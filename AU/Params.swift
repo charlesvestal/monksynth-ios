@@ -134,7 +134,8 @@ enum Param: UInt64, CaseIterable {
     func formatted(_ normalized: AUValue) -> String {
         switch self {
         case .unison:
-            return String(Int((normalized * 9.0 + 1.5).rounded(.down)))
+            let clamped = min(max(normalized, 0.0), 1.0)
+            return String(Int((clamped * 9.0 + 1.5).rounded(.down)))
         case .pitchBendRouting:
             return PitchBendMode(normalized: normalized).name
         case .xyNoteOn:

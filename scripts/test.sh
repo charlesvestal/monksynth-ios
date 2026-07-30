@@ -10,6 +10,15 @@ cd "$(dirname "$0")/.."
 # resolve to any booted-or-bootable device. Instead, ask simctl for every
 # *available* iPhone across all installed runtimes and pick by UDID, which
 # always resolves regardless of which runtimes happen to be installed.
+#
+# jq isn't used elsewhere in this repo and isn't bundled with Xcode itself
+# (it ships with macOS separately), so fail fast with an actionable message
+# instead of a bare "command not found" / exit 127 further down.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "error: 'jq' is required to resolve a simulator destination but was not found on PATH. Install it with 'brew install jq' and re-run." >&2
+  exit 1
+fi
+
 SIMCTL_JSON="$(xcrun simctl list devices available --json)"
 
 # List "<version>\t<udid>\t<name>" for every available iPhone simulator,
