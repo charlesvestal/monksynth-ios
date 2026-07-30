@@ -28,7 +28,7 @@
     {
       "id": 13,
       "subject": "Task 4: Parameter definitions",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** The 22-parameter table encoded once in C (addresses) and Swift (ranges, defaults, formatting), with tests asserting every default and display range matches upstream.\n\n**Files:**\n- Modify: AU/ParameterAddresses.h\n- Create: AU/Params.swift\n- Create: Tests/MonkSynthTests/ParamsTests.swift\n- Create: scripts/test.sh\n\n**Acceptance Criteria:**\n- [ ] ParameterAddress enum has all 22 cases in upstream's ID order\n- [ ] Every parameter's normalized default matches the plan's table\n- [ ] Display conversion round-trips within 1e-6\n- [ ] unison displays integer steps 1-10; pitchBendRouting displays the four mode names\n\n**Verify:** scripts/test.sh MonkSynthTests/ParamsTests -> `Executed 5 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 4.\n\n```json:metadata\n{\"files\": [\"AU/ParameterAddresses.h\", \"AU/Params.swift\", \"Tests/MonkSynthTests/ParamsTests.swift\", \"scripts/test.sh\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/ParamsTests\", \"acceptanceCriteria\": [\"ParameterAddress enum has all 22 cases in upstream's ID order\", \"Every parameter's normalized default matches the plan's table\", \"Display conversion round-trips within 1e-6\", \"unison displays integer steps 1-10; pitchBendRouting displays the four mode names\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         12
@@ -150,5 +150,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-30T22:47:28.897753+02:00"
+  "lastUpdated": "2026-07-30T23:14:09.715093+02:00"
 }
