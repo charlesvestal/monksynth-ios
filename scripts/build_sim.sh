@@ -7,5 +7,6 @@ xcodebuild build \
   -project MonkSynth.xcodeproj \
   -scheme MonkSynth \
   -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
   -configuration Debug \
   CODE_SIGNING_ALLOWED=NO
