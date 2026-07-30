@@ -1,5 +1,6 @@
 .superpowers/
 build/
+build-device/
 DerivedData/
 *.xcodeproj
 .DS_Store

@@ -1,0 +1,3 @@
+#ifndef PARAMETER_SHADOW_H
+#define PARAMETER_SHADOW_H
+#endif
