@@ -10,7 +10,7 @@
     {
       "id": 11,
       "subject": "Task 2: Parity golden harness",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** A C program that drives dsp/ through a fixed script using upstream's exact normalized->DSP mapping and emits a golden buffer. Task 6 asserts the Swift port reproduces it bit-for-bit.\n\n**Files:**\n- Create: Tests/ParityHarness/script.h\n- Create: Tests/ParityHarness/render_golden.c\n- Create: Tests/ParityHarness/golden_44k.f32 (generated)\n- Create: Tests/ParityHarness/run.sh\n\n**Acceptance Criteria:**\n- [ ] Script exercises every parameter, both XY edges, MIDI note on/off, and pitch bend\n- [ ] Golden is 4 seconds stereo at 44100 Hz (352800 floats)\n- [ ] Re-running the harness reproduces the golden byte-for-byte\n\n**Verify:** Tests/ParityHarness/run.sh -> prints `golden matches (352800 samples)`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 2.\n\n```json:metadata\n{\"files\": [\"Tests/ParityHarness/script.h\", \"Tests/ParityHarness/render_golden.c\", \"Tests/ParityHarness/run.sh\"], \"verifyCommand\": \"Tests/ParityHarness/run.sh\", \"acceptanceCriteria\": [\"Script exercises every parameter, both XY edges, MIDI note on/off, and pitch bend\", \"Golden is 4 seconds stereo at 44100 Hz (352800 floats)\", \"Re-running the harness reproduces the golden byte-for-byte\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         10
@@ -150,5 +150,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-30T22:00:32.893570+02:00"
+  "lastUpdated": "2026-07-30T22:22:29.855146+02:00"
 }
