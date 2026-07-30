@@ -19,7 +19,7 @@
     {
       "id": 12,
       "subject": "Task 3: XcodeGen project skeleton",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** MonkSynth app and MonkSynthAU app-extension targets that both compile the vendored C through a bridging header, building clean for the simulator.\n\n**Files:**\n- Create: project.yml\n- Create: AU/Info.plist, AU/MonkSynthAU.entitlements\n- Create: Host/Info.plist, Host/MonkSynth.entitlements\n- Create: AU/MonkSynth-Bridging-Header.h\n- Create: AU/MonkSynthAU.swift, AU/AudioUnitViewController.swift, Host/MonkSynthApp.swift (stubs)\n- Create: scripts/build_sim.sh\n\n**Acceptance Criteria:**\n- [ ] xcodegen generate produces MonkSynth.xcodeproj\n- [ ] Both targets build for iphonesimulator with no warnings\n- [ ] The appex declares type aumu, subtype Mnks, manufacturer Vstl\n- [ ] Swift can call monk_synth_new in both targets\n\n**Verify:** scripts/build_sim.sh -> ends with `** BUILD SUCCEEDED **`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 3.\n\n```json:metadata\n{\"files\": [\"project.yml\", \"AU/Info.plist\", \"Host/Info.plist\", \"AU/MonkSynth-Bridging-Header.h\", \"scripts/build_sim.sh\"], \"verifyCommand\": \"scripts/build_sim.sh\", \"acceptanceCriteria\": [\"xcodegen generate produces MonkSynth.xcodeproj\", \"Both targets build for iphonesimulator with no warnings\", \"The appex declares type aumu, subtype Mnks, manufacturer Vstl\", \"Swift can call monk_synth_new in both targets\"], \"modelTier\": \"mechanical\"}\n```",
       "blockedBy": [
         10
@@ -150,5 +150,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-30T22:22:29.855146+02:00"
+  "lastUpdated": "2026-07-30T22:47:28.897753+02:00"
 }
