@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
+#
+# There is no build system yet, so each test binary links directly against
+# dsp/*.c rather than an intermediate library or object files.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 OUT=$(mktemp -d)
+trap 'rm -rf "$OUT"' EXIT
 for t in synth voice delay; do
   clang -std=c99 -Wall -Werror -Idsp \
     "Tests/CTests/test_$t.c" dsp/synth.c dsp/voice.c dsp/delay.c \
