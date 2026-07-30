@@ -24,6 +24,7 @@ if [ ! -f "$GOLD" ]; then
   "$OUT/render_golden" "$GOLD" >/dev/null
   actual_bytes=$(stat -f%z "$GOLD")
   if [ "$actual_bytes" -ne "$EXPECTED_BYTES" ]; then
+    rm -f "$GOLD"   # don't leave a wrong-sized golden in the tree to be committed
     echo "PARITY FAILURE: captured golden is $actual_bytes bytes, expected $EXPECTED_BYTES" >&2
     exit 1
   fi
