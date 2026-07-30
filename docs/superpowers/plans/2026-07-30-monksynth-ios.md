@@ -379,6 +379,7 @@ int main(int argc, char **argv) {
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 OUT=$(mktemp -d)
+trap 'rm -rf "$OUT"' EXIT     # else every run leaks a temp dir of build output
 GOLD=Tests/ParityHarness/golden_44k.f32
 
 clang -std=c99 -O2 -Wall -Werror -Idsp -ITests/ParityHarness \
