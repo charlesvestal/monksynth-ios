@@ -63,9 +63,15 @@ int main(int argc, char **argv) {
     const char *path = argc > 1 ? argv[1] : "Tests/ParityHarness/golden_44k.f32";
     MonkSynthEngine *s = monk_synth_new((float)PARITY_SR);
     float *out = calloc((size_t)PARITY_FRAMES * 2, sizeof(float));
+    if (!out) { perror("calloc"); monk_synth_free(s); return 1; }
     float l[PARITY_BLOCK], r[PARITY_BLOCK];
     int next = 0;
 
+    /* Events are only checked at block boundaries (pos = 0, 512, 1024, ...),
+     * so an event scripted at `at` actually fires on the first boundary
+     * >= `at` — i.e. `at` rounds UP to the next multiple of PARITY_BLOCK.
+     * See the note in script.h; any replay of this script must use the
+     * same block size to stay bit-identical. */
     for (int pos = 0; pos < PARITY_FRAMES; pos += PARITY_BLOCK) {
         while (next < PARITY_EVENT_COUNT && kParityScript[next].at <= pos)
             apply_event(s, &kParityScript[next++]);
@@ -78,10 +84,47 @@ int main(int argc, char **argv) {
         }
     }
 
-    FILE *f = fopen(path, "wb");
-    if (!f) { perror("fopen"); return 1; }
-    fwrite(out, sizeof(float), (size_t)PARITY_FRAMES * 2, f);
-    fclose(f);
+    /* Write to a temp file in the same directory as `path`, then rename()
+     * into place only once the write and close both succeed. rename() on
+     * the same filesystem is atomic, so a failed/partial render can never
+     * leave a truncated file sitting at `path` — a caller either sees the
+     * old (or no) file, or the fully-written new one, never a broken one. */
+    char tmp_path[4096];
+    int tmp_len = snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+    if (tmp_len < 0 || (size_t)tmp_len >= sizeof(tmp_path)) {
+        fprintf(stderr, "error: path too long: %s\n", path);
+        free(out);
+        monk_synth_free(s);
+        return 1;
+    }
+
+    FILE *f = fopen(tmp_path, "wb");
+    if (!f) { perror("fopen"); free(out); monk_synth_free(s); return 1; }
+
+    size_t written = fwrite(out, sizeof(float), (size_t)PARITY_FRAMES * 2, f);
+    if (written != (size_t)PARITY_FRAMES * 2) {
+        perror("fwrite");
+        fclose(f);
+        remove(tmp_path);
+        free(out);
+        monk_synth_free(s);
+        return 1;
+    }
+    if (fclose(f) != 0) {
+        perror("fclose");
+        remove(tmp_path);
+        free(out);
+        monk_synth_free(s);
+        return 1;
+    }
+    if (rename(tmp_path, path) != 0) {
+        perror("rename");
+        remove(tmp_path);
+        free(out);
+        monk_synth_free(s);
+        return 1;
+    }
+
     free(out);
     monk_synth_free(s);
     printf("wrote %d samples to %s\n", PARITY_FRAMES * 2, path);
