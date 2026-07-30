@@ -4,7 +4,7 @@
     {
       "id": 10,
       "subject": "Task 1: Vendor the C DSP",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** dsp/ present verbatim from upstream, a sync script to refresh it, and upstream's three C unit tests passing locally.\n\n**Files:**\n- Create: scripts/sync_dsp.sh\n- Create: dsp/*.c,*.h (copied, not authored)\n- Create: Tests/CTests/test_{synth,voice,delay}.c\n- Create: Tests/CTests/run.sh\n\n**Acceptance Criteria:**\n- [ ] dsp/ byte-identical to upstream at the pinned commit\n- [ ] sync_dsp.sh re-copies from a checkout path and reports the upstream commit\n- [ ] All three C test binaries compile with -Wall -Werror and exit 0\n\n**Verify:** Tests/CTests/run.sh -> prints `all C DSP tests passed`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 1.\n\n```json:metadata\n{\"files\": [\"dsp/\", \"scripts/sync_dsp.sh\", \"Tests/CTests/run.sh\"], \"verifyCommand\": \"Tests/CTests/run.sh\", \"acceptanceCriteria\": [\"dsp/ byte-identical to upstream at the pinned commit\", \"sync_dsp.sh re-copies from a checkout path and reports the upstream commit\", \"All three C test binaries compile with -Wall -Werror and exit 0\"], \"modelTier\": \"mechanical\"}\n```"
     },
     {
@@ -150,5 +150,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-30T21:44:25.880428+02:00"
+  "lastUpdated": "2026-07-30T22:00:32.893570+02:00"
 }

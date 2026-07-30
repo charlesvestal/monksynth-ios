@@ -225,6 +225,16 @@ git commit -m "Vendor upstream C DSP with sync script and unit tests"
 
 **Verify:** `Tests/ParityHarness/run.sh` → prints `golden matches (352800 samples)`
 
+> **As-built note (commit `3761346`).** The snippets below are the first draft; code
+> review hardened them before this task closed, and the shipped harness differs:
+> `run.sh` requires `RECORD_GOLDEN=1` to capture a missing golden (otherwise it
+> exits 1 — silently re-minting the golden would make the gate pass while testing
+> nothing), verifies the captured file is exactly 1411200 bytes, and
+> `render_golden.c` checks `calloc`/`fwrite`/`fclose` and writes via an adjacent
+> temp file + `rename()` so a failed run cannot leave a truncated golden in place.
+> The golden itself is unchanged — SHA-256 `307b1289…`. Read the files, not this
+> section, for current behaviour.
+
 **Steps:**
 
 - [ ] **Step 1: Write `Tests/ParityHarness/script.h`** — the shared event script, so the Swift test can replay the identical sequence.
