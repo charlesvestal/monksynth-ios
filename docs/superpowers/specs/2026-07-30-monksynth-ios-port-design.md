@@ -32,12 +32,16 @@ because the two halves of a native harness already exist in this portfolio:
   (`tsf.h` / `tsf_impl.c` → `LocalSynth.swift`), `scripts/deploy_testflight.sh`, and
   the `AppStore/` screenshot and metadata pipeline.
 - **`CV-12` (Punchline)** — an `aumu` instrument AUv3 with a real
-  `internalRenderBlock` (`CV12AU/Common/Audio Unit/CV12AUAudioUnit.swift:183`),
-  bridging header, and Apple's parameter-address header pattern.
+  `internalRenderBlock` (`CV12AU/Common/Audio Unit/CV12AUAudioUnit.swift:183`)
+  and Apple's parameter-address header pattern. **Reference for shape only, not
+  for code:** its render block calls `DispatchQueue.main.async` and `print()`
+  from the audio thread, which is realtime-unsafe. MonkSynth's render block is
+  written fresh against the constraints in "Audio architecture" below.
 
-Qwertet's AU is a MIDI processor with no DSP in the extension; CV-12 supplies
-exactly that missing piece. So the usual cost of going native — hand-writing AUv3
-boilerplate and a release pipeline — has already been paid twice.
+Qwertet is the pattern to follow; CV-12 only establishes that the `aumu`
+instrument shape already exists in this portfolio. So the usual cost of going
+native — hand-writing the AUv3 container and a release pipeline — is largely
+already paid.
 
 **Accepted trade-off:** no macOS build. A Mac version later means Mac Catalyst or a
 separate JUCE target. In exchange, UIKit + Core Graphics is a better home for the

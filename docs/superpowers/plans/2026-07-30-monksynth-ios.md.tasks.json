@@ -1,0 +1,154 @@
+{
+  "planPath": "docs/superpowers/plans/2026-07-30-monksynth-ios.md",
+  "tasks": [
+    {
+      "id": 10,
+      "subject": "Task 1: Vendor the C DSP",
+      "status": "pending",
+      "description": "**Goal:** dsp/ present verbatim from upstream, a sync script to refresh it, and upstream's three C unit tests passing locally.\n\n**Files:**\n- Create: scripts/sync_dsp.sh\n- Create: dsp/*.c,*.h (copied, not authored)\n- Create: Tests/CTests/test_{synth,voice,delay}.c\n- Create: Tests/CTests/run.sh\n\n**Acceptance Criteria:**\n- [ ] dsp/ byte-identical to upstream at the pinned commit\n- [ ] sync_dsp.sh re-copies from a checkout path and reports the upstream commit\n- [ ] All three C test binaries compile with -Wall -Werror and exit 0\n\n**Verify:** Tests/CTests/run.sh -> prints `all C DSP tests passed`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 1.\n\n```json:metadata\n{\"files\": [\"dsp/\", \"scripts/sync_dsp.sh\", \"Tests/CTests/run.sh\"], \"verifyCommand\": \"Tests/CTests/run.sh\", \"acceptanceCriteria\": [\"dsp/ byte-identical to upstream at the pinned commit\", \"sync_dsp.sh re-copies from a checkout path and reports the upstream commit\", \"All three C test binaries compile with -Wall -Werror and exit 0\"], \"modelTier\": \"mechanical\"}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 2: Parity golden harness",
+      "status": "pending",
+      "description": "**Goal:** A C program that drives dsp/ through a fixed script using upstream's exact normalized->DSP mapping and emits a golden buffer. Task 6 asserts the Swift port reproduces it bit-for-bit.\n\n**Files:**\n- Create: Tests/ParityHarness/script.h\n- Create: Tests/ParityHarness/render_golden.c\n- Create: Tests/ParityHarness/golden_44k.f32 (generated)\n- Create: Tests/ParityHarness/run.sh\n\n**Acceptance Criteria:**\n- [ ] Script exercises every parameter, both XY edges, MIDI note on/off, and pitch bend\n- [ ] Golden is 4 seconds stereo at 44100 Hz (352800 floats)\n- [ ] Re-running the harness reproduces the golden byte-for-byte\n\n**Verify:** Tests/ParityHarness/run.sh -> prints `golden matches (352800 samples)`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 2.\n\n```json:metadata\n{\"files\": [\"Tests/ParityHarness/script.h\", \"Tests/ParityHarness/render_golden.c\", \"Tests/ParityHarness/run.sh\"], \"verifyCommand\": \"Tests/ParityHarness/run.sh\", \"acceptanceCriteria\": [\"Script exercises every parameter, both XY edges, MIDI note on/off, and pitch bend\", \"Golden is 4 seconds stereo at 44100 Hz (352800 floats)\", \"Re-running the harness reproduces the golden byte-for-byte\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        10
+      ]
+    },
+    {
+      "id": 12,
+      "subject": "Task 3: XcodeGen project skeleton",
+      "status": "pending",
+      "description": "**Goal:** MonkSynth app and MonkSynthAU app-extension targets that both compile the vendored C through a bridging header, building clean for the simulator.\n\n**Files:**\n- Create: project.yml\n- Create: AU/Info.plist, AU/MonkSynthAU.entitlements\n- Create: Host/Info.plist, Host/MonkSynth.entitlements\n- Create: AU/MonkSynth-Bridging-Header.h\n- Create: AU/MonkSynthAU.swift, AU/AudioUnitViewController.swift, Host/MonkSynthApp.swift (stubs)\n- Create: scripts/build_sim.sh\n\n**Acceptance Criteria:**\n- [ ] xcodegen generate produces MonkSynth.xcodeproj\n- [ ] Both targets build for iphonesimulator with no warnings\n- [ ] The appex declares type aumu, subtype Mnks, manufacturer Vstl\n- [ ] Swift can call monk_synth_new in both targets\n\n**Verify:** scripts/build_sim.sh -> ends with `** BUILD SUCCEEDED **`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 3.\n\n```json:metadata\n{\"files\": [\"project.yml\", \"AU/Info.plist\", \"Host/Info.plist\", \"AU/MonkSynth-Bridging-Header.h\", \"scripts/build_sim.sh\"], \"verifyCommand\": \"scripts/build_sim.sh\", \"acceptanceCriteria\": [\"xcodegen generate produces MonkSynth.xcodeproj\", \"Both targets build for iphonesimulator with no warnings\", \"The appex declares type aumu, subtype Mnks, manufacturer Vstl\", \"Swift can call monk_synth_new in both targets\"], \"modelTier\": \"mechanical\"}\n```",
+      "blockedBy": [
+        10
+      ]
+    },
+    {
+      "id": 13,
+      "subject": "Task 4: Parameter definitions",
+      "status": "pending",
+      "description": "**Goal:** The 22-parameter table encoded once in C (addresses) and Swift (ranges, defaults, formatting), with tests asserting every default and display range matches upstream.\n\n**Files:**\n- Modify: AU/ParameterAddresses.h\n- Create: AU/Params.swift\n- Create: Tests/MonkSynthTests/ParamsTests.swift\n- Create: scripts/test.sh\n\n**Acceptance Criteria:**\n- [ ] ParameterAddress enum has all 22 cases in upstream's ID order\n- [ ] Every parameter's normalized default matches the plan's table\n- [ ] Display conversion round-trips within 1e-6\n- [ ] unison displays integer steps 1-10; pitchBendRouting displays the four mode names\n\n**Verify:** scripts/test.sh MonkSynthTests/ParamsTests -> `Executed 5 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 4.\n\n```json:metadata\n{\"files\": [\"AU/ParameterAddresses.h\", \"AU/Params.swift\", \"Tests/MonkSynthTests/ParamsTests.swift\", \"scripts/test.sh\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/ParamsTests\", \"acceptanceCriteria\": [\"ParameterAddress enum has all 22 cases in upstream's ID order\", \"Every parameter's normalized default matches the plan's table\", \"Display conversion round-trips within 1e-6\", \"unison displays integer steps 1-10; pitchBendRouting displays the four mode names\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        12
+      ]
+    },
+    {
+      "id": 14,
+      "subject": "Task 5: Parameter shadow array",
+      "status": "pending",
+      "description": "**Goal:** A lock-free C array of atomics the render block reads without touching AUParameter, plus the AUParameterTree that writes into it.\n\n**Files:**\n- Modify: AU/ParameterShadow.h\n- Create: AU/ParameterShadow.c\n- Modify: AU/MonkSynthAU.swift\n- Create: Tests/MonkSynthTests/ShadowTests.swift\n\n**Acceptance Criteria:**\n- [ ] param_shadow_set/get are _Atomic float accesses with no locks\n- [ ] Setting an AUParameter value updates the shadow\n- [ ] Host reads of AUParameter.value return the shadow value\n- [ ] parameterTree.allParameters.count == 22\n\n**Verify:** scripts/test.sh MonkSynthTests/ShadowTests -> `Executed 3 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 5.\n\n```json:metadata\n{\"files\": [\"AU/ParameterShadow.h\", \"AU/ParameterShadow.c\", \"AU/MonkSynthAU.swift\", \"Tests/MonkSynthTests/ShadowTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/ShadowTests\", \"acceptanceCriteria\": [\"param_shadow_set/get are _Atomic float accesses with no locks\", \"Setting an AUParameter value updates the shadow\", \"Host reads of AUParameter.value return the shadow value\", \"parameterTree.allParameters.count == 22\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        13
+      ]
+    },
+    {
+      "id": 15,
+      "subject": "Task 6: Render block and parity gate",
+      "status": "pending",
+      "description": "**Goal:** A realtime-safe internalRenderBlock that applies parameters, handles MIDI and XY semantics, and renders - proven bit-identical to the C golden from Task 2.\n\n**Files:**\n- Create: AU/RenderContext.swift\n- Modify: AU/MonkSynthAU.swift\n- Create: Tests/MonkSynthTests/ParityTests.swift\n- Create: Tests/MonkSynthTests/Resources/golden_44k.f32\n- Modify: project.yml\n\n**Acceptance Criteria:**\n- [ ] allocateRenderResources creates the engine at the host sample rate; deallocate frees it\n- [ ] Render block performs no allocation, locking, Swift runtime metadata calls, or print\n- [ ] Replaying the parity script through RenderContext matches golden_44k.f32 byte-for-byte\n- [ ] Note-off while the XY pad is held re-asserts XY pitch (upstream processor.cpp:268-276)\n\n**Verify:** scripts/test.sh MonkSynthTests/ParityTests -> `Executed 2 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 6.\n\n```json:metadata\n{\"files\": [\"AU/RenderContext.swift\", \"AU/MonkSynthAU.swift\", \"Tests/MonkSynthTests/ParityTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/ParityTests\", \"acceptanceCriteria\": [\"allocateRenderResources creates the engine at the host sample rate; deallocate frees it\", \"Render block performs no allocation, locking, Swift runtime metadata calls, or print\", \"Replaying the parity script through RenderContext matches golden_44k.f32 byte-for-byte\", \"Note-off while the XY pad is held re-asserts XY pitch (upstream processor.cpp:268-276)\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        11,
+        14
+      ]
+    },
+    {
+      "id": 16,
+      "subject": "Task 7: State persistence and presets",
+      "status": "pending",
+      "description": "**Goal:** fullState round-trips all 22 parameters, and upstream's six .vstpreset files ship as AUv3 factory presets.\n\n**Files:**\n- Create: scripts/extract_presets.py\n- Create: AU/FactoryPresets.swift (generated)\n- Modify: AU/MonkSynthAU.swift\n- Create: Tests/MonkSynthTests/PresetTests.swift\n\n**Acceptance Criteria:**\n- [ ] fullState set -> get returns identical values for all 22 parameters\n- [ ] factoryPresets has 6 entries: Dorje, Jamyang, Monastary, Ngawang, Rabten, Tinley\n- [ ] Selecting a preset updates the shadow and the parameter tree\n- [ ] State shorter than 22 values leaves the rest at defaults (upstream processor.cpp:112-127)\n\n**Verify:** scripts/test.sh MonkSynthTests/PresetTests -> `Executed 4 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 7.\n\n```json:metadata\n{\"files\": [\"scripts/extract_presets.py\", \"AU/FactoryPresets.swift\", \"AU/MonkSynthAU.swift\", \"Tests/MonkSynthTests/PresetTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/PresetTests\", \"acceptanceCriteria\": [\"fullState set -> get returns identical values for all 22 parameters\", \"factoryPresets has 6 entries: Dorje, Jamyang, Monastary, Ngawang, Rabten, Tinley\", \"Selecting a preset updates the shadow and the parameter tree\", \"State shorter than 22 values leaves the rest at defaults (upstream processor.cpp:112-127)\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        15
+      ]
+    },
+    {
+      "id": 17,
+      "subject": "Task 9: XY performance pad",
+      "status": "pending",
+      "description": "**Goal:** A touch surface where X sets pitch and Y sets vowel, writing the three XY parameters so host automation records the performance. Also creates the shared Theme.\n\n**Files:**\n- Create: AU/UI/Theme.swift (first UI task to need it; Tasks 8, 10, 11 consume it)\n- Create: AU/UI/XYPadView.swift\n- Create: Tests/MonkSynthTests/XYPadTests.swift\n\n**Acceptance Criteria:**\n- [ ] Theme defines the colors and metrics later UI tasks reference\n- [ ] Touch-down sets xyPitchTarget and xyVowel BEFORE xyNoteOn - upstream reads pending pitch on the rising edge\n- [ ] Touch-up sets xyNoteOn to 0\n- [ ] Y is inverted: the top of the pad is vowel 1.0\n- [ ] Values clamp to 0-1 when a drag leaves the bounds\n- [ ] Multitouch is last-touch-wins\n\n**Verify:** scripts/test.sh MonkSynthTests/XYPadTests -> `Executed 4 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 9.\n\n```json:metadata\n{\"files\": [\"AU/UI/Theme.swift\", \"AU/UI/XYPadView.swift\", \"Tests/MonkSynthTests/XYPadTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/XYPadTests\", \"acceptanceCriteria\": [\"Theme defines the colors and metrics later UI tasks reference\", \"Touch-down sets xyPitchTarget and xyVowel BEFORE xyNoteOn - upstream reads pending pitch on the rising edge\", \"Touch-up sets xyNoteOn to 0\", \"Y is inverted: the top of the pad is vowel 1.0\", \"Values clamp to 0-1 when a drag leaves the bounds\", \"Multitouch is last-touch-wins\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        13
+      ]
+    },
+    {
+      "id": 18,
+      "subject": "Task 11: Knob and control pages",
+      "status": "pending",
+      "description": "**Goal:** A rotary control and the five-page parameter surface, rendering as a strip in landscape and a drawer in portrait.\n\n**Files:**\n- Create: AU/UI/KnobView.swift\n- Create: AU/UI/ControlPages.swift\n- Create: Tests/MonkSynthTests/ControlPagesTests.swift\n\n**Acceptance Criteria:**\n- [ ] Vertical drag changes value; 180pt of travel spans the full 0-1 range\n- [ ] A second finger down engages fine mode at 1/8 sensitivity\n- [ ] Double-tap restores the parameter default\n- [ ] Five pages cover all 18 non-hidden parameters with no parameter listed twice\n- [ ] Each knob is a VoiceOver element reporting name and formatted value\n\n**Verify:** scripts/test.sh MonkSynthTests/ControlPagesTests -> `Executed 3 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 11.\n\n```json:metadata\n{\"files\": [\"AU/UI/KnobView.swift\", \"AU/UI/ControlPages.swift\", \"Tests/MonkSynthTests/ControlPagesTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/ControlPagesTests\", \"acceptanceCriteria\": [\"Vertical drag changes value; 180pt of travel spans the full 0-1 range\", \"A second finger down engages fine mode at 1/8 sensitivity\", \"Double-tap restores the parameter default\", \"Five pages cover all 18 non-hidden parameters with no parameter listed twice\", \"Each knob is a VoiceOver element reporting name and formatted value\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        17
+      ]
+    },
+    {
+      "id": 19,
+      "subject": "Task 8: Theme and responsive container",
+      "status": "pending",
+      "description": "**Goal:** PluginView lays out the three zones - Stage, Pad, Controls - stacking in portrait and splitting in landscape, driven by aspect ratio rather than device class. Depends on Tasks 9 and 11; do not stub them.\n\n**Files:**\n- Create: AU/UI/PluginView.swift\n- Create: Tests/MonkSynthTests/LayoutTests.swift\n\n**Acceptance Criteria:**\n- [ ] Aspect ratio < 1.0 stacks vertically; >= 1.0 splits horizontally\n- [ ] Landscape lays out the control strip; portrait shows only the drawer handle\n- [ ] Below 260pt of height the Stage collapses to zero and the Pad keeps at least 120pt\n- [ ] No zone ever has a negative or NaN frame at any tested size\n\n**Verify:** scripts/test.sh MonkSynthTests/LayoutTests -> `Executed 4 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 8.\n\n```json:metadata\n{\"files\": [\"AU/UI/PluginView.swift\", \"Tests/MonkSynthTests/LayoutTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/LayoutTests\", \"acceptanceCriteria\": [\"Aspect ratio < 1.0 stacks vertically; >= 1.0 splits horizontally\", \"Landscape lays out the control strip; portrait shows only the drawer handle\", \"Below 260pt of height the Stage collapses to zero and the Pad keeps at least 120pt\", \"No zone ever has a negative or NaN frame at any tested size\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        17,
+        18
+      ]
+    },
+    {
+      "id": 20,
+      "subject": "Task 10: The vector monk",
+      "status": "pending",
+      "description": "**Goal:** An original character drawn from UIBezierPath parts whose mouth morphs continuously with vowel, with upstream's idle state machine driving the rig instead of sprite frames.\n\n**Files:**\n- Create: AU/UI/MonkView.swift\n- Create: AU/UI/IdleAnimator.swift\n- Create: Tests/MonkSynthTests/IdleAnimatorTests.swift\n\n**Acceptance Criteria:**\n- [ ] Five anchor mouth shapes interpolate continuously across vowel 0-1 with no discontinuity\n- [ ] Idle HOLD lasts 48 ticks with blinks at ticks 14-17 and 31-34 (upstream monk_view.h:58-67)\n- [ ] Idle SHUFFLE walks upstream's 24-step sequence at 2 ticks per step\n- [ ] The display link only runs while a note sounds or the idle animation is active\n- [ ] UIAccessibility.isReduceMotionEnabled freezes the idle animation on the HOLD pose\n\n**Verify:** scripts/test.sh MonkSynthTests/IdleAnimatorTests -> `Executed 4 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 10.\n\n```json:metadata\n{\"files\": [\"AU/UI/MonkView.swift\", \"AU/UI/IdleAnimator.swift\", \"Tests/MonkSynthTests/IdleAnimatorTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/IdleAnimatorTests\", \"acceptanceCriteria\": [\"Five anchor mouth shapes interpolate continuously across vowel 0-1 with no discontinuity\", \"Idle HOLD lasts 48 ticks with blinks at ticks 14-17 and 31-34 (upstream monk_view.h:58-67)\", \"Idle SHUFFLE walks upstream's 24-step sequence at 2 ticks per step\", \"The display link only runs while a note sounds or the idle animation is active\", \"UIAccessibility.isReduceMotionEnabled freezes the idle animation on the HOLD pose\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        17
+      ]
+    },
+    {
+      "id": 21,
+      "subject": "Task 12: Wire the editor to the audio unit",
+      "status": "pending",
+      "description": "**Goal:** AudioUnitViewController binds the UI to the AU in both directions - touches write parameters, host automation moves the knobs, and the monk animates from render-thread publications.\n\n**Files:**\n- Modify: AU/AudioUnitViewController.swift\n- Modify: AU/UI/PluginView.swift (stage becomes MonkView)\n- Create: Tests/MonkSynthTests/EditorBindingTests.swift\n\n**Acceptance Criteria:**\n- [ ] Pad and knob changes call AUParameter.setValue(_:originator:) so the host records them\n- [ ] Host-side parameter changes update the matching knob without feeding back into the AU\n- [ ] The monk's vowel/amplitude/active come from MonkSynthAU.uiVowel/uiAmplitude/uiNoteActive, never the engine\n- [ ] The parameter observer token is removed on deinit\n- [ ] preferredContentSize is 480x320 and the view survives any host-supplied rect\n\n**Verify:** scripts/test.sh MonkSynthTests/EditorBindingTests -> `Executed 3 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 12.\n\n```json:metadata\n{\"files\": [\"AU/AudioUnitViewController.swift\", \"AU/UI/PluginView.swift\", \"Tests/MonkSynthTests/EditorBindingTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/EditorBindingTests\", \"acceptanceCriteria\": [\"Pad and knob changes call AUParameter.setValue(_:originator:) so the host records them\", \"Host-side parameter changes update the matching knob without feeding back into the AU\", \"The monk's vowel/amplitude/active come from MonkSynthAU.uiVowel/uiAmplitude/uiNoteActive, never the engine\", \"The parameter observer token is removed on deinit\", \"preferredContentSize is 480x320 and the view survives any host-supplied rect\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        15,
+        19,
+        20
+      ]
+    },
+    {
+      "id": 22,
+      "subject": "Task 13: Standalone host app",
+      "status": "pending",
+      "description": "**Goal:** The container app runs the same UI over an AVAudioEngine source node, accepts CoreMIDI and Bluetooth MIDI input, and keeps playing in the background.\n\n**Files:**\n- Modify: Host/MonkSynthApp.swift\n- Create: Host/LocalEngine.swift\n- Create: Host/MIDIInput.swift\n- Create: Host/RootViewController.swift\n\n**Acceptance Criteria:**\n- [ ] Audio session category .playback with .mixWithOthers so it coexists with AUM\n- [ ] AVAudioSourceNode renders from the same RenderContext used by the AUv3\n- [ ] CoreMIDI input from any connected source drives notes and CCs\n- [ ] Bluetooth MIDI devices connect via CABTMIDICentralViewController\n- [ ] No microphone permission is requested - this is a synth with no audio input\n\n**Verify:** scripts/build_sim.sh -> `** BUILD SUCCEEDED **`, then launch in the simulator and confirm the pad sounds and the mouth moves\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 13.\n\n```json:metadata\n{\"files\": [\"Host/LocalEngine.swift\", \"Host/MIDIInput.swift\", \"Host/RootViewController.swift\", \"Host/MonkSynthApp.swift\"], \"verifyCommand\": \"scripts/build_sim.sh\", \"acceptanceCriteria\": [\"Audio session category .playback with .mixWithOthers so it coexists with AUM\", \"AVAudioSourceNode renders from the same RenderContext used by the AUv3\", \"CoreMIDI input from any connected source drives notes and CCs\", \"Bluetooth MIDI devices connect via CABTMIDICentralViewController\", \"No microphone permission is requested - this is a synth with no audio input\"], \"modelTier\": \"standard\"}\n```",
+      "blockedBy": [
+        21
+      ]
+    },
+    {
+      "id": 23,
+      "subject": "Task 14: Localization and about screen",
+      "status": "pending",
+      "description": "**Goal:** English, Japanese and Korean strings, plus an about screen carrying the MIT notice and credit to Jonathan Taylor.\n\n**Files:**\n- Create: AU/Resources/{en,ja,ko}.lproj/Localizable.strings\n- Create: AU/UI/AboutView.swift\n- Modify: AU/UI/PluginView.swift, AU/AudioUnitViewController.swift, Host/RootViewController.swift, project.yml\n- Create: Tests/MonkSynthTests/LocalizationTests.swift\n\n**Acceptance Criteria:**\n- [ ] All three .lproj bundles carry the same key set\n- [ ] The about screen shows the MIT notice, 'Copyright (c) 2026 Jonathan Taylor', and a link to the upstream repository\n- [ ] The Delay Lama reference appears exactly once, as a factual 'inspired by' line\n- [ ] An info button opens the about screen; tapping outside dismisses it\n\n**Verify:** scripts/test.sh MonkSynthTests/LocalizationTests -> `Executed 2 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 14.\n\n```json:metadata\n{\"files\": [\"AU/Resources/en.lproj/Localizable.strings\", \"AU/Resources/ja.lproj/Localizable.strings\", \"AU/Resources/ko.lproj/Localizable.strings\", \"AU/UI/AboutView.swift\", \"Tests/MonkSynthTests/LocalizationTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/LocalizationTests\", \"acceptanceCriteria\": [\"All three .lproj bundles carry the same key set\", \"The about screen shows the MIT notice, 'Copyright (c) 2026 Jonathan Taylor', and a link to the upstream repository\", \"The Delay Lama reference appears exactly once, as a factual 'inspired by' line\", \"An info button opens the about screen; tapping outside dismisses it\"], \"modelTier\": \"mechanical\"}\n```",
+      "blockedBy": [
+        21,
+        22
+      ]
+    },
+    {
+      "id": 24,
+      "subject": "Task 15: App icon and device verification",
+      "status": "pending",
+      "description": "**Goal:** A signed device build installed on hardware, with the AUv3 confirmed loading and sounding inside AUM.\n\n**Files:**\n- Create: Host/Assets.xcassets/AppIcon.appiconset/Contents.json\n- Create: Host/Assets.xcassets/AppIcon.appiconset/icon-1024.png\n- Create: scripts/run_device.sh\n\n**Acceptance Criteria:**\n- [ ] scripts/run_device.sh builds signed, installs and launches on a connected device\n- [ ] The standalone app sounds when the pad is dragged\n- [ ] MonkSynth appears in AUM's instrument list and loads its custom UI\n- [ ] Playing MIDI into the AUv3 from AUM produces sound and animates the monk\n- [ ] Rotating the device reflows portrait/landscape without clipping\n\n**Verify:** scripts/run_device.sh -> ends with `launched com.vestal.monksynth`, then the AUM checks by hand\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 15.\n\n```json:metadata\n{\"files\": [\"Host/Assets.xcassets/AppIcon.appiconset/Contents.json\", \"scripts/run_device.sh\"], \"verifyCommand\": \"scripts/run_device.sh\", \"acceptanceCriteria\": [\"scripts/run_device.sh builds signed, installs and launches on a connected device\", \"The standalone app sounds when the pad is dragged\", \"MonkSynth appears in AUM's instrument list and loads its custom UI\", \"Playing MIDI into the AUv3 from AUM produces sound and animates the monk\", \"Rotating the device reflows portrait/landscape without clipping\"], \"modelTier\": \"mechanical\"}\n```",
+      "blockedBy": [
+        16,
+        22,
+        23
+      ]
+    },
+    {
+      "id": 25,
+      "subject": "Task 16: TestFlight deployment",
+      "status": "pending",
+      "description": "**Goal:** A one-command archive-and-upload path, and the App Store Connect records that make the first upload possible.\n\n**Files:**\n- Create: scripts/deploy_testflight.sh\n- Create: scripts/.deploy.local.example\n- Modify: .gitignore\n- Create: docs/RELEASE.md\n\n**Acceptance Criteria:**\n- [ ] App IDs com.vestal.monksynth and com.vestal.monksynth.AU registered\n- [ ] An App Store Connect app record exists for com.vestal.monksynth\n- [ ] deploy_testflight.sh archives, exports and uploads with a unique build number\n- [ ] scripts/.deploy.local is gitignored\n- [ ] The build appears in TestFlight without asking the encryption question\n\n**Verify:** scripts/deploy_testflight.sh -> ends with `uploaded build <n> to TestFlight`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 16.\n\n```json:metadata\n{\"files\": [\"scripts/deploy_testflight.sh\", \"scripts/.deploy.local.example\", \".gitignore\", \"docs/RELEASE.md\"], \"verifyCommand\": \"scripts/deploy_testflight.sh\", \"acceptanceCriteria\": [\"App IDs com.vestal.monksynth and com.vestal.monksynth.AU registered\", \"An App Store Connect app record exists for com.vestal.monksynth\", \"deploy_testflight.sh archives, exports and uploads with a unique build number\", \"scripts/.deploy.local is gitignored\", \"The build appears in TestFlight without asking the encryption question\"], \"modelTier\": \"mechanical\"}\n```",
+      "blockedBy": [
+        24
+      ]
+    }
+  ],
+  "lastUpdated": "2026-07-30T21:44:25.880428+02:00"
+}
