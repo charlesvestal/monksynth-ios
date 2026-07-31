@@ -65,7 +65,7 @@
     {
       "id": 17,
       "subject": "Task 9: XY performance pad",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** A touch surface where X sets pitch and Y sets vowel, writing the three XY parameters so host automation records the performance. Also creates the shared Theme.\n\n**Files:**\n- Create: AU/UI/Theme.swift (first UI task to need it; Tasks 8, 10, 11 consume it)\n- Create: AU/UI/XYPadView.swift\n- Create: Tests/MonkSynthTests/XYPadTests.swift\n\n**Acceptance Criteria:**\n- [ ] Theme defines the colors and metrics later UI tasks reference\n- [ ] Touch-down sets xyPitchTarget and xyVowel BEFORE xyNoteOn - upstream reads pending pitch on the rising edge\n- [ ] Touch-up sets xyNoteOn to 0\n- [ ] Y is inverted: the top of the pad is vowel 1.0\n- [ ] Values clamp to 0-1 when a drag leaves the bounds\n- [ ] Multitouch is last-touch-wins\n\n**Verify:** scripts/test.sh MonkSynthTests/XYPadTests -> `Executed 4 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 9.\n\n```json:metadata\n{\"files\": [\"AU/UI/Theme.swift\", \"AU/UI/XYPadView.swift\", \"Tests/MonkSynthTests/XYPadTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/XYPadTests\", \"acceptanceCriteria\": [\"Theme defines the colors and metrics later UI tasks reference\", \"Touch-down sets xyPitchTarget and xyVowel BEFORE xyNoteOn - upstream reads pending pitch on the rising edge\", \"Touch-up sets xyNoteOn to 0\", \"Y is inverted: the top of the pad is vowel 1.0\", \"Values clamp to 0-1 when a drag leaves the bounds\", \"Multitouch is last-touch-wins\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         13
@@ -74,7 +74,7 @@
     {
       "id": 18,
       "subject": "Task 11: Knob and control pages",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** A rotary control and the five-page parameter surface, rendering as a strip in landscape and a drawer in portrait.\n\n**Files:**\n- Create: AU/UI/KnobView.swift\n- Create: AU/UI/ControlPages.swift\n- Create: Tests/MonkSynthTests/ControlPagesTests.swift\n\n**Acceptance Criteria:**\n- [ ] Vertical drag changes value; 180pt of travel spans the full 0-1 range\n- [ ] A second finger down engages fine mode at 1/8 sensitivity\n- [ ] Double-tap restores the parameter default\n- [ ] Five pages cover all 18 non-hidden parameters with no parameter listed twice\n- [ ] Each knob is a VoiceOver element reporting name and formatted value\n\n**Verify:** scripts/test.sh MonkSynthTests/ControlPagesTests -> `Executed 3 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 11.\n\n```json:metadata\n{\"files\": [\"AU/UI/KnobView.swift\", \"AU/UI/ControlPages.swift\", \"Tests/MonkSynthTests/ControlPagesTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/ControlPagesTests\", \"acceptanceCriteria\": [\"Vertical drag changes value; 180pt of travel spans the full 0-1 range\", \"A second finger down engages fine mode at 1/8 sensitivity\", \"Double-tap restores the parameter default\", \"Five pages cover all 18 non-hidden parameters with no parameter listed twice\", \"Each knob is a VoiceOver element reporting name and formatted value\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         17
@@ -93,7 +93,7 @@
     {
       "id": 20,
       "subject": "Task 10: The vector monk",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** An original character drawn from UIBezierPath parts whose mouth morphs continuously with vowel, with upstream's idle state machine driving the rig instead of sprite frames.\n\n**Files:**\n- Create: AU/UI/MonkView.swift\n- Create: AU/UI/IdleAnimator.swift\n- Create: Tests/MonkSynthTests/IdleAnimatorTests.swift\n\n**Acceptance Criteria:**\n- [ ] Five anchor mouth shapes interpolate continuously across vowel 0-1 with no discontinuity\n- [ ] Idle HOLD lasts 48 ticks with blinks at ticks 14-17 and 31-34 (upstream monk_view.h:58-67)\n- [ ] Idle SHUFFLE walks upstream's 24-step sequence at 2 ticks per step\n- [ ] The display link only runs while a note sounds or the idle animation is active\n- [ ] UIAccessibility.isReduceMotionEnabled freezes the idle animation on the HOLD pose\n\n**Verify:** scripts/test.sh MonkSynthTests/IdleAnimatorTests -> `Executed 4 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 10.\n\n```json:metadata\n{\"files\": [\"AU/UI/MonkView.swift\", \"AU/UI/IdleAnimator.swift\", \"Tests/MonkSynthTests/IdleAnimatorTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/IdleAnimatorTests\", \"acceptanceCriteria\": [\"Five anchor mouth shapes interpolate continuously across vowel 0-1 with no discontinuity\", \"Idle HOLD lasts 48 ticks with blinks at ticks 14-17 and 31-34 (upstream monk_view.h:58-67)\", \"Idle SHUFFLE walks upstream's 24-step sequence at 2 ticks per step\", \"The display link only runs while a note sounds or the idle animation is active\", \"UIAccessibility.isReduceMotionEnabled freezes the idle animation on the HOLD pose\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         17
@@ -150,5 +150,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-31T04:43:38.789568+02:00"
+  "lastUpdated": "2026-07-31T05:52:09.731720+02:00"
 }
