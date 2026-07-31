@@ -96,4 +96,55 @@ final class RenderUISnapshot: XCTestCase {
         try data.write(to: URL(fileURLWithPath: "/tmp/ui_knobs.png"))
         print("SNAPSHOT_WRITTEN /tmp/ui_knobs.png bytes=\(data.count)")
     }
+
+    /// Renders a PluginView reporting a device-like safe area. `safeAreaInsets`
+    /// is read-only and `PluginView` is `final`, so the insets are injected the
+    /// way the system does it — via a hosting view controller's
+    /// `additionalSafeAreaInsets`, which propagates down to `view.safeAreaInsets`.
+    private func renderWithInsets(_ size: CGSize, _ insets: UIEdgeInsets) -> UIImage {
+        let vc = UIViewController()
+        vc.view = PluginView(frame: CGRect(origin: .zero, size: size))
+        vc.additionalSafeAreaInsets = insets
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.rootViewController = vc
+        window.isHidden = false
+        vc.view.setNeedsLayout()
+        vc.view.layoutIfNeeded()
+        return UIGraphicsImageRenderer(size: size).image { c in
+            vc.view.layer.render(in: c.cgContext)
+        }
+    }
+
+    /// Portrait on an iPhone with a home indicator: the drawer handle must sit
+    /// clear of the bottom gesture strip, drawn here as a red band.
+    func testWriteSafeAreaSheet() throws {
+        let insets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        let sizes: [(String, CGSize)] = [
+            ("portrait 390x844", CGSize(width: 390, height: 844)),
+            ("landscape 844x390", CGSize(width: 844, height: 390)),
+        ]
+        let gap: CGFloat = 20
+        let sheet = CGSize(width: sizes.reduce(0) { $0 + $1.1.width + gap } + gap,
+                           height: (sizes.map(\.1.height).max() ?? 0) + gap * 2 + 18)
+        let image = UIGraphicsImageRenderer(size: sheet).image { ctx in
+            UIColor(white: 0.06, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: sheet))
+            var x = gap
+            for (name, size) in sizes {
+                renderWithInsets(size, insets).draw(at: CGPoint(x: x, y: gap + 18))
+                // Mark the home indicator strip the system reserves.
+                UIColor.systemRed.withAlphaComponent(0.28).setFill()
+                ctx.fill(CGRect(x: x, y: gap + 18 + size.height - insets.bottom,
+                                width: size.width, height: insets.bottom))
+                (name as NSString).draw(
+                    at: CGPoint(x: x, y: gap),
+                    withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                                     .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+                x += size.width + gap
+            }
+        }
+        let data = try XCTUnwrap(image.pngData())
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_safearea.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_safearea.png bytes=\(data.count)")
+    }
 }

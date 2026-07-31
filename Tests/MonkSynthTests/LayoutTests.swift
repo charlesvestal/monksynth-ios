@@ -129,4 +129,38 @@ final class LayoutTests: XCTestCase {
         XCTAssertFalse(l.isDrawer)
         XCTAssertGreaterThanOrEqual(l.controls.height, Theme.minUsableStripHeight - 0.5)
     }
+
+    /// Reported from a device: "control drawer can't be reached in portrait
+    /// because of the home indicator". The bottom ~34pt of a modern iPhone is
+    /// a system gesture region — anything placed there is unreachable, because
+    /// the system claims the touch before the app sees it. The layout must
+    /// inset by `safeAreaInsets`, not just by the gutter.
+    func testDrawerClearsTheHomeIndicatorGestureRegion() {
+        let homeIndicator = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        let bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
+
+        let unsafe = PluginView.layout(in: bounds, drawerOpen: false)
+        let safe = PluginView.layout(in: bounds, drawerOpen: false, safeArea: homeIndicator)
+
+        XCTAssertGreaterThan(unsafe.controls.maxY, bounds.maxY - homeIndicator.bottom,
+                             "precondition: without the inset the drawer sits in the gesture strip")
+        XCTAssertLessThanOrEqual(safe.controls.maxY, bounds.maxY - homeIndicator.bottom + 0.5,
+                                 "the drawer must sit entirely above the home indicator")
+    }
+
+    /// The whole visible layout must respect the safe area, not only the
+    /// drawer — a pad running under the indicator would swallow drags too.
+    func testEveryZoneStaysInsideTheSafeArea() {
+        let insets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        for size in [CGSize(width: 390, height: 844), CGSize(width: 844, height: 390)] {
+            let b = CGRect(origin: .zero, size: size)
+            let l = PluginView.layout(in: b, drawerOpen: true, safeArea: insets)
+            for (name, r) in [("stage", l.stage), ("pad", l.pad), ("controls", l.controls)]
+            where r.height > 0 {
+                XCTAssertGreaterThanOrEqual(r.minY, insets.top - 0.5, "\(name) top at \(size)")
+                XCTAssertLessThanOrEqual(r.maxY, b.maxY - insets.bottom + 0.5,
+                                         "\(name) bottom at \(size)")
+            }
+        }
+    }
 }

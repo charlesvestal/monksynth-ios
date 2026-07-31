@@ -97,4 +97,34 @@ final class IdleAnimatorTests: XCTestCase {
         XCTAssertEqual(last.w, 0.44, accuracy: 1e-9)
         XCTAssertEqual(last.h, 0.07, accuracy: 1e-9)
     }
+
+    /// The user preferred the original's stepped, sprite-sheet motion to the
+    /// smooth interpolation an earlier version of this port used: "the distinct
+    /// frames of animation are more evocative than the smooth animations". The
+    /// vowel input is therefore quantised to the same frame count upstream's
+    /// sprite sheet used, while `mouthShape` itself stays continuous.
+    func testVowelIsQuantisedIntoDiscreteFrames() {
+        var distinct = Set<Float>()
+        for i in 0...1000 {
+            distinct.insert(MonkView.quantisedVowel(Float(i) / 1000.0))
+        }
+        XCTAssertEqual(distinct.count, MonkView.vowelFrameCount,
+                       "vowel should land on exactly \(MonkView.vowelFrameCount) positions")
+        XCTAssertEqual(MonkView.quantisedVowel(0), 0, accuracy: 1e-6)
+        XCTAssertEqual(MonkView.quantisedVowel(1), 1, accuracy: 1e-6)
+    }
+
+    /// Stepping must be visible: adjacent frames should differ by a real
+    /// amount, otherwise quantising achieves nothing perceptually.
+    func testAdjacentFramesProduceVisiblyDifferentMouthShapes() {
+        let steps = Float(MonkView.vowelFrameCount - 1)
+        var maxDelta: CGFloat = 0
+        for i in 0..<Int(steps) {
+            let a = MonkView.mouthShape(vowel: MonkView.quantisedVowel(Float(i) / steps))
+            let b = MonkView.mouthShape(vowel: MonkView.quantisedVowel(Float(i + 1) / steps))
+            maxDelta = max(maxDelta, max(abs(a.w - b.w), abs(a.h - b.h)))
+        }
+        XCTAssertGreaterThan(maxDelta, 0.004,
+                             "frames must be distinguishable, not a disguised glide")
+    }
 }
