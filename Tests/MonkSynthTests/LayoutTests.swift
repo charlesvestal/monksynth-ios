@@ -298,6 +298,41 @@ final class LayoutTests: XCTestCase {
         CGSize(width: 480, height: 320),
     ]
 
+    /// The selector is centred, not left-aligned, in the header row: its
+    /// midpoint must land on the safe area's own midpoint. True at every
+    /// size in the sweep except the AUM strip (375×180) — there the drawer
+    /// handle's Y range overlaps the header (see
+    /// `PluginView.characterSelectorFrame`'s doc comment), leaving a
+    /// non-colliding corridor barely wider than the selector's own
+    /// preferred width, with no slack left to also centre it. Not
+    /// intersecting `infoButton`/`handle` always wins over exact centering
+    /// — that trade is covered separately by
+    /// `testCharacterSelectorDoesNotIntersectPadControlsHandleOrInfoButton`
+    /// and `testCharacterSelectorIsPresentEvenWhenStageCollapses`.
+    func testCharacterSelectorIsHorizontallyCenteredWithinTheSafeWidth() {
+        let aumStrip = CGSize(width: 375, height: 180)
+        for size in Self.usualSizeSweep where size != aumStrip {
+            let bounds = CGRect(origin: .zero, size: size)
+            let l = PluginView.layout(in: bounds)
+            XCTAssertEqual(l.characterSelector.midX, bounds.midX, accuracy: 0.5,
+                "selector not centred at \(size): \(l.characterSelector)")
+        }
+    }
+
+    /// Centering must track the SAFE width, not the raw bounds width — an
+    /// asymmetric safe area (e.g. a notch/Dynamic Island cutout reserving
+    /// space unevenly) should shift the centred group along with it, the
+    /// same way `testEveryZoneStaysInsideTheSafeArea` already requires of
+    /// every other zone.
+    func testCharacterSelectorCentersWithinSafeWidthUnderAnAsymmetricSafeArea() {
+        let bounds = CGRect(x: 0, y: 0, width: 844, height: 390)
+        let insets = UIEdgeInsets(top: 0, left: 100, bottom: 0, right: 0)
+        let l = PluginView.layout(in: bounds, safeArea: insets)
+        let safeMidX = bounds.inset(by: insets).midX
+        XCTAssertEqual(l.characterSelector.midX, safeMidX, accuracy: 0.5,
+            "selector should centre within the safe width \(bounds.inset(by: insets)), got \(l.characterSelector)")
+    }
+
     /// Unlike the old edge arrows (only shown beside a non-collapsed
     /// stage), `characterSelector` lives in the header row and is computed
     /// independently of `stage` — so it must meet the 44pt HIG minimum tap

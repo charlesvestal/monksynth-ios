@@ -2,20 +2,21 @@ import XCTest
 import UIKit
 @testable import MonkSynth
 
-/// Covers `CharacterSelector` — the compact "‹ Monk ⌄ ›" control replacing
-/// the old edge arrows and the tap-the-art picker gesture — plus
-/// `PluginView`'s wiring of it: stepping the visible `CharacterView`
-/// (wraparound, exactly what the old arrows did) and opening
-/// `CharacterDropdownView`.
+/// Covers `CharacterSelector` — the quiet, centred "‹ Monk ›" label
+/// replacing the old edge arrows, the tap-the-art picker gesture, and the
+/// filled-pill control that followed it — plus `PluginView`'s wiring of it:
+/// stepping the visible `CharacterView` (wraparound, exactly what the old
+/// arrows did) and opening `CharacterDropdownView` by tapping the name
+/// (there is no separate chevron target anymore).
 ///
-/// `CharacterSelector`'s three interactive subviews (`‹`, the name+`⌄`
-/// target, `›`) are found structurally rather than by matching localized
+/// `CharacterSelector`'s three interactive subviews (`‹`, the name target,
+/// `›`) are found structurally rather than by matching localized
 /// accessibility text (`character.previous`/`character.next`/
 /// `characterSelector.label` all go through `NSLocalizedString`, and this
 /// process's `Bundle.main` resolution for a unit-test bundle is exactly the
 /// kind of thing `LocalizationTests` exists to pin down separately) — the
 /// two `UIButton`s are `‹`/`›` (left-to-right by X position), and the one
-/// remaining subview is the name+chevron target.
+/// remaining subview is the name target.
 final class CharacterSelectorTests: XCTestCase {
 
     // MARK: - Helpers
@@ -31,7 +32,14 @@ final class CharacterSelectorTests: XCTestCase {
         selector.subviews.first(where: { !($0 is UIButton) }) as? UIControl
     }
 
-    private func makeSelector(width: CGFloat = 210, height: CGFloat = 44) -> CharacterSelector {
+    private func nameLabel(in selector: CharacterSelector) throws -> UILabel {
+        let control = try XCTUnwrap(nameControl(in: selector))
+        return try XCTUnwrap(control.subviews.first(where: { $0 is UILabel }) as? UILabel)
+    }
+
+    /// Matches `PluginView.characterSelectorMaxWidth` — the widest the
+    /// selector is ever actually given at a roomy host size.
+    private func makeSelector(width: CGFloat = 180, height: CGFloat = 44) -> CharacterSelector {
         let selector = CharacterSelector(frame: CGRect(x: 0, y: 0, width: width, height: height))
         selector.setNeedsLayout()
         selector.layoutIfNeeded()
@@ -68,8 +76,12 @@ final class CharacterSelectorTests: XCTestCase {
         XCTAssertEqual(opened, 0)
     }
 
-    // MARK: - Name/chevron target opens the dropdown
+    // MARK: - Name target opens the dropdown (there is no separate chevron)
 
+    /// Tapping the name is the ENTIRE "open the list" affordance now — no
+    /// separate chevron target exists to fire this. Also, structurally,
+    /// `nameControl` has exactly one subview (`nameLabel`): the old chevron
+    /// `UIImageView` is gone.
     func testTappingTheNameControlFiresOnOpenDropdownOnly() throws {
         let selector = makeSelector()
         var backward = 0, forward = 0, opened = 0
@@ -78,6 +90,8 @@ final class CharacterSelectorTests: XCTestCase {
         selector.onOpenDropdown = { opened += 1 }
 
         let control = try XCTUnwrap(nameControl(in: selector))
+        XCTAssertEqual(control.subviews.count, 1,
+            "expected only the name label inside the name control — no separate chevron subview")
         control.sendActions(for: .touchUpInside)
 
         XCTAssertEqual(opened, 1)
@@ -91,7 +105,7 @@ final class CharacterSelectorTests: XCTestCase {
     /// name as its VALUE, previous/next as the increment/decrement ADJUST
     /// actions (a VoiceOver swipe, not just the tiny `‹`/`›` glyphs), and
     /// double-tap (`accessibilityActivate`) opening the dropdown — exactly
-    /// what the chevron visually promises.
+    /// what tapping the name itself does visually.
     func testNameControlIsAnAdjustableAccessibilityElement() throws {
         let selector = makeSelector()
         let control = try XCTUnwrap(nameControl(in: selector))
@@ -161,13 +175,82 @@ final class CharacterSelectorTests: XCTestCase {
         for width in widths {
             let selector = makeSelector(width: width)
             XCTAssertEqual(selector.subviews.count, 3,
-                "expected exactly three interactive targets (‹, name+⌄, ›) at width \(width)")
+                "expected exactly three interactive targets (‹, name, ›) at width \(width)")
             for sub in selector.subviews {
                 XCTAssertGreaterThanOrEqual(sub.frame.width, 44,
                     "target \(sub) narrower than 44pt at selector width \(width)")
                 XCTAssertGreaterThanOrEqual(sub.frame.height, 44,
                     "target \(sub) shorter than 44pt at selector width \(width)")
             }
+        }
+    }
+
+    /// The visual shrink (small type, thin glyphs, no pill) must not shrink
+    /// the touch targets underneath it — same "small glyph, big hit region"
+    /// pattern already used by `PluginView.infoButton` and the drawer
+    /// handle. Checks the glyph/label itself renders far smaller than its
+    /// own tap target, at the roomiest width the selector is ever given.
+    func testVisibleGlyphsAreSmallerThanTheirTapTargets() {
+        let selector = makeSelector()
+        let (left, right) = arrowButtons(in: selector)
+        for button in [left, right] {
+            let imageSize = button.imageView?.image?.size ?? .zero
+            XCTAssertLessThan(imageSize.width, 20,
+                "arrow glyph should render small — got \(imageSize) inside a \(button.frame) tap target")
+            XCTAssertGreaterThanOrEqual(button.frame.width, 44)
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+        }
+    }
+
+    // MARK: - Subtle, not a widget
+
+    /// The whole point of this revision: no filled capsule, no border, and
+    /// the name reads in `Theme.textDim` rather than `Theme.textPrimary` —
+    /// a quiet label sitting on the app background, not a chunky control.
+    func testSelectorHasNoBackgroundOrBorder() {
+        let selector = makeSelector()
+        XCTAssertEqual(selector.backgroundColor, .clear)
+        XCTAssertEqual(selector.layer.borderWidth, 0)
+    }
+
+    func testNameLabelUsesTheDimTextColorNotThePrimaryOne() throws {
+        let selector = makeSelector()
+        let label = try nameLabel(in: selector)
+        XCTAssertEqual(label.textColor, Theme.textDim)
+        XCTAssertNotEqual(label.textColor, Theme.textPrimary)
+    }
+
+    // MARK: - Long names (a future roster will exceed "Monk")
+
+    /// "Monk" is six characters at most today. A future roster will have
+    /// names like "Opera Singer" or "Fire Fighter" — this exercises one at
+    /// the exact width `PluginView` hands the selector at the AUM strip
+    /// (375×180), the narrowest realistic width and the one closest to
+    /// `infoButton`. The label must truncate rather than force the view (or
+    /// any of its subviews) wider than the frame it was given, and the
+    /// arrows on either side must keep their full 44pt tap target
+    /// regardless of how long the name is — the name never steals width
+    /// from them; see `layoutSubviews`.
+    func testLongNameTruncatesWithoutGrowingOrStealingTapTargetWidth() throws {
+        let width = PluginView.layout(in: CGRect(x: 0, y: 0, width: 375, height: 180)).characterSelector.width
+        let selector = makeSelector(width: width)
+        selector.characterName = "Opera Singer"
+        selector.setNeedsLayout()
+        selector.layoutIfNeeded()
+
+        XCTAssertEqual(selector.frame.width, width,
+            "a long name must never grow the selector's own frame")
+
+        let label = try nameLabel(in: selector)
+        XCTAssertEqual(label.lineBreakMode, .byTruncatingTail)
+        XCTAssertLessThanOrEqual(label.frame.maxX, selector.bounds.width,
+            "the name label must stay clipped inside the selector's given width, not overflow it")
+
+        let (left, right) = arrowButtons(in: selector)
+        for button in [left, right] {
+            XCTAssertGreaterThanOrEqual(button.frame.width, 44,
+                "a long name must not shrink the arrow tap targets below 44pt")
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
         }
     }
 
@@ -220,5 +303,40 @@ final class CharacterSelectorTests: XCTestCase {
 
         view.stage.character = CowCharacter()   // programmatic, e.g. a restored session
         XCTAssertEqual(control.accessibilityValue, "Cow")
+    }
+
+    // MARK: - Never collides with infoButton, even with a long name
+
+    /// The specific risk the task calls out: because the selector is now
+    /// centred rather than left-aligned, a naive "size the group to its
+    /// content, then centre it" implementation would let a long name grow
+    /// the frame outward on both sides — and at a narrow width the
+    /// right-hand growth could walk into `infoButton`. Exercised end to end
+    /// through a REAL `PluginView`, at the narrowest realistic width (the
+    /// AUM strip, 375×180) where the two sit closest together, with a name
+    /// well beyond anything in today's six-character roster ("Monk", "Fish",
+    /// "Cow", ...) — standing in for a future roster entry like "Opera
+    /// Singer" or "Fire Fighter".
+    func testCharacterSelectorNeverCollidesWithInfoButtonWithALongNameAtTheAUMStripWidth() {
+        let view = PluginView(frame: CGRect(x: 0, y: 0, width: 375, height: 180))
+        view.characterSelector.characterName = "Opera Singer"
+        view.setNeedsLayout(); view.layoutIfNeeded()
+
+        let infoButton = PluginView.layout(in: view.bounds).infoButton
+        XCTAssertFalse(view.characterSelector.frame.intersects(infoButton),
+            "selector \(view.characterSelector.frame) collided with infoButton \(infoButton) for a long name")
+    }
+
+    /// Same collision guarantee at the standard portrait width, where there
+    /// is normally ample room — confirms a long name doesn't quietly regress
+    /// the roomy case either.
+    func testCharacterSelectorNeverCollidesWithInfoButtonWithALongNameAtPortraitWidth() {
+        let view = PluginView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        view.characterSelector.characterName = "Opera Singer"
+        view.setNeedsLayout(); view.layoutIfNeeded()
+
+        let infoButton = PluginView.layout(in: view.bounds).infoButton
+        XCTAssertFalse(view.characterSelector.frame.intersects(infoButton),
+            "selector \(view.characterSelector.frame) collided with infoButton \(infoButton) for a long name")
     }
 }

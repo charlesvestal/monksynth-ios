@@ -1,7 +1,7 @@
 import UIKit
 
 /// Dismissible overlay listing every registered character's NAME as a plain
-/// text row — what `CharacterSelector`'s `⌄` opens. Replaces the old
+/// text row — what tapping `CharacterSelector`'s name opens. Replaces the old
 /// character-ART grid (`CharacterPickerView`, deleted along with
 /// `CharacterView.snapshot(of:size:)`, which existed solely to render that
 /// grid's cells): the user asked for exactly this, "Just list names in a

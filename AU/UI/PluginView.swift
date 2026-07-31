@@ -100,10 +100,11 @@ final class PluginView: UIView {
     /// Minimum tap target per Apple's HIG.
     static let infoButtonSize: CGFloat = 44
 
-    /// The compact "‹ Monk ⌄ ›" control replacing the old edge arrows and
-    /// the tap-the-art picker — see that type's own doc comment. Lives in
-    /// the header row (`characterSelectorFrame`), not beside the character
-    /// art, so it survives a collapsed stage.
+    /// The quiet, centred "‹ Monk ›" label replacing the old edge arrows,
+    /// the tap-the-art picker, and the filled-pill control that followed it
+    /// — see that type's own doc comment. Lives in the header row
+    /// (`characterSelectorFrame`), not beside the character art, so it
+    /// survives a collapsed stage.
     let characterSelector = CharacterSelector()
 
     /// Whether the control drawer is expanded. Defaults to `true`: the user
@@ -364,31 +365,58 @@ final class PluginView: UIView {
     private static let headerHeight: CGFloat = infoButtonSize
 
     /// Width `characterSelector` claims when there's room for it — "‹ Monk
-    /// ⌄ ›" doesn't need anywhere near the view's full width, and capping it
-    /// keeps the header row visually compact rather than stretching a tiny
-    /// control across a wide iPad.
-    private static let characterSelectorMaxWidth: CGFloat = 210
+    /// ›" doesn't need anywhere near the view's full width, and capping it
+    /// keeps the header row visually compact (centred, subtle) rather than
+    /// stretching a tiny label across a wide iPad. Deliberately narrower
+    /// than the old pill control's 210pt: this is a quiet readout, not a
+    /// widget that should visually compete with `infoButton` for attention.
+    private static let characterSelectorMaxWidth: CGFloat = 180
 
-    /// `CharacterSelector`'s frame: top-left, on the same row as
-    /// `infoButton` (top-right) — both `infoButtonSize` (44pt) tall, so the
-    /// header reads as one row. Width is whatever fits up to
-    /// `characterSelectorMaxWidth` before it would collide with
-    /// `infoButton`.
+    /// `CharacterSelector`'s frame: centred horizontally in the header row,
+    /// on the same Y band as `infoButton` (top-right) — both
+    /// `infoButtonSize` (44pt) tall, so the header reads as one row. Width
+    /// is whatever fits up to `characterSelectorMaxWidth`.
     ///
-    /// At most host sizes that's the whole story. But at the very shortest
-    /// realistic host rect (the AUM strip, 375×180 — see `RenderUISnapshot`
-    /// and the class doc comment on host-supplied sizes) there isn't 44pt
-    /// of clearance between the top of the view and where `handle` reaches
-    /// up to from the bottom-pinned control strip: `handle` is deliberately
-    /// protected, untouched by anything here (see `headerHeight`'s doc
-    /// comment), so it can't move to make room. X-separation is the only
-    /// way both can coexist there — the same trick `infoButton` already
-    /// relies on (it sits far enough right of `handle`'s horizontally
-    /// centred band to never actually intersect it, even though their Y
-    /// ranges already overlap at that size). This clamps `characterSelector`
-    /// the same way, but ONLY when the Y ranges actually overlap — at every
-    /// roomier size the selector gets its full preferred width, not a
-    /// permanently-shrunk one.
+    /// The frame's width is computed purely from layout geometry — never
+    /// from `characterName`'s length (see `CharacterSelector`'s own doc
+    /// comment) — so a longer name never pushes this view's claimed width
+    /// or position; it only changes how much of `nameLabel`'s text is
+    /// visible before it truncates. That's deliberate: centering an
+    /// intrinsically-sized "‹ Name ›" group would let a long name's own
+    /// width grow the frame outward on both sides, and on a narrow host
+    /// (the AUM strip, 375×180) the right-hand growth would walk straight
+    /// into `infoButton`. Fixing the width first and truncating the content
+    /// to fit removes that failure mode entirely, for any future roster
+    /// name ("Opera Singer", "Fire Fighter", ...).
+    ///
+    /// The centred position itself is clamped the same defensive way: `x`
+    /// is chosen to centre `preferredWidth` within the view's safe width
+    /// (`safe.midX`), then pulled back inside `[leftInset, maxX - width]` —
+    /// the same non-colliding corridor `maxX` (below) already protects.
+    /// Since `preferredWidth` is never wider than that corridor, the clamp
+    /// can always be satisfied; at most sizes it isn't even invoked (the
+    /// centred position already sits inside the corridor) and the frame
+    /// really is centred, but at the tightest one — the AUM strip, where
+    /// `handle`'s Y range overlaps the header (see below) and eats most of
+    /// the row's width — the corridor itself is barely wider than
+    /// `preferredWidth`, so the frame lands wherever the corridor is rather
+    /// than at the exact midpoint. Never intersecting `infoButton` (or, at
+    /// that one size, `handle`) always wins over exact centering.
+    ///
+    /// At most host sizes the corridor is bounded only by `infoButton`. But
+    /// at the very shortest realistic host rect (the AUM strip, 375×180 —
+    /// see `RenderUISnapshot` and the class doc comment on host-supplied
+    /// sizes) there isn't 44pt of clearance between the top of the view and
+    /// where `handle` reaches up to from the bottom-pinned control strip:
+    /// `handle` is deliberately protected, untouched by anything here (see
+    /// `headerHeight`'s doc comment), so it can't move to make room.
+    /// X-separation is the only way both can coexist there — the same trick
+    /// `infoButton` already relies on (it sits far enough right of
+    /// `handle`'s horizontally centred band to never actually intersect it,
+    /// even though their Y ranges already overlap at that size). This
+    /// clamps `characterSelector`'s corridor the same way, but ONLY when
+    /// the Y ranges actually overlap — at every roomier size the corridor
+    /// is bounded solely by `infoButton`.
     private static func characterSelectorFrame(bounds: CGRect, safeArea: UIEdgeInsets,
                                                  infoButton: CGRect, handle: CGRect) -> CGRect {
         let topInset = max(4, safeArea.top + 4)
@@ -400,8 +428,13 @@ final class PluginView: UIView {
         if topInset < handle.maxY, topInset + height > handle.minY {
             maxX = min(maxX, handle.minX - gap)
         }
-        let width = max(0, min(characterSelectorMaxWidth, maxX - leftInset))
-        return CGRect(x: leftInset, y: topInset, width: width, height: height)
+        let availableWidth = max(0, maxX - leftInset)
+        let width = min(characterSelectorMaxWidth, availableWidth)
+
+        let safe = bounds.inset(by: safeArea)
+        var x = safe.midX - width / 2
+        x = max(leftInset, min(x, maxX - width))
+        return CGRect(x: x, y: topInset, width: width, height: height)
     }
 
     /// The control strip's height for `available` total vertical space (the
