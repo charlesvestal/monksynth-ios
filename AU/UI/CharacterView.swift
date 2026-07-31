@@ -149,11 +149,6 @@ final class CharacterView: UIView {
         super.didMoveToWindow()
         lastTimestamp = nil
         updateDisplayLink()
-        // A window move can change the effective screen scale (e.g. moving
-        // between simulators/screens with different `screen.scale`), which
-        // is part of the body cache's key — force a redraw so a stale cache
-        // rendered at the wrong scale isn't left on screen.
-        setNeedsDisplay()
     }
 
     // MARK: - Stepping and selecting (CharacterSelector's ‹/›/dropdown)
@@ -248,64 +243,18 @@ final class CharacterView: UIView {
         return idle.pose
     }
 
-    // MARK: - Body cache
-    //
-    // `drawBody` is the expensive part now — six-plus `Shading` gradients
-    // per character — and it never changes between frames: only the eyes
-    // (blink) and the mouth (vowel/amplitude) animate. Rendering it into a
-    // `UIImage` once and compositing that same bitmap every tick, instead
-    // of replaying the gradient calls at up to 120Hz, is the difference
-    // between "a few gradients on note-on/blink/vowel-step" and "a few
-    // gradients every single frame" inside a host that's already doing
-    // audio work. See the style spec's "Performance" section.
-    //
-    // The cache key is exactly the spec's three invalidation triggers
-    // (character id, size, screen scale) — no separate "dirty" flag is
-    // needed because `draw(_:)` recomputes the key every call and only
-    // re-renders when it no longer matches.
-    private struct BodyCacheKey: Equatable {
-        let characterID: String
-        let size: CGSize
-        let scale: CGFloat
-    }
-    private var bodyCacheKey: BodyCacheKey?
-    private var bodyCacheImage: UIImage?
-
-    /// The screen scale to render the cached body at. Prefers the window's
-    /// actual screen (so a view dragged to a different-scale display
-    /// re-renders crisp), falling back to the trait collection and then
-    /// `UIScreen.main` for views not yet in a window — the render-harness
-    /// tests construct a `CharacterView` and snapshot it without ever
-    /// adding it to a window.
-    private var effectiveScale: CGFloat {
-        if let windowScale = window?.screen.scale, windowScale > 0 { return windowScale }
-        let traitScale = traitCollection.displayScale
-        return traitScale > 0 ? traitScale : UIScreen.main.scale
-    }
-
     // MARK: - Drawing
 
     override func draw(_ rect: CGRect) {
-        guard bounds.width > 0, bounds.height > 0 else { return }
+        guard rect.width > 0, rect.height > 0 else { return }
 
         // A centred square "stage" so the rig never distorts under odd
         // aspect ratios: every shape is defined in stage-relative fractions
-        // (0...1 across both axes) and mapped through `point`. Derived from
-        // `bounds` rather than the passed-in `rect` so it stays correct
-        // regardless of what UIKit chooses to invalidate — `contentMode =
-        // .redraw` (set in `init`) means a bounds change always triggers a
-        // full redraw of this view anyway.
-        let side = min(bounds.width, bounds.height)
-        let stage = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        // (0...1 across both axes) and mapped through `point`.
+        let side = min(rect.width, rect.height)
+        let stage = CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)
 
-        let scale = effectiveScale
-        let key = BodyCacheKey(characterID: character.id, size: bounds.size, scale: scale)
-        if bodyCacheKey != key {
-            bodyCacheImage = renderBodyImage(stage: stage.offsetBy(dx: -bounds.minX, dy: -bounds.minY),
-                                              size: bounds.size, scale: scale)
-            bodyCacheKey = key
-        }
-        bodyCacheImage?.draw(in: bounds)
+        character.drawBody(in: stage)
 
         let pose = currentPose
         character.drawEyes(in: stage, blinking: pose.blinking)
@@ -314,39 +263,18 @@ final class CharacterView: UIView {
         drawMouth(in: stage, vowel: Self.quantisedVowel(pose.vowel))
     }
 
-    /// Renders `character.drawBody` once into an offscreen bitmap at the
-    /// given size/scale. `stage` is already shifted to a (0,0)-origin local
-    /// coordinate space matching the renderer's own canvas — `bounds.origin`
-    /// is practically always `.zero` for this view, but shifting explicitly
-    /// keeps the cached image correct even if that ever stops being true,
-    /// since the image is later composited back via `draw(in: bounds)`
-    /// which reapplies that same origin.
-    private func renderBodyImage(stage: CGRect, size: CGSize, scale: CGFloat) -> UIImage? {
-        guard size.width > 0, size.height > 0 else { return nil }
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { _ in
-            character.drawBody(in: stage)
-        }
-    }
-
     private func point(_ fx: CGFloat, _ fy: CGFloat, in stage: CGRect) -> CGPoint {
         CGPoint(x: stage.minX + fx * stage.width, y: stage.minY + fy * stage.height)
     }
 
     /// Draws the mouth aperture on every character's behalf, from its
     /// `mouthShape`/`mouthCentre`/`mouthBoxFraction`. Shared, not
-    /// per-character: the aperture is always a `Shading.recess` — a
-    /// genuine hole into the face, not a flat dark oval pasted on top of
-    /// it — so a character wanting a distinctive fixed mouth *frame* (the
-    /// fish's prominent lips, the old man's beard) draws that fixed part
-    /// itself in `drawBody`, and this composites the moving aperture on top
-    /// of it. Drawn fresh every frame (not part of the cached body image)
-    /// since this is exactly the part that animates.
+    /// per-character: the aperture is always a plain dark oval — a "hole"
+    /// reading as an open mouth against any character's face — so a
+    /// character wanting a distinctive fixed mouth *frame* (the fish's
+    /// prominent lips, the old man's beard) draws that fixed part itself in
+    /// `drawBody`, and this composites the moving aperture on top of it.
     private func drawMouth(in stage: CGRect, vowel: Float) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
         let shape = character.mouthShape(vowel: vowel)
         // Step the amplitude swell too. A continuously-scaling mouth would
         // reintroduce exactly the glide that quantising the vowel removes —
@@ -359,6 +287,11 @@ final class CharacterView: UIView {
         let h = box * shape.h * ampBoost
         let c = point(character.mouthCentre.fx, character.mouthCentre.fy, in: stage)
 
-        Shading.recess(in: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h), into: context)
+        let mouth = UIBezierPath(ovalIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h))
+        Theme.background.setFill()
+        mouth.fill()
+        Theme.robeShadow.withAlphaComponent(0.5).setStroke()
+        mouth.lineWidth = stage.width * 0.008
+        mouth.stroke()
     }
 }
