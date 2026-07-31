@@ -479,4 +479,104 @@ final class RenderUISnapshot: XCTestCase {
         try data.write(to: URL(fileURLWithPath: "/tmp/ui_characterdropdown.png"))
         print("SNAPSHOT_WRITTEN /tmp/ui_characterdropdown.png bytes=\(data.count)")
     }
+
+    /// The presets overlay (opened via the about screen's "Presets" link): a
+    /// mix of the six read-only factory presets and several user presets —
+    /// each showing the character face it was saved with — at a normal
+    /// height, a mid height, and the AUM-strip size (375×180) to confirm it
+    /// scrolls and stays usable there too. Required visual check for the
+    /// "save your own patch with a name and the current character as its
+    /// face" task.
+    func testWriteMonkPresetsSheet() throws {
+        let gap: CGFloat = 20
+        let label: CGFloat = 18
+
+        let store = PresetsRenderFakeStore(presets: [
+            ("Sunrise Chant", "monk"),
+            ("Bubbles", "fish"),
+            ("Stardust", "unicorn"),
+            ("Schoolyard", "girl"),
+            ("Grumbles", "oldman"),
+            ("Pasture", "cow"),
+        ])
+
+        func snapshot(_ view: UIView, size: CGSize) -> UIImage {
+            view.frame = CGRect(origin: .zero, size: size)
+            view.setNeedsLayout(); view.layoutIfNeeded()
+            return UIGraphicsImageRenderer(size: size).image { c in view.layer.render(in: c.cgContext) }
+        }
+
+        let tallSize = CGSize(width: 390, height: 844)
+        let tall = PresetsView(frame: .zero, store: store)
+
+        let midSize = CGSize(width: 390, height: 480)
+        let mid = PresetsView(frame: .zero, store: store)
+
+        let shortSize = CGSize(width: 375, height: 180)
+        let short = PresetsView(frame: .zero, store: store)
+
+        // Unsupported-host state: no save UI, no delete buttons — the other
+        // required-by-the-task degrade path.
+        let unsupportedStore = PresetsRenderFakeStore(presets: [("Read Only", "monk")], supportsUserPresets: false)
+        let unsupported = PresetsView(frame: .zero, store: unsupportedStore)
+
+        let columns: [(String, UIView, CGSize)] = [
+            ("tall 390x844", tall, tallSize),
+            ("mid 390x480", mid, midSize),
+            ("AUM strip 375x180 (must scroll)", short, shortSize),
+            ("unsupported host 390x480", unsupported, midSize),
+        ]
+
+        let sheet = CGSize(width: columns.reduce(0) { $0 + $1.2.width + gap } + gap,
+                           height: (columns.map(\.2.height).max() ?? 0) + gap * 2 + label)
+        let renderer = UIGraphicsImageRenderer(size: sheet)
+        let image = renderer.image { ctx in
+            UIColor(white: 0.06, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: sheet))
+            var x = gap
+            for (name, view, size) in columns {
+                snapshot(view, size: size).draw(at: CGPoint(x: x, y: gap + label))
+                (name as NSString).draw(
+                    at: CGPoint(x: x, y: gap),
+                    withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                                     .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+                x += size.width + gap
+            }
+        }
+        let data = try XCTUnwrap(image.pngData())
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_presets.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_presets.png bytes=\(data.count)")
+    }
+}
+
+/// Deterministic, in-memory `PresetStoring` fixture for
+/// `testWriteMonkPresetsSheet` — mirrors the same shape
+/// `PresetsViewTests`'s own private fake uses, but this one needs to be
+/// visible to this file specifically (that one is private to
+/// `PresetsViewTests.swift`) and lets the caller seed a specific character
+/// per row up front, which is exactly what a render sheet needs.
+private final class PresetsRenderFakeStore: PresetStoring {
+    let supportsUserPresets: Bool
+    private(set) var savedUserPresets: [SavedPreset]
+
+    init(presets: [(name: String, characterID: String)], supportsUserPresets: Bool = true) {
+        self.savedUserPresets = presets.map { SavedPreset(name: $0.name, characterID: $0.characterID) }
+        self.supportsUserPresets = supportsUserPresets
+    }
+
+    func snapshot(forUserPresetNamed name: String) -> PresetSnapshot? {
+        guard let preset = savedUserPresets.first(where: { $0.name == name }) else { return nil }
+        return PresetSnapshot(params: Param.allCases.map(\.defaultValue), characterID: preset.characterID)
+    }
+
+    @discardableResult
+    func saveCurrentAsUserPreset(named name: String) -> PresetSaveResult {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .emptyName }
+        savedUserPresets.append(SavedPreset(name: name, characterID: "monk"))
+        return .success
+    }
+
+    func deleteUserPreset(named name: String) {
+        savedUserPresets.removeAll { $0.name == name }
+    }
 }

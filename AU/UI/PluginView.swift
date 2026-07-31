@@ -88,6 +88,23 @@ final class PluginView: UIView {
     /// default; `RootViewController` (the standalone app) turns it on.
     var showsBluetoothOption = false
 
+    /// Where user presets actually live — set by the owning controller
+    /// (`AudioUnitViewController` hands its `MonkSynthAU`;
+    /// `RootViewController` hands its own `StandalonePresetStore`) before
+    /// the presets overlay can ever be opened. `showPresets()` no-ops if
+    /// this is still nil, which should never happen in practice but keeps
+    /// the entry point from crashing on a misconfigured container.
+    var presetStore: PresetStoring?
+    /// A factory preset row was tapped in `PresetsView` — the owner applies
+    /// it (sound only, via whichever mechanism already exists for factory
+    /// presets: `MonkSynthAU.currentPreset` on the AUv3 side, the same
+    /// `kFactoryPresets` values replayed directly on the standalone side).
+    var onApplyFactoryPreset: ((Int) -> Void)?
+    /// A user preset row was tapped, already resolved to a full
+    /// `PresetSnapshot` — the owner applies both the params and the
+    /// character.
+    var onApplyUserPreset: ((PresetSnapshot) -> Void)?
+
     /// Header ⓘ button that opens `AboutView`. Visually a small glyph, but
     /// sized to the full 44pt HIG minimum in both dimensions (see
     /// `layoutSubviews`) — a button's own frame already IS its hit area, so
@@ -96,6 +113,7 @@ final class PluginView: UIView {
     private var aboutView: AboutView?
     private var moreAppsView: MoreAppsView?
     private var characterDropdownView: CharacterDropdownView?
+    private var presetsView: PresetsView?
 
     /// Minimum tap target per Apple's HIG.
     static let infoButtonSize: CGFloat = 44
@@ -234,6 +252,10 @@ final class PluginView: UIView {
             self?.hideAbout()
             self?.showMoreApps()
         }
+        a.onPresets = { [weak self] in
+            self?.hideAbout()
+            self?.showPresets()
+        }
         addSubview(a)
         aboutView = a
         setNeedsLayout()
@@ -257,6 +279,30 @@ final class PluginView: UIView {
     private func hideMoreApps() {
         moreAppsView?.removeFromSuperview()
         moreAppsView = nil
+    }
+
+    // MARK: - Presets
+
+    private func showPresets() {
+        guard presetsView == nil, let store = presetStore else { return }
+        let p = PresetsView(frame: bounds, store: store)
+        p.onClose = { [weak self] in self?.hidePresets() }
+        p.onSelectFactoryPreset = { [weak self] index in
+            self?.onApplyFactoryPreset?(index)
+            self?.hidePresets()
+        }
+        p.onSelectUserPreset = { [weak self] snapshot in
+            self?.onApplyUserPreset?(snapshot)
+            self?.hidePresets()
+        }
+        addSubview(p)
+        presetsView = p
+        setNeedsLayout()
+    }
+
+    private func hidePresets() {
+        presetsView?.removeFromSuperview()
+        presetsView = nil
     }
 
     // MARK: - Character selector
@@ -650,6 +696,10 @@ final class PluginView: UIView {
         if let characterDropdownView {
             characterDropdownView.frame = bounds
             bringSubviewToFront(characterDropdownView)
+        }
+        if let presetsView {
+            presetsView.frame = bounds
+            bringSubviewToFront(presetsView)
         }
     }
 }

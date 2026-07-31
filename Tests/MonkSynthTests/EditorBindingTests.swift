@@ -362,4 +362,90 @@ final class EditorBindingTests: XCTestCase {
         let param = try XCTUnwrap(capturedUnit.parameterTree?.parameter(withAddress: Param.vowel.rawValue))
         param.setValue(0.5, originator: nil)   // must not crash
     }
+
+    // MARK: - Presets
+
+    /// `bind()` hands `MonkSynthAU` itself to `pluginView` as the presets
+    /// overlay's `PresetStoring` — it already conforms (see `MonkSynthAU`'s
+    /// "User presets" section).
+    func testBindWiresTheAUAsThePresetStore() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+
+        let pluginView = vc.view as! PluginView
+        XCTAssertTrue(pluginView.presetStore === unit)
+    }
+
+    /// Tapping a factory preset row in `PresetsView` applies it through the
+    /// existing, already-tested `MonkSynthAU.currentPreset` mechanism —
+    /// sound only, matching `PresetTests.testSelectingPresetUpdatesShadowAndTree`.
+    func testApplyingFactoryPresetFromPresetsOverlayUpdatesShadowAndTree() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+        let pluginView = vc.view as! PluginView
+
+        pluginView.onApplyFactoryPreset?(2)   // Monastary
+
+        let expected = kFactoryPresets[2].values
+        for (i, want) in expected.enumerated() {
+            XCTAssertEqual(param_shadow_get(unit.shadow, Param.address(atIndex: i)), want, accuracy: 1e-5)
+        }
+    }
+
+    /// An out-of-range factory index (defensive: `PresetsView` itself always
+    /// hands back a valid `kFactoryPresets` index, but the closure guards
+    /// anyway) must not crash.
+    func testApplyingOutOfRangeFactoryPresetIndexDoesNotCrash() throws {
+        let vc = AudioUnitViewController()
+        _ = try vc.createAudioUnit(with: makeDescription())
+        vc.loadViewIfNeeded()
+        let pluginView = vc.view as! PluginView
+
+        pluginView.onApplyFactoryPreset?(999)   // must not crash
+        pluginView.onApplyFactoryPreset?(-1)    // must not crash
+    }
+
+    /// Applying a resolved user-preset snapshot — what `PresetsView` hands
+    /// back after a row tap — updates both the AU's params AND its
+    /// character, through the same `fullState` path a session restore
+    /// already uses, and that in turn refreshes the visible character (via
+    /// `au.onCharacterIDChange`, wired in `bind()`).
+    func testApplyingUserPresetSnapshotUpdatesParametersAndCharacter() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+        let pluginView = vc.view as! PluginView
+
+        var params = Param.allCases.map(\.defaultValue)
+        params[Int(Param.headSize.rawValue)] = 0.66
+        let snapshot = PresetSnapshot(params: params, characterID: "fish")
+
+        pluginView.onApplyUserPreset?(snapshot)
+
+        pollUntil { unit.characterID == "fish" }
+        XCTAssertEqual(unit.characterID, "fish")
+        XCTAssertEqual(param_shadow_get(unit.shadow, kParamHeadSize), 0.66, accuracy: 1e-6)
+        pollUntil { pluginView.stage.character.id == "fish" }
+        XCTAssertEqual(pluginView.stage.character.id, "fish")
+    }
+
+    /// A user preset saved under a characterID the roster no longer
+    /// recognises must fall back to monk when applied — `MonkSynthAU.
+    /// fullState`'s setter already guarantees this; this test proves the
+    /// presets-overlay application path actually goes through it.
+    func testApplyingUserPresetWithUnknownCharacterIDFallsBackToMonk() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+        let pluginView = vc.view as! PluginView
+
+        let snapshot = PresetSnapshot(params: Param.allCases.map(\.defaultValue),
+                                       characterID: "some-character-that-was-removed")
+        pluginView.onApplyUserPreset?(snapshot)
+
+        pollUntil { unit.characterID == CharacterRegistry.defaultCharacter.id }
+        XCTAssertEqual(unit.characterID, CharacterRegistry.defaultCharacter.id)
+    }
 }

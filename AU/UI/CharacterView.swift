@@ -243,6 +243,25 @@ final class CharacterView: UIView {
         return idle.pose
     }
 
+    // MARK: - Static thumbnails (presets overlay)
+
+    /// Renders `character`'s idle, non-blinking pose into a plain image,
+    /// sized to `size` — what `PresetsView` shows as a saved user preset's
+    /// face. Deliberately does NOT add the view to a window: `CharacterView`
+    /// only ever starts its `CADisplayLink` once `window != nil` (see
+    /// `updateDisplayLink`), so a bare, never-windowed instance drawn once
+    /// via `layer.render(in:)` — the same technique `RenderUISnapshot`
+    /// already relies on for whole-plugin snapshots — costs exactly one
+    /// synchronous draw and nothing more: no live animation timer for what
+    /// is, in a preset list, a static thumbnail.
+    static func thumbnail(of character: Character, size: CGSize) -> UIImage {
+        let view = CharacterView(frame: CGRect(origin: .zero, size: size))
+        view.character = character
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            view.layer.render(in: ctx.cgContext)
+        }
+    }
+
     // MARK: - Drawing
 
     override func draw(_ rect: CGRect) {

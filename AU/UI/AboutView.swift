@@ -20,6 +20,13 @@ final class AboutView: UIView {
     /// Fired when "More Apps" is tapped. `PluginView` handles it by closing
     /// this screen and presenting `MoreAppsView` in its place.
     var onMoreApps: (() -> Void)?
+    /// Fired when "Presets" is tapped. `PluginView` handles it by closing
+    /// this screen and presenting `PresetsView` in its place — the about
+    /// screen is this feature's entry point (see the task report: the
+    /// header row is already tight with the character selector and ⓘ
+    /// button, so this reuses the same low-chrome pattern "More Apps"
+    /// already established rather than adding a third header control).
+    var onPresets: (() -> Void)?
 
     /// Hidden by default. Bluetooth MIDI pairing is a host-app concern — an
     /// AUv3 editor embedded in someone else's host (AUM, GarageBand, ...)
@@ -108,6 +115,15 @@ final class AboutView: UIView {
         bluetoothButton.addTarget(self, action: #selector(openBluetooth), for: .touchUpInside)
         stack.addArrangedSubview(bluetoothButton)
 
+        let presets = UIButton(type: .system)
+        presets.setTitle(NSLocalizedString("about.presets", comment: "Link to the Presets screen"),
+                          for: .normal)
+        presets.titleLabel?.font = Theme.label(12)
+        presets.setTitleColor(Theme.accent, for: .normal)
+        presets.contentHorizontalAlignment = .leading
+        presets.addTarget(self, action: #selector(openPresets), for: .touchUpInside)
+        stack.addArrangedSubview(presets)
+
         let moreApps = UIButton(type: .system)
         moreApps.setTitle(NSLocalizedString("about.moreApps", comment: "Link to the More Apps screen"),
                            for: .normal)
@@ -144,6 +160,7 @@ final class AboutView: UIView {
     @objc private func openSource() { onOpenURL?(Self.sourceURL) }
     @objc private func openBluetooth() { onBluetoothMIDI?() }
     @objc private func openMoreApps() { onMoreApps?() }
+    @objc private func openPresets() { onPresets?() }
 
     override func layoutSubviews() {
         super.layoutSubviews()

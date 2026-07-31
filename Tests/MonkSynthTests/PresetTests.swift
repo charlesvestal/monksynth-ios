@@ -4,13 +4,16 @@ import XCTest
 
 final class PresetTests: XCTestCase {
 
-    private func makeAU() throws -> MonkSynthAU {
-        let desc = AudioComponentDescription(
+    private func makeDescription() -> AudioComponentDescription {
+        AudioComponentDescription(
             componentType: kAudioUnitType_MusicDevice,
             componentSubType: 0x4D6E6B73,          // 'Mnks'
             componentManufacturer: 0x5673746C,     // 'Vstl'
             componentFlags: 0, componentFlagsMask: 0)
-        return try MonkSynthAU(componentDescription: desc)
+    }
+
+    private func makeAU() throws -> MonkSynthAU {
+        try MonkSynthAU(componentDescription: makeDescription())
     }
 
     func testFullStateRoundTrips() throws {
@@ -112,5 +115,211 @@ final class PresetTests: XCTestCase {
         XCTAssertEqual(param_shadow_get(au.shadow, kParamSustain), Param.sustain.defaultValue, accuracy: 1e-6)
         XCTAssertEqual(param_shadow_get(au.shadow, kParamLevel), Param.level.defaultValue, accuracy: 1e-6)
         XCTAssertEqual(param_shadow_get(au.shadow, kParamPitchWheelRaw), Param.pitchWheelRaw.defaultValue, accuracy: 1e-6)
+    }
+
+    // MARK: - User presets
+    //
+    // `MonkSynthAU`'s real `userPresetBackend` (`NativeUserPresetBackend`)
+    // calls straight through to `AUAudioUnit`'s own native
+    // `saveUserPreset`/`userPresets`/`presetState(for:)`/`deleteUserPreset`
+    // — but that native machinery's actual disk-backed storage is only
+    // reachable from inside a real, installed AU extension process (see the
+    // doc comment on `MonkSynthAU`'s "User presets" section: confirmed
+    // empirically — instantiated the same way the real extension's own
+    // factory function does, `saveUserPreset` neither throws nor persists
+    // anything inside a plain XCTest, hosted or not). These tests substitute
+    // `FakeUserPresetBackend` — an in-memory stand-in for exactly that native
+    // contract (list/read/save/delete `AUAudioUnitPreset`s, `save` capturing
+    // whatever `au.fullState` is at that moment, precisely like the real
+    // `AUAudioUnit.saveUserPreset(_:)` does) — so the LOGIC `MonkSynthAU`
+    // layers on top (name trimming/validation, case-insensitive duplicate
+    // detection, characterID/param packing and fallback) is still fully and
+    // deterministically covered.
+
+    private func makeAUWithFakeBackend() throws -> (au: MonkSynthAU, backend: FakeUserPresetBackend) {
+        let au = try makeAU()
+        let backend = FakeUserPresetBackend(au)
+        au.userPresetBackend = backend
+        return (au, backend)
+    }
+
+    func testSupportsUserPresetsIsTrue() throws {
+        let au = try makeAU()
+        XCTAssertTrue(au.supportsUserPresets)
+    }
+
+    /// "Saving captures the current parameters AND the current character."
+    func testSavingCapturesCurrentParametersAndCharacter() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        au.parameterTree!.parameter(withAddress: Param.headSize.rawValue)!.value = 0.81
+        au.setCharacterID(FishCharacter().id)
+
+        let result = au.saveCurrentAsUserPreset(named: "My Fish Patch")
+        XCTAssertEqual(result, .success)
+
+        let snapshot = try XCTUnwrap(au.snapshot(forUserPresetNamed: "My Fish Patch"))
+        XCTAssertEqual(snapshot.characterID, "fish")
+        XCTAssertEqual(snapshot.params[Int(Param.headSize.rawValue)], 0.81, accuracy: 1e-6)
+    }
+
+    /// "The user's saved presets, each showing its name and the character
+    /// face it was saved with."
+    func testSavedUserPresetsListsNameAndCharacter() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        au.setCharacterID(UnicornCharacter().id)
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Sparkly"), .success)
+
+        let saved = au.savedUserPresets
+        XCTAssertEqual(saved, [SavedPreset(name: "Sparkly", characterID: "unicorn")])
+    }
+
+    /// "Loading restores both" — applying a saved snapshot's params +
+    /// character back into a fresh AU (mirroring how
+    /// `AudioUnitViewController.onApplyUserPreset` applies one via
+    /// `fullState`) reproduces exactly what was saved.
+    func testLoadingRestoresParametersAndCharacter() throws {
+        let (source, _) = try makeAUWithFakeBackend()
+        source.parameterTree!.parameter(withAddress: Param.aspiration.rawValue)!.value = 0.37
+        source.setCharacterID(CowCharacter().id)
+        XCTAssertEqual(source.saveCurrentAsUserPreset(named: "Loadable"), .success)
+        let snapshot = try XCTUnwrap(source.snapshot(forUserPresetNamed: "Loadable"))
+
+        let destination = try makeAU()
+        destination.fullState = [
+            "monkParams": snapshot.params.withUnsafeBufferPointer { Data(buffer: $0) },
+            "characterID": snapshot.characterID,
+        ]
+
+        XCTAssertEqual(destination.characterID, "cow")
+        XCTAssertEqual(param_shadow_get(destination.shadow, kParamAspiration), 0.37, accuracy: 1e-6)
+    }
+
+    /// "Round-trip through fullState preserves characterID" — specifically
+    /// through the user-preset path (`testFullStateRoundTripsCharacterID`
+    /// above already covers the direct `fullState` case).
+    func testRoundTripThroughUserPresetPreservesCharacterID() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        au.setCharacterID(GirlCharacter().id)
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Girl Patch"), .success)
+
+        let snapshot = try XCTUnwrap(au.snapshot(forUserPresetNamed: "Girl Patch"))
+        XCTAssertEqual(snapshot.characterID, "girl")
+    }
+
+    /// "Delete removes it from userPresets."
+    func testDeleteRemovesFromSavedUserPresets() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Temporary"), .success)
+        XCTAssertEqual(au.savedUserPresets.map(\.name), ["Temporary"])
+
+        au.deleteUserPreset(named: "Temporary")
+
+        XCTAssertTrue(au.savedUserPresets.isEmpty)
+    }
+
+    /// Deleting a name that was never saved (or already deleted) is a no-op,
+    /// not a crash.
+    func testDeletingAnUnknownNameIsANoOp() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        au.deleteUserPreset(named: "never existed")
+        XCTAssertTrue(au.savedUserPresets.isEmpty)
+    }
+
+    /// "Saving with an empty name" — rejected, and nothing is saved.
+    func testSavingWithEmptyNameFails() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: ""), .emptyName)
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "   "), .emptyName)
+        XCTAssertTrue(au.savedUserPresets.isEmpty)
+    }
+
+    /// "...or a name that duplicates an existing preset" — rejected
+    /// case-insensitively, and the original is untouched.
+    func testSavingWithDuplicateNameFails() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Dupe"), .success)
+
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Dupe"), .duplicateName)
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "dupe"), .duplicateName)
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "DUPE"), .duplicateName)
+        XCTAssertEqual(au.savedUserPresets.count, 1)
+    }
+
+    /// A name that happens to match a FACTORY preset is fine — factory and
+    /// user presets are different namespaces.
+    func testSavingWithAFactoryPresetsNameSucceeds() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Dorje"), .success)
+        XCTAssertEqual(au.savedUserPresets.map(\.name), ["Dorje"])
+    }
+
+    /// "An unknown characterID in a loaded preset falls back to monk" — a
+    /// preset saved while `characterID` names a character the roster no
+    /// longer recognises (simulated via `setCharacterID`, which — unlike
+    /// `fullState`'s setter — does not itself validate) must still resolve
+    /// to monk when read back.
+    func testUnknownCharacterIDInSavedPresetFallsBackToMonk() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        au.setCharacterID("some-character-that-was-removed")
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Ghost"), .success)
+
+        let snapshot = try XCTUnwrap(au.snapshot(forUserPresetNamed: "Ghost"))
+        XCTAssertEqual(snapshot.characterID, CharacterRegistry.defaultCharacter.id)
+        XCTAssertEqual(au.savedUserPresets.first?.characterID, CharacterRegistry.defaultCharacter.id)
+    }
+
+    /// `snapshot(forUserPresetNamed:)` for a name that doesn't exist (never
+    /// saved, or deleted from under the caller) returns nil rather than
+    /// crashing.
+    func testSnapshotForUnknownNameReturnsNil() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        XCTAssertNil(au.snapshot(forUserPresetNamed: "nope"))
+    }
+
+    /// "Factory presets still work and are not clobbered by user presets."
+    func testFactoryPresetsStillWorkAlongsideUserPresets() throws {
+        let (au, _) = try makeAUWithFakeBackend()
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "One"), .success)
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Two"), .success)
+
+        XCTAssertEqual(au.factoryPresets?.map(\.name), ["Dorje", "Jamyang", "Monastary", "Ngawang", "Rabten", "Tinley"])
+
+        let monastary = try XCTUnwrap(au.factoryPresets?[2])
+        au.currentPreset = monastary
+        let expected = kFactoryPresets[2].values
+        for (i, want) in expected.enumerated() {
+            XCTAssertEqual(param_shadow_get(au.shadow, Param.address(atIndex: i)), want, accuracy: 1e-5)
+        }
+        XCTAssertEqual(au.savedUserPresets.map(\.name).sorted(), ["One", "Two"])
+    }
+}
+
+/// In-memory stand-in for `NativeUserPresetBackend` — see `MonkSynthAU`'s
+/// "User presets" section doc comment. Mirrors the real
+/// `AUAudioUnit.saveUserPreset(_:)` contract exactly: `save` captures
+/// whatever `au.fullState` is AT THE MOMENT it's called, not anything passed
+/// in separately.
+final class FakeUserPresetBackend: UserPresetBackend {
+    private unowned let au: MonkSynthAU
+    private var entries: [(preset: AUAudioUnitPreset, state: [String: Any])] = []
+
+    init(_ au: MonkSynthAU) { self.au = au }
+
+    var all: [AUAudioUnitPreset] { entries.map(\.preset) }
+
+    func state(for preset: AUAudioUnitPreset) throws -> [String: Any] {
+        guard let entry = entries.first(where: { $0.preset.name == preset.name }) else {
+            throw NSError(domain: "FakeUserPresetBackend", code: 1)
+        }
+        return entry.state
+    }
+
+    func save(_ preset: AUAudioUnitPreset) throws {
+        entries.removeAll { $0.preset.name == preset.name }
+        entries.append((preset, au.fullState ?? [:]))
+    }
+
+    func delete(_ preset: AUAudioUnitPreset) throws {
+        entries.removeAll { $0.preset.name == preset.name }
     }
 }
