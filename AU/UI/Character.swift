@@ -76,6 +76,7 @@ enum CharacterRegistry {
         UnicornCharacter(),
         GirlCharacter(),
         OldManCharacter(),
+        CowCharacter(),
     ]
 
     static var defaultCharacter: Character { all[0] }

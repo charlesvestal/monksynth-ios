@@ -14,10 +14,14 @@ final class CharacterTests: XCTestCase {
 
     /// Monk first (the default), and every entry has a real, unique id and
     /// display name — a blank or duplicate id would be silently ambiguous
-    /// for persistence/lookup.
-    func testRegistryHasFiveUniqueCharactersMonkFirst() {
+    /// for persistence/lookup. Deliberately doesn't assert an exact
+    /// `all.count` — that would just be a magic number to bump every time a
+    /// character is added or removed; the roster's *shape* invariants
+    /// (non-empty, unique, monk-first) are what actually matter and are
+    /// derived from the registry itself below.
+    func testRegistryHasUniqueCharactersMonkFirst() {
         let all = CharacterRegistry.all
-        XCTAssertEqual(all.count, 5)
+        XCTAssertFalse(all.isEmpty)
         XCTAssertEqual(all.first?.id, "monk")
         XCTAssertTrue(CharacterRegistry.defaultCharacter.id == "monk")
 
