@@ -195,14 +195,15 @@ final class CharacterTests: XCTestCase {
         XCTAssertFalse(allIdentical, "every character has the same mouth placement: \(placements)")
     }
 
-    // MARK: - The character's own tap does not steal the pad's drags
+    // MARK: - The character art never steals the pad's drags
 
     /// `stage` and `pad` are separate sibling `UIView`s (`PluginView.stage`,
-    /// `PluginView.pad`) — `CharacterView`'s tap gesture (opens the picker)
-    /// is attached to `stage` alone, and UIKit only ever delivers a touch to
-    /// the (single) subview whose frame contains it. So that gesture can
-    /// only ever "steal" a touch that was already going to `stage`, never
-    /// one over `pad` — geometric non-overlap is the whole guarantee.
+    /// `PluginView.pad`). `stage` is non-interactive now (see
+    /// `CharacterView.init`'s `isUserInteractionEnabled = false`) — it has
+    /// no gesture of any kind — but this geometric guarantee is still worth
+    /// keeping: it's what several other tests (and `CharacterSelector`'s own
+    /// header-row placement) lean on to reason about touch/layout
+    /// independently of whether any given zone happens to be interactive.
     /// `LayoutTests` already asserts pad-doesn't-overlap-stage for a couple
     /// of specific sizes; this sweeps a wider range, including the
     /// collapsed-stage case the design doc calls out as fine ("there is
@@ -225,9 +226,9 @@ final class CharacterTests: XCTestCase {
 
     /// End-to-end version of the same guarantee using real views: laying
     /// out a `PluginView` and tapping squarely inside `pad`'s frame must
-    /// reach the pad, not `stage`'s own tap gesture — proven here by
-    /// confirming UIKit's own hit-test resolves a point inside `pad` to
-    /// `pad` (or one of its subviews), never to `stage`.
+    /// reach the pad, never `stage` — proven here by confirming UIKit's own
+    /// hit-test resolves a point inside `pad` to `pad` (or one of its
+    /// subviews), never to `stage`.
     func testHitTestInsidePadFrameNeverResolvesToStage() {
         let view = PluginView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         view.setNeedsLayout()
@@ -243,54 +244,36 @@ final class CharacterTests: XCTestCase {
 
     // MARK: - Accessibility
 
-    func testCharacterViewIsAButtonTraitedAccessibilityElementNamingTheCurrentCharacter() {
+    /// The character art is purely decorative now — `CharacterSelector`
+    /// (see `CharacterSelectorTests`) is the single accessible place that
+    /// names the current character and lets it be changed. `CharacterView`
+    /// itself must stay OUT of the accessibility tree so VoiceOver doesn't
+    /// announce the same information twice.
+    func testCharacterViewIsNotAnAccessibilityElement() {
         let view = CharacterView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
-        XCTAssertTrue(view.isAccessibilityElement)
-        XCTAssertTrue(view.accessibilityTraits.contains(.button))
-        XCTAssertTrue(view.accessibilityLabel?.contains("Monk") ?? false,
-                     "accessibility label should name the current character: \(view.accessibilityLabel ?? "nil")")
+        XCTAssertFalse(view.isAccessibilityElement)
 
         view.character = FishCharacter()
-        XCTAssertTrue(view.accessibilityLabel?.contains("Fish") ?? false,
-                     "accessibility label should update when the character changes: \(view.accessibilityLabel ?? "nil")")
+        XCTAssertFalse(view.isAccessibilityElement,
+                        "changing the character must not make the art accessible")
     }
 
-    /// VoiceOver's double-tap invokes `accessibilityActivate()` on a
-    /// non-`UIControl` accessibility element rather than synthesizing a
-    /// touch. It must open the picker (`onOpenPicker`) — exactly what a
-    /// sighted tap does — and, crucially, must NOT itself change the
-    /// character: selection happens inside the picker, where each cell is
-    /// its own accessible element (see `CharacterPickerView`).
-    func testAccessibilityActivateOpensPickerWithoutChangingCharacter() {
+    /// Every route that changes the character fires `onCharacterChanged`
+    /// too — unconditionally, including a plain programmatic assignment
+    /// (`view.character = ...`, the route `AudioUnitViewController`/
+    /// `RootViewController` use to seed/restore the view) that does NOT go
+    /// through `onCharacterSelected`. `PluginView.characterSelector` relies
+    /// on exactly this to keep its name label in sync with every route, not
+    /// just the two (`stepForward`/`stepBackward`) it triggers itself.
+    func testOnCharacterChangedFiresForBothProgrammaticAndUserDrivenChanges() {
         let view = CharacterView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
-        var openPickerCount = 0
-        view.onOpenPicker = { openPickerCount += 1 }
-        var selectedCount = 0
-        view.onCharacterSelected = { _ in selectedCount += 1 }
-        XCTAssertEqual(view.character.id, "monk")
+        var changed: [String] = []
+        view.onCharacterChanged = { changed.append($0.id) }
 
-        let handled = view.accessibilityActivate()
+        view.character = FishCharacter()          // programmatic — no onCharacterSelected
+        view.stepForward()                         // user-driven — fires both callbacks
+        view.select(CowCharacter())                 // user-driven — fires both callbacks
 
-        XCTAssertTrue(handled)
-        XCTAssertEqual(openPickerCount, 1)
-        XCTAssertEqual(selectedCount, 0, "accessibilityActivate must not itself change the character")
-        XCTAssertEqual(view.character.id, "monk", "the character must be unchanged by opening the picker")
-    }
-
-    /// A plain tap on the character (the real gesture, not a stand-in call)
-    /// fires `onOpenPicker` too. `handleTap` is private, so this invokes it
-    /// the same way `RenderUISnapshot` already reaches into `PluginView`'s
-    /// own private `toggleDrawer` — a direct call to the gesture's target
-    /// action, honest about testing this module's internals rather than
-    /// synthesizing a real touch through UIKit's gesture machinery.
-    func testTapFiresOnOpenPicker() {
-        let view = CharacterView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
-        var openPickerCount = 0
-        view.onOpenPicker = { openPickerCount += 1 }
-
-        view.perform(Selector(("handleTap")))
-
-        XCTAssertEqual(openPickerCount, 1)
-        XCTAssertEqual(view.character.id, "monk", "a tap must not itself change the character")
+        XCTAssertEqual(changed, ["fish", "unicorn", "cow"])
     }
 }

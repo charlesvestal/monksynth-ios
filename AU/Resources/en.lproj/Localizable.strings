@@ -4,23 +4,27 @@
 /* Accessibility label for the XY performance pad. */
 "pad.label" = "Performance pad. Drag horizontally for pitch, vertically for vowel.";
 
-/* Accessibility label for the character view; %@ is the current character's
-   display name (e.g. "Monk", "Fish" — not localized, see CharacterRegistry). */
-"character.accessibility" = "Character: %@";
-
-/* Accessibility hint for the character view, explaining that tapping it
-   opens a picker of every character. */
-"character.accessibilityHint" = "Opens a picker to choose a different character.";
-
-/* Accessibility label for the arrow button that steps to the previous
-   character. */
+/* Accessibility label for the character selector's ‹ arrow button that
+   steps to the previous character. */
 "character.previous" = "Previous character";
 
-/* Accessibility label for the arrow button that steps to the next
-   character. */
+/* Accessibility label for the character selector's › arrow button that
+   steps to the next character. */
 "character.next" = "Next character";
 
-/* Character picker overlay: title. */
+/* Accessibility label naming the character selector's adjustable name/
+   dropdown control (its accessibility VALUE is the current character's
+   display name, e.g. "Monk", "Fish" — not localized, see
+   CharacterRegistry). */
+"characterSelector.label" = "Character";
+
+/* Accessibility hint for the character selector's adjustable name/dropdown
+   control: explains that swiping up/down steps the character and
+   double-tapping opens the full list. */
+"characterSelector.hint" = "Swipe up or down to change the character. Double tap to choose from a list.";
+
+/* Character dropdown overlay (opened from the character selector's ⌄):
+   title. */
 "characterPicker.title" = "Choose a Character";
 
 /* About screen: title. */

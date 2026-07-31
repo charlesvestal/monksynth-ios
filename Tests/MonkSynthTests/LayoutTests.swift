@@ -280,13 +280,14 @@ final class LayoutTests: XCTestCase {
         }
     }
 
-    // MARK: - Character step arrows
+    // MARK: - Character selector
 
     /// The usual size sweep: a spread of realistic host-supplied rects,
     /// portrait and landscape, phone and tablet, plus the AUM strip where
-    /// the stage is known to collapse. Shared by every arrow test below so
-    /// they all sweep exactly the same sizes `CharacterTests`'
-    /// stage/pad-overlap sweep already uses.
+    /// the stage is known to collapse. The same sweep the old edge-arrow
+    /// tests used (and `CharacterTests`' stage/pad-overlap sweep still
+    /// uses) — kept identical so this suite exercises exactly the sizes
+    /// that mattered before, not a hand-picked new set.
     private static let usualSizeSweep: [CGSize] = [
         CGSize(width: 320, height: 480),
         CGSize(width: 390, height: 844),
@@ -297,74 +298,68 @@ final class LayoutTests: XCTestCase {
         CGSize(width: 480, height: 320),
     ]
 
-    /// Wherever the arrows are actually shown (non-collapsed stage with
-    /// enough room), both must meet the 44pt HIG minimum tap target in both
-    /// dimensions — same bar as the drawer handle and the info button.
-    func testArrowFramesMeetMinimumTapTargetWhereShown() {
+    /// Unlike the old edge arrows (only shown beside a non-collapsed
+    /// stage), `characterSelector` lives in the header row and is computed
+    /// independently of `stage` — so it must meet the 44pt HIG minimum tap
+    /// target in both dimensions at EVERY size in the sweep, no "not shown
+    /// here" exception.
+    func testCharacterSelectorMeetsMinimumTapTargetAcrossTheSizeSweep() {
         for size in Self.usualSizeSweep {
             let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
-            guard l.leftArrow.width >= 1 else { continue }   // not shown at this size
-            XCTAssertGreaterThanOrEqual(l.leftArrow.width, 44, "left arrow too narrow at \(size)")
-            XCTAssertGreaterThanOrEqual(l.leftArrow.height, 44, "left arrow too short at \(size)")
-            XCTAssertGreaterThanOrEqual(l.rightArrow.width, 44, "right arrow too narrow at \(size)")
-            XCTAssertGreaterThanOrEqual(l.rightArrow.height, 44, "right arrow too short at \(size)")
+            XCTAssertGreaterThanOrEqual(l.characterSelector.height, 44,
+                "character selector shorter than the 44pt HIG minimum at \(size): \(l.characterSelector)")
+            XCTAssertGreaterThanOrEqual(l.characterSelector.width, 44,
+                "character selector narrower than the 44pt HIG minimum at \(size): \(l.characterSelector)")
         }
     }
 
-    /// Across the whole sweep, neither arrow may intersect the pad, the
+    /// Across the whole sweep, the selector may not intersect the pad, the
     /// controls strip, the drawer handle, or the info button — the four
-    /// things the task explicitly calls out as off-limits. (The arrows are
-    /// allowed to overlap `stage` itself, since they're drawn flanking the
-    /// character — that's the whole point.)
-    func testArrowFramesDoNotIntersectPadControlsHandleOrInfoButton() {
+    /// things the task explicitly calls out as off-limits (stricter than
+    /// the old arrows, which were allowed to sit over `stage` itself; the
+    /// selector isn't drawn over any zone, it lives in its own header row).
+    func testCharacterSelectorDoesNotIntersectPadControlsHandleOrInfoButton() {
         for size in Self.usualSizeSweep {
             let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
-            for (name, arrow) in [("left", l.leftArrow), ("right", l.rightArrow)] where arrow.width >= 1 {
-                XCTAssertFalse(arrow.intersects(l.pad), "\(name) arrow \(arrow) overlaps pad \(l.pad) at \(size)")
-                XCTAssertFalse(arrow.intersects(l.controls), "\(name) arrow \(arrow) overlaps controls \(l.controls) at \(size)")
-                XCTAssertFalse(arrow.intersects(l.handle), "\(name) arrow \(arrow) overlaps handle \(l.handle) at \(size)")
-                XCTAssertFalse(arrow.intersects(l.infoButton), "\(name) arrow \(arrow) overlaps infoButton \(l.infoButton) at \(size)")
-            }
+            let selector = l.characterSelector
+            XCTAssertFalse(selector.intersects(l.pad),
+                "selector \(selector) overlaps pad \(l.pad) at \(size)")
+            XCTAssertFalse(selector.intersects(l.controls),
+                "selector \(selector) overlaps controls \(l.controls) at \(size)")
+            XCTAssertFalse(selector.intersects(l.handle),
+                "selector \(selector) overlaps handle \(l.handle) at \(size)")
+            XCTAssertFalse(selector.intersects(l.infoButton),
+                "selector \(selector) overlaps infoButton \(l.infoButton) at \(size)")
         }
     }
 
-    /// The two arrows must never overlap each other either — a degenerate
-    /// case `arrowFrames(for:)`'s own width guard exists specifically to
-    /// prevent.
-    func testArrowFramesNeverOverlapEachOther() {
-        for size in Self.usualSizeSweep {
-            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
-            guard l.leftArrow.width >= 1 else { continue }
-            XCTAssertFalse(l.leftArrow.intersects(l.rightArrow),
-                "left arrow \(l.leftArrow) overlaps right arrow \(l.rightArrow) at \(size)")
-        }
-    }
-
-    /// Required by the task: "Hide them when the stage is collapsed". The
-    /// AUM strip (375x180) is the layout suite's own reference case for a
-    /// collapsed stage (see `testAUMStripKeepsControlsAtFullHeightAndCollapsesTheStage`).
-    func testArrowsAreAbsentWhenStageCollapses() {
+    /// The specific gain of this design over the old edge arrows, called
+    /// out by name in the task: at the exact AUM-strip size where the stage
+    /// collapses entirely (see
+    /// `testAUMStripKeepsControlsAtFullHeightAndCollapsesTheStage`, and
+    /// where the old arrows used to vanish along with it), the selector
+    /// must still be there, and still meet its own 44pt tap target.
+    func testCharacterSelectorIsPresentEvenWhenStageCollapses() {
         let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 375, height: 180))
         XCTAssertEqual(l.stage, .zero, "precondition: stage collapses at this size")
-        XCTAssertEqual(l.leftArrow, .zero, "left arrow must be hidden when the stage collapses")
-        XCTAssertEqual(l.rightArrow, .zero, "right arrow must be hidden when the stage collapses")
+        XCTAssertGreaterThanOrEqual(l.characterSelector.width, 44,
+            "the character selector must remain usable even when the stage collapses")
+        XCTAssertGreaterThanOrEqual(l.characterSelector.height, 44)
     }
 
     /// A degenerate host rect (smaller than the gutters themselves) must
-    /// still produce well-formed, non-hidden-but-broken arrow frames — i.e.
-    /// they fall back to `.zero` cleanly rather than NaN or negative,
+    /// still produce a well-formed selector frame — i.e. it degrades to a
+    /// small-but-finite, non-negative rect rather than NaN or negative,
     /// mirroring `testNoZoneIsEverNegativeOrNaNAtAnySize`'s guarantee for
     /// the other zones.
-    func testArrowFramesAreNeverNaNOrNegativeEvenAtDegenerateSizes() {
+    func testCharacterSelectorFrameIsNeverNaNOrNegativeEvenAtDegenerateSizes() {
         let sizes: [CGSize] = [CGSize(width: 1, height: 1), CGSize(width: 100, height: 100)]
         for size in sizes {
             let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
-            for (name, rect) in [("left", l.leftArrow), ("right", l.rightArrow)] {
-                XCTAssertTrue(rect.width.isFinite, "\(name) arrow width not finite at \(size)")
-                XCTAssertTrue(rect.height.isFinite, "\(name) arrow height not finite at \(size)")
-                XCTAssertGreaterThanOrEqual(rect.width, 0, "\(name) arrow width negative at \(size)")
-                XCTAssertGreaterThanOrEqual(rect.height, 0, "\(name) arrow height negative at \(size)")
-            }
+            XCTAssertTrue(l.characterSelector.width.isFinite, "selector width not finite at \(size)")
+            XCTAssertTrue(l.characterSelector.height.isFinite, "selector height not finite at \(size)")
+            XCTAssertGreaterThanOrEqual(l.characterSelector.width, 0, "selector width negative at \(size)")
+            XCTAssertGreaterThanOrEqual(l.characterSelector.height, 0, "selector height negative at \(size)")
         }
     }
 }
