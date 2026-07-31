@@ -17,6 +17,10 @@ final class XYPadView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
+        // See KnobView: without .redraw, a host resizing the AUv3 view scales
+        // the stale drawing instead of re-running draw(_:), skewing the
+        // crosshair and the position dot.
+        contentMode = .redraw
         isAccessibilityElement = true
         accessibilityLabel = NSLocalizedString("pad.label", comment: "XY pad")
         accessibilityTraits = .allowsDirectInteraction

@@ -106,4 +106,48 @@ final class ControlPagesTests: XCTestCase {
         pages.showPage(2)
         XCTAssertEqual(pages.knob(for: .unison)?.value ?? -1, Param.unison.defaultValue, accuracy: 1e-6)
     }
+
+    // MARK: - Regressions from on-device feedback (build 35)
+
+    /// Reported from a device: "the knobs get stretched and distorted" in the
+    /// AUv3. Cause was UIView's default `.scaleToFill` contentMode — on a
+    /// bounds change UIKit scales the previously drawn layer instead of calling
+    /// `draw(_:)`, so a host resizing its view turns these circles into
+    /// ellipses. `MonkView` already set `.redraw`, which is exactly why the
+    /// character never distorted while the knobs did.
+    func testCustomDrawnViewsRedrawOnResizeRatherThanStretching() {
+        let knob = KnobView(param: .vowel, value: 0.5)
+        XCTAssertEqual(knob.contentMode, .redraw,
+                       "KnobView must redraw on resize or a host resize skews the dial")
+
+        let pad = XYPadView(frame: .zero)
+        XCTAssertEqual(pad.contentMode, .redraw,
+                       "XYPadView must redraw on resize or the crosshair skews")
+
+        let monk = MonkView(frame: .zero)
+        XCTAssertEqual(monk.contentMode, .redraw)
+    }
+
+    /// Reported from a device: "the knobs move too slowly, they're hard to
+    /// manipulate". The control row is only ~92pt tall in an AUv3 strip, so a
+    /// 180pt throw meant running out of glass before running out of range.
+    func testKnobTravelFitsAnAUv3ControlStrip() {
+        XCTAssertLessThanOrEqual(KnobView.fullTravel, Theme.stripHeight + 40,
+                                 "full-range throw should be reachable within a control strip")
+        // Still precise: fine mode multiplies the required travel by 8.
+        XCTAssertEqual(KnobView.fineFactor, 0.125, accuracy: 1e-9)
+    }
+
+    /// Reported from a device: the knobs "have no labels" — the row rendered
+    /// bare values with nothing identifying which parameter each one was.
+    func testKnobsReserveRoomForBothCaptionLines() {
+        // A knob laid out at strip height must still produce a positive dial
+        // radius after the name+value captions are reserved.
+        let rowHeight = Theme.stripHeight - 20 - 8   // minus tab bar and gutters
+        let knob = KnobView(param: .unisonVoiceSpread, value: 0.5)
+        knob.frame = CGRect(x: 0, y: 0, width: 64, height: rowHeight)
+        XCTAssertGreaterThan(knob.dialSide, 8,
+                             "captions must not squeeze the dial out of existence")
+        XCTAssertFalse(knob.param.name.isEmpty, "the caption needs a name to draw")
+    }
 }

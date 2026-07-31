@@ -24,7 +24,11 @@ final class KnobView: UIView {
     /// location (not the new touch's location) keeps the transition smooth.
     private var primaryTouch: UITouch?
 
-    static let fullTravel: CGFloat = 180
+    /// Finger travel for the full 0…1 sweep. Deliberately shorter than a
+    /// knob-diameter-proportional value: in an AUv3 strip the control row is
+    /// ~92pt tall, so a long throw means running out of glass before running
+    /// out of range. Fine mode covers the precision this trades away.
+    static let fullTravel: CGFloat = 110
     static let fineFactor: CGFloat = 0.125
 
     init(param: Param, value: Float) {
@@ -33,6 +37,10 @@ final class KnobView: UIView {
         super.init(frame: .zero)
         backgroundColor = .clear
         isMultipleTouchEnabled = true
+        // Without this, UIKit scales the previously drawn layer on a bounds
+        // change instead of calling draw(_:) — an AUv3 host resizing its view
+        // would stretch these circles into ellipses.
+        contentMode = .redraw
 
         let double = UITapGestureRecognizer(target: self, action: #selector(resetToDefault))
         double.numberOfTapsRequired = 2
@@ -102,9 +110,20 @@ final class KnobView: UIView {
         primaryTouch = nil
     }
 
+    /// Height reserved beneath the dial for the name and value lines.
+    static let captionHeight: CGFloat = 24
+
+    /// Diameter the dial will actually be drawn at, for the current bounds.
+    /// Exposed so tests can confirm the captions never squeeze it away.
+    var dialSide: CGFloat { min(bounds.width, bounds.height - Self.captionHeight) }
+    private static let nameFontSize: CGFloat = 8
+    private static let valueFontSize: CGFloat = 9
+
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        let side = min(rect.width, rect.height - 16)
+        // Reserve room for two caption lines (name + value) and keep the dial
+        // a true circle — the smaller of the two axes, never stretched to fit.
+        let side = min(rect.width, rect.height - Self.captionHeight)
         guard side > 4 else { return }
         let dial = CGRect(x: rect.midX - side / 2, y: rect.minY, width: side, height: side)
 
@@ -125,10 +144,26 @@ final class KnobView: UIView {
         ctx.addLine(to: CGPoint(x: c.x + cos(angle) * r, y: c.y + sin(angle) * r))
         ctx.strokePath()
 
-        let text = param.formatted(value) as NSString
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: Theme.label(9), .foregroundColor: Theme.textDim]
-        text.draw(at: CGPoint(x: rect.midX - text.size(withAttributes: attrs).width / 2,
-                              y: dial.maxY + 3), withAttributes: attrs)
+        // Two caption lines: the parameter NAME (so you can tell the knobs
+        // apart — the whole row was previously unlabelled) then its value.
+        // The name is truncated to the cell width rather than overlapping its
+        // neighbours, since "Voice Spread" is far wider than a small dial.
+        func centred(_ s: String, _ font: UIFont, _ colour: UIColor, _ y: CGFloat) {
+            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: colour]
+            let para = NSMutableParagraphStyle()
+            para.alignment = .center
+            para.lineBreakMode = .byTruncatingTail
+            var a = attrs
+            a[.paragraphStyle] = para
+            (s as NSString).draw(in: CGRect(x: rect.minX, y: y,
+                                            width: rect.width, height: font.lineHeight + 1),
+                                 withAttributes: a)
+        }
+
+        let nameFont = Theme.label(Self.nameFontSize, weight: .semibold)
+        let valueFont = Theme.label(Self.valueFontSize)
+        centred(param.name.uppercased(), nameFont, Theme.textDim, dial.maxY + 2)
+        centred(param.formatted(value), valueFont, Theme.textPrimary,
+                dial.maxY + 2 + nameFont.lineHeight)
     }
 }

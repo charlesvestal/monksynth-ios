@@ -17,6 +17,13 @@ enum Theme {
     static let cornerRadius: CGFloat = 10
     static let gutter: CGFloat = 8
     static let stripHeight: CGFloat = 92
+
+    /// Below this, a control strip cannot show a usable knob: the tab bar and
+    /// the name+value captions consume the whole height and the dial computes
+    /// to nothing, leaving a row of tabs controlling invisible knobs. When the
+    /// strip would be shorter than this, the controls collapse to a drawer
+    /// instead so the user can pull them up over the pad.
+    static let minUsableStripHeight: CGFloat = 78
     static let drawerHandleHeight: CGFloat = 22
     static let minPadHeight: CGFloat = 120
     static let stageCollapseBelowHeight: CGFloat = 260
