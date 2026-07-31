@@ -5,16 +5,24 @@ struct ZoneLayout: Equatable {
     var stage: CGRect
     var pad: CGRect
     var controls: CGRect
-    var isDrawer: Bool
 }
 
 /// The responsive three-zone container: Stage (the selected character), Pad
 /// (the XY performance surface), and Controls (the five-page knob strip).
 ///
-/// Portrait stacks the three zones vertically, with Controls tucked into a
-/// pull-up drawer so the pad gets most of the screen. Landscape splits Stage
-/// and Pad side by side above a control strip that is always visible — no
-/// drawer, since there is width to spare.
+/// The control strip is always laid out, in both orientations — no drawer,
+/// no tap-to-reveal. Portrait stacks the three zones vertically (stage / pad
+/// / strip); landscape splits Stage and Pad side by side above the strip.
+///
+/// The strip gets `Theme.stripHeight` when there's room. When there isn't,
+/// it shrinks, but never below `Theme.minUsableStripHeight` — the height
+/// below which `ControlPages` can no longer draw an actual knob — as long as
+/// there is at least that much room to give it; only a truly degenerate host
+/// rect (smaller than the floor itself) forces it any shorter. The Stage
+/// yields space first (see `portraitLayout`/`landscapeLayout`), then the Pad
+/// takes whatever is left; the Pad can end up below `Theme.minPadHeight` at
+/// extreme sizes, which is an acceptable trade against ever hiding the
+/// controls.
 ///
 /// The split is chosen by aspect ratio (`inner.width >= inner.height`), not
 /// device idiom, because an AUv3 host can hand this view any rect at all —
@@ -47,74 +55,36 @@ final class PluginView: UIView {
 
     /// Header ⓘ button that opens `AboutView`. Visually a small glyph, but
     /// sized to the full 44pt HIG minimum in both dimensions (see
-    /// `layoutSubviews`) — same "small glyph, big hit target" shape as
-    /// `drawerHandle`/`drawerHandleBar` below, collapsed into a single
-    /// `UIButton` since a button's own frame already IS its hit area.
+    /// `layoutSubviews`) — a button's own frame already IS its hit area, so
+    /// a single `UIButton` gets a big tap target for free.
     private let infoButton = UIButton(type: .system)
     private var aboutView: AboutView?
+    private var moreAppsView: MoreAppsView?
 
-    /// Minimum tap target per Apple's HIG, mirroring `drawerHitSize`.
+    /// Minimum tap target per Apple's HIG.
     static let infoButtonSize: CGFloat = 44
-
-    /// The actual tap target for opening/closing the drawer. Deliberately
-    /// much larger than the visible pill (`drawerHandleBar`) it contains: a
-    /// 4pt-tall hit region is well under Apple's 44pt HIG minimum and is
-    /// effectively unhittable. This view stays transparent and sized to at
-    /// least 44pt in both dimensions; only `drawerHandleBar` draws anything.
-    private let drawerHandle = UIView()
-    private let drawerHandleBar = UIView()
-    private var drawerOpen = false
-
-    /// Minimum tap target per Apple's HIG (both dimensions >= 44pt). The
-    /// visible pill stays small; only the invisible hit region around it
-    /// grows to this size.
-    static let drawerHitSize = CGSize(width: 60, height: 44)
-
-    /// Test-only window into the hit region's actual size. Mirrors
-    /// `ControlPages.visibleKnobViews`: the visible bar is intentionally
-    /// tiny, so a test asserting the real tap target needs a seam past it.
-    var drawerHitFrame: CGRect { drawerHandle.frame }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = Theme.background
         for v in [stage, pad, controls] as [UIView] { addSubview(v) }
-        addSubview(drawerHandle)
-        drawerHandle.addSubview(drawerHandleBar)
-
-        drawerHandle.backgroundColor = .clear
-        drawerHandle.isUserInteractionEnabled = true
-        drawerHandle.addGestureRecognizer(
-            UITapGestureRecognizer(target: self, action: #selector(toggleDrawer)))
-
-        drawerHandleBar.backgroundColor = Theme.panelBorder
-        drawerHandleBar.layer.cornerRadius = 2
-        drawerHandleBar.isUserInteractionEnabled = false
-        drawerHandleBar.frame = CGRect(
-            x: (Self.drawerHitSize.width - 34) / 2,
-            y: (Self.drawerHitSize.height - 4) / 2,
-            width: 34, height: 4)
 
         pad.layer.cornerRadius = Theme.cornerRadius
         pad.backgroundColor = Theme.panel
         pad.layer.borderWidth = 1
         pad.layer.borderColor = Theme.panelBorder.cgColor
 
-        // When the drawer is closed its frame is only the handle's height, but
-        // ControlPages still lays out a full tab bar and knob row inside that
-        // frame. Without clipping, the top of the tab bar bleeds out of the
-        // drawer and hangs at the bottom edge of the plugin.
+        // Belt-and-suspenders: `controls`'s frame is always sized so
+        // `ControlPages`'s own layout fits inside it (see
+        // `controlStripHeight`), but clipping guards against it bleeding
+        // into the pad above at the smallest degenerate host rects a test
+        // might throw at it.
         controls.clipsToBounds = true
 
         installInfoButton()
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
-
-    @objc private func toggleDrawer() {
-        drawerOpen.toggle()
-        UIView.animate(withDuration: 0.25) { self.setNeedsLayout(); self.layoutIfNeeded() }
-    }
 
     // MARK: - About screen
 
@@ -139,6 +109,10 @@ final class PluginView: UIView {
         a.onClose = { [weak self] in self?.hideAbout() }
         a.onOpenURL = { [weak self] url in self?.onOpenURL?(url) }
         a.onBluetoothMIDI = { [weak self] in self?.onBluetoothMIDI?() }
+        a.onMoreApps = { [weak self] in
+            self?.hideAbout()
+            self?.showMoreApps()
+        }
         addSubview(a)
         aboutView = a
         setNeedsLayout()
@@ -149,35 +123,70 @@ final class PluginView: UIView {
         aboutView = nil
     }
 
-    /// Portrait stacks (stage / pad / drawer); landscape splits (stage | pad)
-    /// with the control strip always visible.
+    private func showMoreApps() {
+        guard moreAppsView == nil else { return }
+        let m = MoreAppsView(frame: bounds)
+        m.onClose = { [weak self] in self?.hideMoreApps() }
+        m.onOpenURL = { [weak self] url in self?.onOpenURL?(url) }
+        addSubview(m)
+        moreAppsView = m
+        setNeedsLayout()
+    }
+
+    private func hideMoreApps() {
+        moreAppsView?.removeFromSuperview()
+        moreAppsView = nil
+    }
+
+    /// Portrait stacks (stage / pad / strip); landscape splits (stage | pad)
+    /// above the strip. The strip is always laid out in both orientations —
+    /// see the class doc comment for the shrink-but-never-hide contract.
     ///
     /// Pure and static so `LayoutTests` can exercise every corner of the
     /// arithmetic without instantiating any UIKit views.
     /// - Parameter safeArea: the view's `safeAreaInsets`. Critically this
     ///   includes the BOTTOM inset: on a device with a home indicator, the
-    ///   bottom ~34pt is a system gesture region, and a drawer handle placed
-    ///   there is unreachable — the system claims the touch before the app
-    ///   sees it. Reported from a device: "control drawer can't be reached in
-    ///   portrait because of the home indicator". Defaults to `.zero` so pure
-    ///   layout tests can exercise the geometry without a real view.
-    static func layout(in bounds: CGRect,
-                       drawerOpen: Bool,
-                       safeArea: UIEdgeInsets = .zero) -> ZoneLayout {
+    ///   bottom ~34pt is a system gesture region, and controls placed there
+    ///   are unreachable — the system claims the touch before the app sees
+    ///   it. Reported from a device, back when the strip lived in a pull-up
+    ///   drawer: "control drawer can't be reached in portrait because of the
+    ///   home indicator". Defaults to `.zero` so pure layout tests can
+    ///   exercise the geometry without a real view.
+    static func layout(in bounds: CGRect, safeArea: UIEdgeInsets = .zero) -> ZoneLayout {
         let g = Theme.gutter
         let safe = bounds.inset(by: safeArea)
         let inner = safe.insetBy(dx: g, dy: g)
         guard inner.width > 0, inner.height > 0 else {
-            return ZoneLayout(stage: .zero, pad: .zero, controls: .zero, isDrawer: false)
+            return ZoneLayout(stage: .zero, pad: .zero, controls: .zero)
         }
 
         let isWide = inner.width >= inner.height
         return isWide
             ? landscapeLayout(inner: inner, gutter: g)
-            : portraitLayout(inner: inner, gutter: g, drawerOpen: drawerOpen)
+            : portraitLayout(inner: inner, gutter: g)
     }
 
-    /// Landscape: stage | pad side by side above an always-visible strip.
+    /// The control strip's height for `available` total vertical space (the
+    /// zone the strip shares with whatever sits above it, so `available - g`
+    /// is what's left over once the strip's own top gutter is reserved).
+    ///
+    /// Prefers `Theme.stripHeight`. When the available space doesn't stretch
+    /// that far, the strip still won't drop below `Theme.minUsableStripHeight`
+    /// — the height below which `ControlPages` can no longer draw an actual
+    /// knob, only a tab bar over an invisible dial (its tab row plus
+    /// `KnobView.captionHeight` eat the whole thing) — as long as `available`
+    /// itself is at least that floor; whatever sits above the strip yields
+    /// first. Only when `available` itself is smaller than the floor does the
+    /// strip shrink further, because there is nothing left to give it. Never
+    /// exceeds `available` and never goes negative.
+    private static func controlStripHeight(available: CGFloat, gutter g: CGFloat) -> CGFloat {
+        let roomAboveTheGutter = max(0, available - g)
+        let preferred = min(Theme.stripHeight, roomAboveTheGutter)
+        let floored = max(preferred, min(Theme.minUsableStripHeight, available))
+        return max(0, min(floored, available))
+    }
+
+    /// Landscape: stage | pad side by side above the strip.
     ///
     /// Below `Theme.stageCollapseBelowHeight` the stage yields entirely.
     /// Unlike portrait, hiding it here buys the pad no extra *height* — both
@@ -185,25 +194,8 @@ final class PluginView: UIView {
     /// anything into its column — so this is a flat "the character isn't
     /// worth showing this short" cutoff, not a space reallocation.
     private static func landscapeLayout(inner: CGRect, gutter g: CGFloat) -> ZoneLayout {
-        // Reserve at least minPadHeight *and* the gutter between the strip
-        // and the row above it before letting the strip claim its full
-        // preferred height. The first draft capped the strip at
-        // `inner.height - minPadHeight` and forgot the gutter, which let
-        // `topH` (and so the pad) fall `g` points short of `minPadHeight`.
-        var stripH = min(Theme.stripHeight, max(0, inner.height - Theme.minPadHeight - g))
-
-        // A strip too short to fit a knob is worse than no strip: the tab bar
-        // still draws, but the dial computes to zero once the tab row and the
-        // name+value captions are subtracted, so the user gets tabs that
-        // appear to control nothing. Collapse to a drawer instead — the pad
-        // keeps the height and the controls can be pulled up over it.
-        var isDrawer = false
-        if stripH > 0 && stripH < Theme.minUsableStripHeight {
-            stripH = Theme.drawerHandleHeight
-            isDrawer = true
-        }
-
-        let topH = max(0, inner.height - stripH - (stripH > 0 ? g : 0))
+        let stripH = controlStripHeight(available: inner.height, gutter: g)
+        let topH = max(0, inner.height - stripH - g)
         let controlsFrame = CGRect(x: inner.minX, y: inner.maxY - stripH,
                                     width: inner.width, height: stripH)
 
@@ -211,8 +203,7 @@ final class PluginView: UIView {
             return ZoneLayout(
                 stage: .zero,
                 pad: CGRect(x: inner.minX, y: inner.minY, width: inner.width, height: topH),
-                controls: controlsFrame,
-                isDrawer: isDrawer)
+                controls: controlsFrame)
         }
 
         let stageW = max(0, (inner.width - g) * 0.40)
@@ -220,20 +211,16 @@ final class PluginView: UIView {
         return ZoneLayout(
             stage: CGRect(x: inner.minX, y: inner.minY, width: stageW, height: topH),
             pad: CGRect(x: inner.minX + stageW + g, y: inner.minY, width: padW, height: topH),
-            controls: controlsFrame,
-            isDrawer: isDrawer)
+            controls: controlsFrame)
     }
 
-    /// Portrait: controls live in a drawer; only the handle shows when
-    /// closed. Short heights make the stage yield its space to the pad
-    /// gradually — the pad is topped up toward `minPadHeight` first and the
-    /// stage gets whatever remains, down to zero.
-    private static func portraitLayout(inner: CGRect, gutter g: CGFloat, drawerOpen: Bool) -> ZoneLayout {
-        let drawerH = drawerOpen
-            ? min(Theme.stripHeight + Theme.drawerHandleHeight,
-                  max(0, inner.height - Theme.minPadHeight))
-            : Theme.drawerHandleHeight
-        let remaining = inner.height - drawerH - g
+    /// Portrait: stage over pad over the strip. Short heights make the stage
+    /// yield its space to the pad gradually — the pad is topped up toward
+    /// `minPadHeight` first and the stage gets whatever remains, down to
+    /// zero.
+    private static func portraitLayout(inner: CGRect, gutter g: CGFloat) -> ZoneLayout {
+        let stripH = controlStripHeight(available: inner.height, gutter: g)
+        let remaining = max(0, inner.height - stripH - g)
         var stageH = remaining * 0.48
         var padH = remaining - stageH - g
 
@@ -245,10 +232,13 @@ final class PluginView: UIView {
         // can never go negative: since padH <= remaining - g whenever that
         // quantity is >= 0, `remaining - padH - g >= 0` always holds, so the
         // outer `max(0, ...)` never actually has to bite except when
-        // `remaining` itself is negative (an overlong drawer eating more
-        // than the available height) — a case that only arises well below
-        // any size this view will realistically be given, but is still
-        // handled without producing a negative frame.
+        // `remaining` itself is negative — a case that only arises well
+        // below any size this view will realistically be given, but is
+        // still handled without producing a negative frame. At extreme
+        // sizes `padH` itself can land below `minPadHeight` (the min/max
+        // pair above doesn't force it up past what `remaining` can actually
+        // supply) — acceptable, since the alternative would be hiding the
+        // strip, which is exactly what this contract rules out.
         if inner.height < Theme.stageCollapseBelowHeight || padH < Theme.minPadHeight {
             padH = min(max(Theme.minPadHeight, padH), max(0, remaining - g))
             stageH = max(0, remaining - padH - g)
@@ -258,14 +248,13 @@ final class PluginView: UIView {
             stage: CGRect(x: inner.minX, y: inner.minY, width: inner.width, height: stageH),
             pad: CGRect(x: inner.minX, y: inner.minY + stageH + (stageH > 0 ? g : 0),
                         width: inner.width, height: padH),
-            controls: CGRect(x: inner.minX, y: inner.maxY - drawerH,
-                             width: inner.width, height: drawerH),
-            isDrawer: true)
+            controls: CGRect(x: inner.minX, y: inner.maxY - stripH,
+                             width: inner.width, height: stripH))
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let l = Self.layout(in: bounds, drawerOpen: drawerOpen, safeArea: safeAreaInsets)
+        let l = Self.layout(in: bounds, safeArea: safeAreaInsets)
         pad.frame = l.pad
         controls.frame = l.controls
 
@@ -284,30 +273,6 @@ final class PluginView: UIView {
         } else {
             if stage.superview == nil { insertSubview(stage, at: 0) }
             stage.frame = l.stage
-        }
-
-        if l.isDrawer {
-            drawerHandle.isHidden = false
-            // Centre the 44pt+ hit region on the same point the old 4pt-tall
-            // visible bar used to occupy (controls.minY + 8, height 4 -> its
-            // own centre is controls.minY + 10), so the tap target grows
-            // without moving the pill it surrounds.
-            // Grow the hit region UPWARD from the bottom of the controls
-            // frame rather than centring it on the visible pill. Centring
-            // pushed the region's lower edge past the safe area and into the
-            // home indicator's gesture strip, where the system claims the
-            // touch first and the drawer simply cannot be opened. Extending
-            // up instead overlaps only the pad's bottom edge — the least-used
-            // part of the play surface — and keeps every pixel of the target
-            // reachable.
-            drawerHandle.frame = CGRect(
-                x: l.controls.midX - Self.drawerHitSize.width / 2,
-                y: l.controls.maxY - Self.drawerHitSize.height,
-                width: Self.drawerHitSize.width, height: Self.drawerHitSize.height)
-            controls.contentInsetTop = Theme.drawerHandleHeight
-        } else {
-            drawerHandle.isHidden = true
-            controls.contentInsetTop = 0
         }
 
         // Top-right corner, flush with the header, but pulled in by
@@ -335,6 +300,10 @@ final class PluginView: UIView {
         if let aboutView {
             aboutView.frame = bounds
             bringSubviewToFront(aboutView)
+        }
+        if let moreAppsView {
+            moreAppsView.frame = bounds
+            bringSubviewToFront(moreAppsView)
         }
     }
 }

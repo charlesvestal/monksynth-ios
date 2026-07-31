@@ -17,6 +17,9 @@ final class AboutView: UIView {
     var onClose: (() -> Void)?
     var onOpenURL: ((URL) -> Void)?
     var onBluetoothMIDI: (() -> Void)?
+    /// Fired when "More Apps" is tapped. `PluginView` handles it by closing
+    /// this screen and presenting `MoreAppsView` in its place.
+    var onMoreApps: (() -> Void)?
 
     /// Hidden by default. Bluetooth MIDI pairing is a host-app concern — an
     /// AUv3 editor embedded in someone else's host (AUM, GarageBand, ...)
@@ -105,6 +108,15 @@ final class AboutView: UIView {
         bluetoothButton.addTarget(self, action: #selector(openBluetooth), for: .touchUpInside)
         stack.addArrangedSubview(bluetoothButton)
 
+        let moreApps = UIButton(type: .system)
+        moreApps.setTitle(NSLocalizedString("about.moreApps", comment: "Link to the More Apps screen"),
+                           for: .normal)
+        moreApps.titleLabel?.font = Theme.label(12)
+        moreApps.setTitleColor(Theme.accent, for: .normal)
+        moreApps.contentHorizontalAlignment = .leading
+        moreApps.addTarget(self, action: #selector(openMoreApps), for: .touchUpInside)
+        stack.addArrangedSubview(moreApps)
+
         var closeConfig = UIButton.Configuration.filled()
         closeConfig.title = NSLocalizedString("about.close", comment: "Dismiss the about screen")
         closeConfig.baseBackgroundColor = Theme.panelBorder
@@ -131,6 +143,7 @@ final class AboutView: UIView {
     @objc private func closeTapped() { onClose?() }
     @objc private func openSource() { onOpenURL?(Self.sourceURL) }
     @objc private func openBluetooth() { onBluetoothMIDI?() }
+    @objc private func openMoreApps() { onMoreApps?() }
 
     override func layoutSubviews() {
         super.layoutSubviews()
