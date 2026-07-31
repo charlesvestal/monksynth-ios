@@ -1284,7 +1284,11 @@ import AVFoundation
 final class RenderContext {
 
     private(set) var engine: OpaquePointer?
-    private let shadow: UnsafeMutablePointer<ParamShadow>
+    // NOTE: no explicit `UnsafeMutablePointer<ParamShadow>` annotation — Xcode's
+    // emit-module-separately pass cannot resolve a forward-declared C struct named
+    // in a stored-property type annotation, and fails with "cannot find type
+    // 'ParamShadow' in scope". Task 5 hit this; let the type be inferred.
+    private let shadow: OpaquePointer
 
     private var lastValues = [Float](repeating: .nan, count: Int(kParamCount.rawValue))
     private var xyNoteActive = false
