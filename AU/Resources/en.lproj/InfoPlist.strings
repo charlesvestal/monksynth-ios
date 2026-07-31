@@ -1,0 +1,4 @@
+/* Why the app wants Bluetooth. Shown by iOS in the permission prompt.
+   The key must also exist in Host/Info.plist or iOS terminates the app
+   the moment CABTMIDICentralViewController tries to scan. */
+"NSBluetoothAlwaysUsageDescription" = "MonkSynth uses Bluetooth to connect wireless MIDI keyboards and controllers.";
