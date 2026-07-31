@@ -107,4 +107,26 @@ final class LayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(view.drawerHitFrame.width, 44,
                                      "drawer handle tap target must be at least 44pt wide")
     }
+
+    /// Found by rendering the UI at real host sizes: at an AUM-strip height the
+    /// control strip was tall enough to draw its tab bar but too short to fit a
+    /// knob, so the user got five tabs controlling invisible dials. Below
+    /// `Theme.minUsableStripHeight` the controls must collapse to a drawer.
+    func testTooShortAControlStripCollapsesToADrawerRatherThanShowingEmptyTabs() {
+        let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 375, height: 180),
+                                  drawerOpen: false)
+        XCTAssertTrue(l.isDrawer,
+                      "a strip too short for a knob must become a drawer")
+        XCTAssertEqual(l.controls.height, Theme.drawerHandleHeight, accuracy: 0.5)
+        XCTAssertGreaterThanOrEqual(l.pad.height, Theme.minPadHeight - 0.5,
+                                    "collapsing the strip must give the height to the pad")
+    }
+
+    /// A strip with room for a knob stays a strip.
+    func testATallEnoughControlStripStaysVisible() {
+        let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 844, height: 390),
+                                  drawerOpen: false)
+        XCTAssertFalse(l.isDrawer)
+        XCTAssertGreaterThanOrEqual(l.controls.height, Theme.minUsableStripHeight - 0.5)
+    }
 }

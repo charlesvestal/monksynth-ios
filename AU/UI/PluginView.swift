@@ -100,6 +100,12 @@ final class PluginView: UIView {
         pad.layer.borderWidth = 1
         pad.layer.borderColor = Theme.panelBorder.cgColor
 
+        // When the drawer is closed its frame is only the handle's height, but
+        // ControlPages still lays out a full tab bar and knob row inside that
+        // frame. Without clipping, the top of the tab bar bleeds out of the
+        // drawer and hangs at the bottom edge of the plugin.
+        controls.clipsToBounds = true
+
         installInfoButton()
     }
 
@@ -174,7 +180,19 @@ final class PluginView: UIView {
         // preferred height. The first draft capped the strip at
         // `inner.height - minPadHeight` and forgot the gutter, which let
         // `topH` (and so the pad) fall `g` points short of `minPadHeight`.
-        let stripH = min(Theme.stripHeight, max(0, inner.height - Theme.minPadHeight - g))
+        var stripH = min(Theme.stripHeight, max(0, inner.height - Theme.minPadHeight - g))
+
+        // A strip too short to fit a knob is worse than no strip: the tab bar
+        // still draws, but the dial computes to zero once the tab row and the
+        // name+value captions are subtracted, so the user gets tabs that
+        // appear to control nothing. Collapse to a drawer instead — the pad
+        // keeps the height and the controls can be pulled up over it.
+        var isDrawer = false
+        if stripH > 0 && stripH < Theme.minUsableStripHeight {
+            stripH = Theme.drawerHandleHeight
+            isDrawer = true
+        }
+
         let topH = max(0, inner.height - stripH - (stripH > 0 ? g : 0))
         let controlsFrame = CGRect(x: inner.minX, y: inner.maxY - stripH,
                                     width: inner.width, height: stripH)
@@ -184,7 +202,7 @@ final class PluginView: UIView {
                 stage: .zero,
                 pad: CGRect(x: inner.minX, y: inner.minY, width: inner.width, height: topH),
                 controls: controlsFrame,
-                isDrawer: false)
+                isDrawer: isDrawer)
         }
 
         let stageW = max(0, (inner.width - g) * 0.40)
@@ -193,7 +211,7 @@ final class PluginView: UIView {
             stage: CGRect(x: inner.minX, y: inner.minY, width: stageW, height: topH),
             pad: CGRect(x: inner.minX + stageW + g, y: inner.minY, width: padW, height: topH),
             controls: controlsFrame,
-            isDrawer: false)
+            isDrawer: isDrawer)
     }
 
     /// Portrait: controls live in a drawer; only the handle shows when
