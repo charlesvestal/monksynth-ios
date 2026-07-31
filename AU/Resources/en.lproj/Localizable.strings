@@ -6,13 +6,22 @@
 
 /* Accessibility label for the character view; %@ is the current character's
    display name (e.g. "Monk", "Fish" — not localized, see CharacterRegistry). */
-"character.accessibility" = "Character: %@. Double-tap to change.";
+"character.accessibility" = "Character: %@";
 
-/* Accessibility hint for the character view, explaining both gestures: a
-   tap/double-tap changes the character AND loads its matching sound; a
-   long-press changes only the character and leaves the current sound
-   alone. */
-"character.accessibilityHint" = "Tap to change character and sound. Long-press to change character only.";
+/* Accessibility hint for the character view, explaining that tapping it
+   opens a picker of every character. */
+"character.accessibilityHint" = "Opens a picker to choose a different character.";
+
+/* Accessibility label for the arrow button that steps to the previous
+   character. */
+"character.previous" = "Previous character";
+
+/* Accessibility label for the arrow button that steps to the next
+   character. */
+"character.next" = "Next character";
+
+/* Character picker overlay: title. */
+"characterPicker.title" = "Choose a Character";
 
 /* About screen: title. */
 "about.title" = "MonkSynth";

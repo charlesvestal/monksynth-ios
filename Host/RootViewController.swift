@@ -96,20 +96,20 @@ final class RootViewController: UIViewController {
         // or if a character was ever renamed/removed.
         let storedID = UserDefaults.standard.string(forKey: Self.characterIDDefaultsKey)
         pluginView.stage.character = CharacterRegistry.character(withID: storedID)
-        pluginView.stage.onCharacterChange = { character in
-            UserDefaults.standard.set(character.id, forKey: Self.characterIDDefaultsKey)
-        }
-        // The user TAPPED the character, so its voice loads too (long-press
-        // only fires `onCharacterChange` above, never this). There's no
-        // `AUParameterTree`/host to record the change here — same as every
-        // other UI write in the standalone app (see `pad`/`controls`'
-        // `onParameterChange` just above), this goes straight into
-        // `LocalEngine`'s shadow. It also has to explicitly push each value
-        // into `pluginView.controls` afterward, mirroring `MIDIInput`'s CC
-        // and pitch-bend handlers just below: unlike the AUv3 path, nothing
-        // here observes the shadow and refreshes the knobs automatically.
-        pluginView.stage.onVoiceLoad = { [weak self] character in
+        // The user changed the character — an arrow step or a picker
+        // selection — so it both persists AND loads its voice, always; see
+        // `CharacterView.onCharacterSelected`'s doc comment for why there is
+        // only one callback now. There's no `AUParameterTree`/host to record
+        // the change here — same as every other UI write in the standalone
+        // app (see `pad`/`controls`' `onParameterChange` just above), this
+        // goes straight into `LocalEngine`'s shadow. It also has to
+        // explicitly push each value into `pluginView.controls` afterward,
+        // mirroring `MIDIInput`'s CC and pitch-bend handlers just below:
+        // unlike the AUv3 path, nothing here observes the shadow and
+        // refreshes the knobs automatically.
+        pluginView.stage.onCharacterSelected = { [weak self] character in
             guard let self else { return }
+            UserDefaults.standard.set(character.id, forKey: Self.characterIDDefaultsKey)
             for (param, value) in CharacterVoiceTable.voice(for: character) {
                 self.audio.setParameter(param, value)
                 self.pluginView.controls.setValue(value, for: param)

@@ -11,6 +11,19 @@ struct ZoneLayout: Equatable {
     /// which is pinned to the bottom of the view and identical whether the
     /// drawer is open or closed.
     var handle: CGRect
+
+    /// The "previous character" / "next character" arrow tap targets,
+    /// flanking `stage`. Both `.zero` whenever `stage` is collapsed or too
+    /// small to fit both arrows without overlapping each other — see
+    /// `PluginView.arrowFrames(for:)`.
+    var leftArrow: CGRect = .zero
+    var rightArrow: CGRect = .zero
+
+    /// The header ⓘ button's frame — see `PluginView.infoButtonFrame(bounds:safeArea:)`.
+    /// Included here (rather than left to `layoutSubviews` alone) so
+    /// `LayoutTests` can assert the arrows never intersect it without
+    /// needing a live view.
+    var infoButton: CGRect = .zero
 }
 
 /// The responsive three-zone container: Stage (the selected character), Pad
@@ -78,9 +91,22 @@ final class PluginView: UIView {
     private let infoButton = UIButton(type: .system)
     private var aboutView: AboutView?
     private var moreAppsView: MoreAppsView?
+    private var characterPickerView: CharacterPickerView?
 
     /// Minimum tap target per Apple's HIG.
     static let infoButtonSize: CGFloat = 44
+
+    /// The step-arrow buttons flanking the character. Low-contrast at rest
+    /// (`Theme.textDim`, no background chrome) — this is a performance
+    /// instrument, not a browser, so the arrows should read as "available if
+    /// you look" rather than compete with the pad/controls for attention.
+    /// Each still gets the full 44pt HIG tap target even though the glyph
+    /// drawn inside it is much smaller, exactly like `infoButton`.
+    private let leftArrowButton = UIButton(type: .system)
+    private let rightArrowButton = UIButton(type: .system)
+
+    /// Minimum tap target per Apple's HIG, applied to both arrow buttons.
+    static let arrowHitSize: CGFloat = 44
 
     /// Whether the control drawer is expanded. Defaults to `true`: the user
     /// asked for controls visible by default, with collapsing as something
@@ -138,6 +164,9 @@ final class PluginView: UIView {
 
         installDrawerHandle()
         installInfoButton()
+        installCharacterArrows()
+
+        stage.onOpenPicker = { [weak self] in self?.showCharacterPicker() }
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -233,6 +262,47 @@ final class PluginView: UIView {
         moreAppsView = nil
     }
 
+    // MARK: - Character arrows
+
+    private func installCharacterArrows() {
+        let config = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+        leftArrowButton.setImage(UIImage(systemName: "chevron.left", withConfiguration: config), for: .normal)
+        rightArrowButton.setImage(UIImage(systemName: "chevron.right", withConfiguration: config), for: .normal)
+        for button in [leftArrowButton, rightArrowButton] {
+            button.tintColor = Theme.textDim
+            addSubview(button)
+        }
+        leftArrowButton.accessibilityLabel = NSLocalizedString(
+            "character.previous", comment: "Steps to the previous character")
+        rightArrowButton.accessibilityLabel = NSLocalizedString(
+            "character.next", comment: "Steps to the next character")
+        leftArrowButton.addTarget(self, action: #selector(stepCharacterBackward), for: .touchUpInside)
+        rightArrowButton.addTarget(self, action: #selector(stepCharacterForward), for: .touchUpInside)
+    }
+
+    @objc private func stepCharacterBackward() { stage.stepBackward() }
+    @objc private func stepCharacterForward() { stage.stepForward() }
+
+    // MARK: - Character picker
+
+    private func showCharacterPicker() {
+        guard characterPickerView == nil else { return }
+        let picker = CharacterPickerView(frame: bounds, current: stage.character)
+        picker.onClose = { [weak self] in self?.hideCharacterPicker() }
+        picker.onSelect = { [weak self] character in
+            self?.stage.select(character)
+            self?.hideCharacterPicker()
+        }
+        addSubview(picker)
+        characterPickerView = picker
+        setNeedsLayout()
+    }
+
+    private func hideCharacterPicker() {
+        characterPickerView?.removeFromSuperview()
+        characterPickerView = nil
+    }
+
     /// Portrait stacks (stage / pad / strip); landscape splits (stage | pad)
     /// above the strip. The strip is a drawer in both orientations — see
     /// the class doc comment for the open/closed contract.
@@ -256,14 +326,64 @@ final class PluginView: UIView {
         let g = Theme.gutter
         let safe = bounds.inset(by: safeArea)
         let inner = safe.insetBy(dx: g, dy: g)
+        let infoButton = infoButtonFrame(bounds: bounds, safeArea: safeArea)
         guard inner.width > 0, inner.height > 0 else {
-            return ZoneLayout(stage: .zero, pad: .zero, controls: .zero, handle: .zero)
+            return ZoneLayout(stage: .zero, pad: .zero, controls: .zero, handle: .zero,
+                               leftArrow: .zero, rightArrow: .zero, infoButton: infoButton)
         }
 
         let isWide = inner.width >= inner.height
-        return isWide
+        var l = isWide
             ? landscapeLayout(inner: inner, gutter: g, drawerOpen: drawerOpen)
             : portraitLayout(inner: inner, gutter: g, drawerOpen: drawerOpen)
+        let arrows = arrowFrames(for: l.stage)
+        l.leftArrow = arrows.left
+        l.rightArrow = arrows.right
+        l.infoButton = infoButton
+        return l
+    }
+
+    /// A small inset from `stage`'s own edges, not flush against them —
+    /// purely cosmetic breathing room between the arrow glyph and whatever
+    /// the character draws at its own edge.
+    private static let arrowEdgeMargin: CGFloat = 4
+
+    /// The "previous"/"next" arrow tap targets, flanking `stage` and
+    /// vertically centred within it. Both `.zero` (i.e. hidden — see
+    /// `PluginView.layoutSubviews`) whenever `stage` itself is collapsed
+    /// (there's no character to page through) or too small to fit two
+    /// 44pt targets side by side without overlapping each other — the same
+    /// "there is simply nothing to tap" reasoning `stage`'s own collapse
+    /// already uses.
+    ///
+    /// Deliberately confined to `stage`'s own rect: `LayoutTests` already
+    /// proves `stage` never overlaps `pad` or `controls`, so any rect
+    /// contained within `stage` inherits that guarantee for free, without
+    /// this function needing to know anything about the other zones itself.
+    private static func arrowFrames(for stage: CGRect) -> (left: CGRect, right: CGRect) {
+        let size = arrowHitSize
+        guard stage.width >= size * 2 + arrowEdgeMargin * 2, stage.height >= size else {
+            return (.zero, .zero)
+        }
+        let y = stage.midY - size / 2
+        let left = CGRect(x: stage.minX + arrowEdgeMargin, y: y, width: size, height: size)
+        let right = CGRect(x: stage.maxX - arrowEdgeMargin - size, y: y, width: size, height: size)
+        return (left, right)
+    }
+
+    /// The header ⓘ button's frame: top-right corner, flush with the
+    /// header, pulled in by `safeArea` so it clears the status bar / Dynamic
+    /// Island (or whatever chrome a host reserves) rather than fighting the
+    /// system clock/battery icons for the same few points. Extracted to a
+    /// pure function — mirroring `handleFrame(for:)` — so both
+    /// `layoutSubviews` and `LayoutTests` (checking the arrows never
+    /// intersect it) share one formula instead of `layoutSubviews` keeping
+    /// its own private copy the tests can't see.
+    private static func infoButtonFrame(bounds: CGRect, safeArea: UIEdgeInsets) -> CGRect {
+        let topInset = max(4, safeArea.top + 4)
+        let rightInset = safeArea.right + 4
+        return CGRect(x: bounds.maxX - infoButtonSize - rightInset, y: topInset,
+                      width: infoButtonSize, height: infoButtonSize)
     }
 
     /// The control strip's height for `available` total vertical space (the
@@ -427,6 +547,18 @@ final class PluginView: UIView {
             stage.frame = l.stage
         }
 
+        // Hidden (not just zero-frame) whenever `arrowFrames(for:)` returned
+        // `.zero` — collapsed stage or too little room for both arrows. See
+        // that function's doc comment for why a `.zero` result already means
+        // "there is simply nothing to page through/no room to do it in".
+        let arrowsHidden = l.leftArrow.width < 1 || l.leftArrow.height < 1
+        leftArrowButton.isHidden = arrowsHidden
+        rightArrowButton.isHidden = arrowsHidden
+        leftArrowButton.frame = l.leftArrow
+        rightArrowButton.frame = l.rightArrow
+        bringSubviewToFront(leftArrowButton)
+        bringSubviewToFront(rightArrowButton)
+
         // Top-right corner, flush with the header, but pulled in by
         // `safeAreaInsets` so it clears the status bar / Dynamic Island in
         // the standalone app (and whatever chrome a host reserves in the
@@ -442,11 +574,7 @@ final class PluginView: UIView {
         // contain the point), so the button "steals" only its own square
         // corner and nothing more — the rest of the pad's drag surface is
         // completely unaffected.
-        let topInset = max(4, safeAreaInsets.top + 4)
-        let rightInset = safeAreaInsets.right + 4
-        infoButton.frame = CGRect(
-            x: bounds.maxX - Self.infoButtonSize - rightInset, y: topInset,
-            width: Self.infoButtonSize, height: Self.infoButtonSize)
+        infoButton.frame = l.infoButton
         bringSubviewToFront(infoButton)
 
         if let aboutView {
@@ -456,6 +584,10 @@ final class PluginView: UIView {
         if let moreAppsView {
             moreAppsView.frame = bounds
             bringSubviewToFront(moreAppsView)
+        }
+        if let characterPickerView {
+            characterPickerView.frame = bounds
+            bringSubviewToFront(characterPickerView)
         }
     }
 }

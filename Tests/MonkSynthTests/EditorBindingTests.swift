@@ -103,9 +103,10 @@ final class EditorBindingTests: XCTestCase {
         XCTAssertEqual(pluginView.stage.character.id, "fish")
     }
 
-    /// UI -> AU: tapping the character to cycle it must write the new
-    /// selection back into the AU (so it round-trips via `fullState`).
-    func testCyclingCharacterWritesCharacterIDBackToAU() throws {
+    /// UI -> AU: stepping the character forward (the "next character" arrow)
+    /// must write the new selection back into the AU (so it round-trips via
+    /// `fullState`).
+    func testStepForwardWritesCharacterIDBackToAU() throws {
         let vc = AudioUnitViewController()
         let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
         vc.loadViewIfNeeded()
@@ -113,19 +114,17 @@ final class EditorBindingTests: XCTestCase {
         let pluginView = vc.view as! PluginView
         XCTAssertEqual(unit.characterID, "monk")
 
-        pluginView.stage.cycleCharacter()
+        pluginView.stage.stepForward()
 
         XCTAssertEqual(unit.characterID, "fish")
         XCTAssertEqual(pluginView.stage.character.id, "fish")
     }
 
-    /// UI -> AU: a tap changes the character AND loads its voice. Simulated
-    /// here via `accessibilityActivate()` — VoiceOver's double-tap, and
-    /// `CharacterView`'s own doc comment on why it mirrors a sighted tap
-    /// rather than a long-press — rather than synthesizing a real touch
-    /// through the gesture recognizers, which `handleTap` (private) isn't
-    /// reachable from outside the view anyway.
-    func testTappingCharacterAlsoLoadsItsVoiceIntoTheParameterTree() throws {
+    /// UI -> AU: a forward step changes the character AND loads its voice —
+    /// the same single `onCharacterSelected` callback every change route
+    /// fires now (see that property's doc comment: there is no longer a
+    /// "character only" mode to distinguish).
+    func testStepForwardAlsoLoadsItsVoiceIntoTheParameterTree() throws {
         let vc = AudioUnitViewController()
         let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
         vc.loadViewIfNeeded()
@@ -134,11 +133,11 @@ final class EditorBindingTests: XCTestCase {
         XCTAssertEqual(pluginView.stage.character.id, "monk")
 
         // Dial headSize somewhere fish's own voice does NOT use, so the
-        // assertion below can only pass if the tap actually rewrote it.
+        // assertion below can only pass if the step actually rewrote it.
         unit.parameterTree?.parameter(withAddress: Param.headSize.rawValue)?
             .setValue(0.5, originator: nil)
 
-        _ = pluginView.stage.accessibilityActivate()   // monk -> fish, tap-equivalent
+        pluginView.stage.stepForward()   // monk -> fish
 
         XCTAssertEqual(pluginView.stage.character.id, "fish")
         for (param, value) in CharacterVoiceTable.fish {
@@ -151,24 +150,46 @@ final class EditorBindingTests: XCTestCase {
         XCTAssertEqual(routing ?? -1, Param.pitchBendRouting.defaultValue, accuracy: 1e-6)
     }
 
-    /// UI -> AU: `cycleCharacter()` alone is exactly what the long-press
-    /// path calls (see `CharacterView.handleLongPress`) — character only,
-    /// deliberately leaving whatever sound is dialled in untouched.
-    func testCyclingCharacterAloneNeverTouchesAnyParameter() throws {
+    /// Symmetric coverage for `stepBackward()` (the "previous character"
+    /// arrow) — stepping backward from monk wraps straight to the last
+    /// entry (cow), and that also loads cow's voice.
+    func testStepBackwardAlsoLoadsItsVoiceIntoTheParameterTree() throws {
         let vc = AudioUnitViewController()
         let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
         vc.loadViewIfNeeded()
 
         let pluginView = vc.view as! PluginView
-        unit.parameterTree?.parameter(withAddress: Param.headSize.rawValue)?
-            .setValue(0.5, originator: nil)
+        XCTAssertEqual(pluginView.stage.character.id, "monk")
 
-        pluginView.stage.cycleCharacter()   // monk -> fish, character only
+        pluginView.stage.stepBackward()   // monk -> cow (wraps backward)
 
-        XCTAssertEqual(pluginView.stage.character.id, "fish")
-        let stillDialledIn = unit.parameterTree?.parameter(withAddress: Param.headSize.rawValue)?.value
-        XCTAssertEqual(stillDialledIn ?? -1, 0.5, accuracy: 1e-6,
-                        "cycleCharacter() alone (the long-press path) must not touch any parameter")
+        XCTAssertEqual(pluginView.stage.character.id, "cow")
+        XCTAssertEqual(unit.characterID, "cow")
+        for (param, value) in CharacterVoiceTable.cow {
+            let treeValue = unit.parameterTree?.parameter(withAddress: param.rawValue)?.value
+            XCTAssertEqual(treeValue ?? -1, value, accuracy: 1e-6,
+                            "\(param.identifier) did not load cow's voice")
+        }
+    }
+
+    /// UI -> AU: the picker's route (`select(_:)`, jumping straight to a
+    /// given character rather than the adjacent one) must load its voice
+    /// exactly the same way the arrows do — "either route" per the task.
+    func testSelectingCharacterViaPickerRouteAlsoLoadsItsVoiceIntoTheParameterTree() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+
+        let pluginView = vc.view as! PluginView
+        pluginView.stage.select(UnicornCharacter())
+
+        XCTAssertEqual(pluginView.stage.character.id, "unicorn")
+        XCTAssertEqual(unit.characterID, "unicorn")
+        for (param, value) in CharacterVoiceTable.unicorn {
+            let treeValue = unit.parameterTree?.parameter(withAddress: param.rawValue)?.value
+            XCTAssertEqual(treeValue ?? -1, value, accuracy: 1e-6,
+                            "\(param.identifier) did not load unicorn's voice")
+        }
     }
 
     /// The task requires voice-load writes to go through the parameter tree
@@ -178,7 +199,7 @@ final class EditorBindingTests: XCTestCase {
     /// proves the originator mechanism: an independent second observer
     /// registration, standing in for a real host's automation recorder,
     /// must see the change.
-    func testTappingCharacterVoiceChangeIsVisibleToAnIndependentHostObserver() throws {
+    func testCharacterVoiceChangeIsVisibleToAnIndependentHostObserver() throws {
         let vc = AudioUnitViewController()
         let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
         vc.loadViewIfNeeded()
@@ -189,11 +210,11 @@ final class EditorBindingTests: XCTestCase {
         let hostToken = tree.token(byAddingParameterObserver: { _, _ in hostObservedCount += 1 })
         defer { tree.removeParameterObserver(hostToken) }
 
-        _ = pluginView.stage.accessibilityActivate()   // monk -> fish, tap-equivalent
+        pluginView.stage.stepForward()   // monk -> fish
 
         pollUntil { hostObservedCount > 0 }
         XCTAssertGreaterThan(hostObservedCount, 0,
-            "an independent host observer must see the parameter writes a tap's voice load produces")
+            "an independent host observer must see the parameter writes a step's voice load produces")
     }
 
     /// AU -> UI: a `fullState` load reaching in *after* the editor is

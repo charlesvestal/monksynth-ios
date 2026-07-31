@@ -177,7 +177,8 @@ public final class MonkSynthAU: AUAudioUnit {
 
     /// The selected character's `id`. Read by `AudioUnitViewController` at
     /// bind time to seed the visible `CharacterView`, and written by it
-    /// when the user taps to cycle (`setCharacterID`). Defaults to
+    /// whenever the user changes character — an arrow step or a picker
+    /// selection (`setCharacterID`). Defaults to
     /// `CharacterRegistry.defaultCharacter` (monk) until a session restores
     /// something else.
     private(set) var characterID: String = CharacterRegistry.defaultCharacter.id {
@@ -197,7 +198,7 @@ public final class MonkSynthAU: AUAudioUnit {
     var onCharacterIDChange: ((String) -> Void)?
 
     /// UI -> AU write: `AudioUnitViewController` calls this when the user
-    /// taps the character to cycle it.
+    /// changes the character (an arrow step or a picker selection).
     func setCharacterID(_ id: String) {
         characterID = id
     }

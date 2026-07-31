@@ -38,9 +38,9 @@ final class CharacterView: UIView {
     /// The character currently on screen. Defaults to the monk — the
     /// roster's first entry and the persisted default (see
     /// `CharacterRegistry`). Settable directly (state restore, or an owner
-    /// applying a value read from `fullState`/`UserDefaults`); tap-to-cycle
-    /// (`cycleCharacter()`) is just this setter plus the roster walk plus
-    /// the name overlay.
+    /// applying a value read from `fullState`/`UserDefaults`); `stepForward()`/
+    /// `stepBackward()`/`select(_:)` are just this setter plus a roster
+    /// lookup plus the name overlay and `onCharacterSelected`.
     var character: Character = MonkCharacter() {
         didSet {
             updateAccessibility()
@@ -48,25 +48,31 @@ final class CharacterView: UIView {
         }
     }
 
-    /// Fired whenever the user's gesture (a tap OR a long-press — see
-    /// `handleTap`/`handleLongPress`) cycles to the next character — never
-    /// fired for a programmatic `character =` assignment, so an owner
-    /// applying a restored/loaded value can't bounce right back into
-    /// whatever wrote it. The owner uses this to persist the new selection
-    /// (AU `fullState`, or `UserDefaults` in the standalone host).
-    var onCharacterChange: ((Character) -> Void)?
+    /// Fired whenever the user actually changes the character — an arrow
+    /// step or a picker selection (see `stepForward`/`stepBackward`/
+    /// `select`) — never for a programmatic `character =` assignment, so an
+    /// owner applying a restored/loaded value can't bounce right back into
+    /// whatever wrote it.
+    ///
+    /// There used to be two callbacks here (`onCharacterChange` for "persist
+    /// the id" and `onVoiceLoad`, fired only by a tap, for "and load its
+    /// sound") because a long-press could change the character WITHOUT its
+    /// voice. That escape hatch is gone — the user rejected it explicitly
+    /// ("have arrows instead of tap to change. Then you know what's
+    /// happening"): an arrow or a picker selection is unambiguous, so there
+    /// is no accidental-sound-change case left to guard against. One
+    /// callback, always both effects: the owner (`AudioUnitViewController`/
+    /// `RootViewController`) persists `character.id` AND loads
+    /// `CharacterVoiceTable.voice(for:)` into the parameter tree via
+    /// `setValue(_:originator:)`, every time, no modes.
+    var onCharacterSelected: ((Character) -> Void)?
 
-    /// Fired immediately after `onCharacterChange`, but ONLY by a tap — never
-    /// by a long-press. This is the "and load its voice" half of the tap
-    /// gesture: tap changes character AND sound, long-press changes the
-    /// character only and leaves whatever sound is currently dialled in
-    /// alone. `CharacterView` itself has no notion of parameters or voices —
-    /// it only tells its owner "the user asked for this character's voice
-    /// too", exactly as `onCharacterChange` already tells it "the user asked
-    /// for this character". The owner (`AudioUnitViewController`/
-    /// `RootViewController`) is what actually knows how to look up and apply
-    /// a voice.
-    var onVoiceLoad: ((Character) -> Void)?
+    /// Fired when the user taps (or VoiceOver-activates) the character
+    /// itself. `CharacterView` has no notion of overlays — exactly as it has
+    /// no notion of parameters or voices (see the class doc comment) — so
+    /// the owner (`PluginView`) is what actually presents the character
+    /// picker in response.
+    var onOpenPicker: (() -> Void)?
 
     // MARK: - Idle animation
 
@@ -109,21 +115,7 @@ final class CharacterView: UIView {
 
         addSubview(nameOverlay)
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
-        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
-        // Without this, a held-and-released touch would fire BOTH: the long
-        // press recognizes at `minimumPressDuration` while the finger is
-        // still down (UILongPressGestureRecognizer has no upper bound on
-        // hold time), and a plain UITapGestureRecognizer still recognizes on
-        // release regardless of how long the touch was held. Making the tap
-        // wait for the long press to actually FAIL (i.e. the touch lifted
-        // before the long-press threshold) is what makes the two gestures
-        // mutually exclusive: hold past the threshold and only the long
-        // press fires; release quickly and only the tap fires. See
-        // `handleTap`/`handleLongPress` for what "only" means here — tap
-        // loads the voice, long-press deliberately does not.
-        tap.require(toFail: longPress)
         addGestureRecognizer(tap)
-        addGestureRecognizer(longPress)
 
         // Reduce Motion can be toggled while the view is on screen; react so
         // an idle shuffle in progress freezes immediately rather than
@@ -152,47 +144,57 @@ final class CharacterView: UIView {
         updateDisplayLink()
     }
 
-    // MARK: - Tap-to-cycle (and load its voice) / long-press-to-cycle (character only)
-
-    /// A tap changes character AND loads its voice — `cycleCharacter()` for
-    /// the picture, `onVoiceLoad` for the sound. This is the gesture users
-    /// reach for by default; the user was warned it can overwrite a patch
-    /// they've dialled in, and chose it anyway (see the task). Long-press
-    /// (`handleLongPress`) is the escape hatch that leaves the sound alone.
-    @objc private func handleTap() {
-        cycleCharacter()
-        onVoiceLoad?(character)
-    }
-
-    /// Character only — deliberately does NOT fire `onVoiceLoad`. Gated to
-    /// `.began` so a held touch fires this exactly once, not once per
-    /// re-recognition tick.
-    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began else { return }
-        cycleCharacter()
-    }
+    // MARK: - Stepping and selecting (arrows / picker)
 
     /// Advances to the next character in `CharacterRegistry.all`, wrapping
-    /// from the last entry back to the first, and briefly overlays its
-    /// name. Shared by both gestures above; never loads a voice itself —
-    /// see `handleTap` for the one caller that also wants that.
-    func cycleCharacter() {
-        let next = CharacterRegistry.character(after: character)
+    /// from the last entry back to the first. What the "next character"
+    /// arrow calls.
+    func stepForward() {
+        applyCharacter(CharacterRegistry.character(after: character))
+    }
+
+    /// Steps to the previous character, wrapping from the first entry back
+    /// to the last. What the "previous character" arrow calls.
+    func stepBackward() {
+        applyCharacter(CharacterRegistry.character(before: character))
+    }
+
+    /// Jumps straight to `newCharacter` — what the picker overlay calls
+    /// when the user taps a cell. Applies unconditionally, even if
+    /// `newCharacter` is already the current one: re-loading the same
+    /// voice is a harmless no-op, and treating "tapped the character
+    /// that's already selected" as a special case would just be extra
+    /// branching for no observable benefit.
+    func select(_ newCharacter: Character) {
+        applyCharacter(newCharacter)
+    }
+
+    /// The one place `character` actually changes in response to the user:
+    /// updates the picture, fires `onCharacterSelected` (persist id + load
+    /// voice — see that property's doc comment), and briefly overlays the
+    /// new name. Shared by `stepForward`/`stepBackward`/`select` so all
+    /// three routes behave identically, per the task's "one behaviour, no
+    /// modes".
+    private func applyCharacter(_ next: Character) {
         character = next
-        onCharacterChange?(next)
+        onCharacterSelected?(next)
         showNameOverlay(next.displayName)
+    }
+
+    /// A tap on the character itself opens the picker — it does not, by
+    /// itself, change anything. See `onOpenPicker`.
+    @objc private func handleTap() {
+        onOpenPicker?()
     }
 
     /// VoiceOver's double-tap is the direct equivalent of a sighted user's
     /// single tap (it's how a non-`UIControl` accessibility element exposes
-    /// its primary action) — so this mirrors `handleTap`, not
-    /// `handleLongPress`: character AND voice. The character-only path stays
-    /// reachable to VoiceOver users too, just via a different route (a
-    /// physical long-press still works under VoiceOver on most iOS
-    /// versions, and the hint below calls it out explicitly either way).
+    /// its primary action) — so this mirrors `handleTap`: it opens the
+    /// picker, it does not change the character. Once the picker is open,
+    /// each of its cells is its own accessible element a VoiceOver user can
+    /// navigate to and double-tap to select — see `CharacterPickerView`.
     override func accessibilityActivate() -> Bool {
-        cycleCharacter()
-        onVoiceLoad?(character)
+        onOpenPicker?()
         return true
     }
 
@@ -203,12 +205,12 @@ final class CharacterView: UIView {
         accessibilityLabel = String(format: format, character.displayName)
         accessibilityHint = NSLocalizedString(
             "character.accessibilityHint",
-            comment: "Accessibility hint for the character view, explaining both gestures.")
+            comment: "Accessibility hint for the character view, explaining that it opens a picker.")
     }
 
     // MARK: - Name overlay
 
-    /// Small pill showing the character's name for ~1s after cycling.
+    /// Small pill showing the character's name for ~1s after a step/select.
     /// `isUserInteractionEnabled` stays at its default `false` so taps
     /// landing on it still reach `CharacterView`'s own tap gesture rather
     /// than being swallowed by the label.
@@ -350,5 +352,34 @@ final class CharacterView: UIView {
         Theme.robeShadow.withAlphaComponent(0.5).setStroke()
         mouth.lineWidth = stage.width * 0.008
         mouth.stroke()
+    }
+
+    // MARK: - Static snapshot rendering (for the character picker)
+
+    /// Renders `character`'s idle pose into a plain, standalone image sized
+    /// `size` — how the picker overlay (`CharacterPickerView`) shows each
+    /// roster entry's art. Reuses this view's own `draw(_:)` (a temporary,
+    /// never-window-attached instance) rather than the picker reimplementing
+    /// any character drawing itself, per the task's "render each character's
+    /// actual art in the cell... reuse rather than reimplement".
+    ///
+    /// Deliberately a one-shot render, not N live `CharacterView`s embedded
+    /// in the grid: a `CharacterView` starts its own idle-animation
+    /// `CADisplayLink` as soon as it's attached to a window (see
+    /// `didMoveToWindow`/`updateDisplayLink`), so a picker listing a roster
+    /// that's "about to grow well beyond six" would otherwise spin up one
+    /// display link per cell for no visible benefit — the picker is a
+    /// momentary overlay, not a place anyone watches for idle fidgeting.
+    /// This view is never added to a window, so no display link is ever
+    /// created; the returned `UIImage` is completely static.
+    static func snapshot(of character: Character, size: CGSize) -> UIImage {
+        let view = CharacterView(frame: CGRect(origin: .zero, size: size))
+        view.character = character
+        view.backgroundColor = .clear
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            view.layer.render(in: ctx.cgContext)
+        }
     }
 }

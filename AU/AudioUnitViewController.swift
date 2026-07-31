@@ -149,24 +149,27 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
                 self?.pluginView.stage.character = CharacterRegistry.character(withID: id)
             }
         }
-        // UI -> AU: the user cycled the character (tap OR long-press).
-        pluginView.stage.onCharacterChange = { [weak self] character in
-            self?.au?.setCharacterID(character.id)
-        }
-        // UI -> AU: the user TAPPED the character, so its voice loads too.
-        // Writes go through the parameter tree with `setValue(_:originator:)`
-        // — never straight into the shadow — so the host sees and can undo
-        // each of the 15 parameter changes, exactly like a knob edit or a
-        // preset load. `originator: nil` (not `token`) is deliberate: this
-        // write isn't "the knob confirming the value it just produced" (the
-        // one case `token` exists to silence — see the comment on `token`
-        // above), it's a batch of values nothing on screen currently
-        // reflects, so `bind()`'s own observer must fire too and refresh
-        // every affected knob — the same reasoning `MonkSynthAU.fullState`'s
-        // setter and `currentPreset`'s setter already use for the identical
-        // "apply a whole configuration, then resync the UI" situation.
-        pluginView.stage.onVoiceLoad = { [weak self] character in
-            guard let self, let tree = self.au?.parameterTree else { return }
+        // UI -> AU: the user changed the character — an arrow step or a
+        // picker selection (see `CharacterView.onCharacterSelected`'s doc
+        // comment for why there is only one callback now, not a
+        // persist-the-id one and a separate load-the-voice one gated on
+        // which gesture fired). Every change persists the id AND loads the
+        // voice; writes go through the parameter tree with
+        // `setValue(_:originator:)` — never straight into the shadow — so
+        // the host sees and can undo each of the 15 parameter changes,
+        // exactly like a knob edit or a preset load. `originator: nil` (not
+        // `token`) is deliberate: this write isn't "the knob confirming the
+        // value it just produced" (the one case `token` exists to silence —
+        // see the comment on `token` above), it's a batch of values nothing
+        // on screen currently reflects, so `bind()`'s own observer must fire
+        // too and refresh every affected knob — the same reasoning
+        // `MonkSynthAU.fullState`'s setter and `currentPreset`'s setter
+        // already use for the identical "apply a whole configuration, then
+        // resync the UI" situation.
+        pluginView.stage.onCharacterSelected = { [weak self] character in
+            guard let self else { return }
+            self.au?.setCharacterID(character.id)
+            guard let tree = self.au?.parameterTree else { return }
             for (param, value) in CharacterVoiceTable.voice(for: character) {
                 tree.parameter(withAddress: param.rawValue)?.setValue(value, originator: nil)
             }
