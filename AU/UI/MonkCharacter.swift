@@ -1,10 +1,12 @@
 import UIKit
 
 /// The default character: a bald, warm-faced chanting figure in a
-/// saffron/maroon robe draped over one shoulder. Rebuilt against the 90s
-/// pre-rendered-3D style spec (`docs/superpowers/specs/2026-07-31-character-style-spec.md`):
-/// every surface is shaded through `Shading`'s primitives instead of flat
-/// fills, and nothing is stroked — see that file's doc comment for why.
+/// saffron/maroon robe draped over one shoulder, built from layered
+/// `UIBezierPath`s. This is upstream's original — and, until this file
+/// existed, MonkSynth's *only* — face, moved here unchanged from `MonkView`
+/// when that view grew into `CharacterView` to support five characters.
+/// See `CharacterView` for the animation (idle state machine, vowel
+/// quantisation, amplitude swell) every character shares.
 ///
 /// Layers, back to front: robe (torso silhouette + clipped bare-shoulder
 /// skin), neck, ears, head, eyes. `CharacterView` draws the mouth aperture
@@ -16,13 +18,16 @@ struct MonkCharacter: Character {
 
     // MARK: - Derived robe tones
     //
-    // The saffron trim is derived from `Theme.robe` in HSB space rather than
-    // a hand-picked constant that could drift out of sync with it: lighter
-    // and desaturated toward yellow. `Theme.robe`'s own hue is ~9°
-    // (red-orange); the shift must be *positive* to move toward
-    // yellow/saffron (~35°) — a negative shift wraps the other way round the
-    // hue circle into pink/magenta.
+    // Rather than hand-picking two more raw colour constants that could
+    // drift out of sync with `Theme.robe`, the saffron trim and the fold
+    // shadow are both derived from it in HSB space: lighter + desaturated
+    // toward yellow for the saffron piping, darker for the fold shadow.
+    // `Theme.robe`'s own hue is ~9° (red-orange); the shift must be
+    // *positive* to move toward yellow/saffron (~35°) — a negative shift
+    // wraps the other way round the hue circle into pink/magenta, which is
+    // what an earlier version of this constant actually rendered as.
     private static let robeSaffron = Theme.robe.adjusted(hueShift: 0.07, saturationScale: 0.60, brightnessScale: 1.7)
+    private static let robeFold = Theme.robe.adjusted(saturationScale: 1.05, brightnessScale: 0.62)
 
     // MARK: - Mouth anchors: (width, height) of the aperture in unit-square
     // space, roughly OO / OH / AH / EH / EE.
@@ -57,7 +62,9 @@ struct MonkCharacter: Character {
     /// `drawRobe` reuses this exact path as a clip mask for the bare
     /// shoulder, so that patch's outer edge is always pixel-identical to
     /// the body's real silhouette no matter how the drape-line curve below
-    /// is tuned.
+    /// is tuned. (Four earlier attempts hand-matched a separate curve to
+    /// the robe's own edge and either left a gap or bulged past it; this
+    /// is structurally immune to that class of bug.)
     private let neckBottomLeft = (fx: CGFloat(0.43), fy: CGFloat(0.50))
     private let neckBottomRight = (fx: CGFloat(0.57), fy: CGFloat(0.50))
     private let leftShoulderTop = (fx: CGFloat(0.20), fy: CGFloat(0.58))
@@ -90,17 +97,31 @@ struct MonkCharacter: Character {
         guard let context = UIGraphicsGetCurrentContext() else { return }
         let torso = torsoPath(in: stage)
 
-        Shading.freeform(torso.cgPath, boundingBox: torso.bounds, color: Theme.robe, into: context)
+        Theme.robe.setFill()
+        torso.fill()
+
+        // A soft, narrow fold low on the (always-robed) left/centre so the
+        // robe reads as fabric rather than a flat wash.
+        let fold = UIBezierPath()
+        fold.move(to: p(0.5, 0.72))
+        fold.addQuadCurve(to: p(0.475, 0.97), controlPoint: p(0.455, 0.86))
+        fold.addQuadCurve(to: p(0.525, 0.97), controlPoint: p(0.5, 0.95))
+        fold.addQuadCurve(to: p(0.5, 0.72), controlPoint: p(0.545, 0.86))
+        fold.close()
+        Self.robeFold.withAlphaComponent(0.22).setFill()
+        fold.fill()
 
         // The drape line: from the base of the neck, sweeping *well down*
         // across the chest before exiting off the right edge of the stage.
         // Everything in the torso silhouette above/right of this line
         // becomes bare skin — clip to `torso` first so the fill can never
         // leak past the body's real outline, then clip to "above the line"
-        // and shade. This needs to sag substantially below the torso's own
-        // shoulder curve (which only drops from fy 0.50 to 0.58) or the
-        // exposed region is squeezed to a hairline sliver between the two
-        // curves.
+        // and flood-fill. This needs to sag substantially below the
+        // torso's own shoulder curve (which only drops from fy 0.50 to
+        // 0.58) or the exposed region is squeezed to a hairline sliver
+        // between the two curves — an earlier version of this line hugged
+        // the torso's edge too closely and the bare shoulder was nearly
+        // invisible as a result.
         let drapeLine = UIBezierPath()
         drapeLine.move(to: p(neckBottomRight.fx, neckBottomRight.fy))
         drapeLine.addQuadCurve(to: p(1.05, 0.82), controlPoint: p(0.74, 0.64))
@@ -113,75 +134,75 @@ struct MonkCharacter: Character {
         context.saveGState()
         torso.addClip()
         cut.addClip()
-        // Shaded against the whole torso's bounding box, not the small
-        // patch's own — a patch of bare skin on a lit robe should reveal
-        // the body's own lighting, not get an independent hot spot.
-        Shading.radialShade(in: torso.bounds, color: Theme.skin, into: context)
+        Theme.skin.setFill()
+        context.fill(stage)
         context.restoreGState()
 
-        // Saffron piping along the visible drape line: a thin filled ribbon
-        // (the stroke outline of the drape curve, filled rather than
-        // stroked) shaded like a piece of trimmed fabric, clipped to the
-        // torso so it can never extend past the body's own silhouette.
+        // Saffron trim along the visible drape line — clipped to the torso
+        // too, so it can never extend past the body's own silhouette the
+        // way the very first version's floating sash did.
         context.saveGState()
         torso.addClip()
-        let ribbonPath = drapeLine.cgPath.copy(
-            strokingWithWidth: stage.width * 0.02, lineCap: .round, lineJoin: .round, miterLimit: 1)
-        Shading.freeform(ribbonPath, boundingBox: ribbonPath.boundingBox, color: Self.robeSaffron, into: context)
+        drapeLine.lineWidth = stage.width * 0.014
+        drapeLine.lineCapStyle = .round
+        Self.robeSaffron.withAlphaComponent(0.85).setStroke()
+        drapeLine.stroke()
         context.restoreGState()
     }
 
     /// The neck, always fully skin-coloured regardless of which shoulder is
-    /// bare — it is the strip directly beneath the head that connects it to
-    /// `torsoPath`'s own neckline, so the head never appears to float.
+    /// bare — it is the strip directly beneath the head that connects it
+    /// to `torsoPath`'s own neckline, so the head never appears to float.
     private func drawNeck(in stage: CGRect) {
         func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
-        guard let context = UIGraphicsGetCurrentContext() else { return }
         let neck = UIBezierPath()
         neck.move(to: p(0.44, 0.43))
         neck.addLine(to: p(0.56, 0.43))
         neck.addLine(to: p(neckBottomRight.fx, neckBottomRight.fy))
         neck.addLine(to: p(neckBottomLeft.fx, neckBottomLeft.fy))
         neck.close()
-        Shading.freeform(neck.cgPath, boundingBox: neck.bounds, color: Theme.skin, into: context)
+        Theme.skin.setFill()
+        neck.fill()
     }
 
     private let faceCenter = (fx: CGFloat(0.5), fy: CGFloat(0.30))
     private let headRadius: CGFloat = 0.17
 
     private func drawHead(in stage: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
         let center = point(faceCenter.fx, faceCenter.fy, in: stage)
-        let headRect = CGRect(x: center.x - stage.width * headRadius, y: center.y - stage.width * headRadius,
-                               width: stage.width * headRadius * 2, height: stage.width * headRadius * 2)
 
-        // Ears: drawn before the head sphere so it overlaps their inner
+        // Ears: drawn before the head circle so it overlaps their inner
         // half, leaving only an outer crescent visible on a bald head.
         for cx: CGFloat in [faceCenter.fx - headRadius * 0.96,
                              faceCenter.fx + headRadius * 0.96] {
             let c = point(cx, faceCenter.fy + 0.018, in: stage)
             let w = stage.width * 0.045
             let h = stage.width * 0.076
-            Shading.sphere(in: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h),
-                            color: Theme.skin, into: context)
+            let ear = UIBezierPath(ovalIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h))
+            Theme.skin.setFill()
+            ear.fill()
         }
 
-        Shading.sphere(in: headRect, color: Theme.skin, into: context)
+        let head = UIBezierPath(arcCenter: center, radius: stage.width * headRadius,
+                                 startAngle: 0, endAngle: .pi * 2, clockwise: true)
+        Theme.skin.setFill()
+        head.fill()
     }
 
     func drawEyes(in stage: CGRect, blinking: Bool) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
-        // A calm, half-lidded meditation look rather than fully round eyes:
-        // a shallow recessed socket, thinner still when blinking. Both
-        // states are the same `Shading.recess` primitive at a different
-        // aspect, so there is no stroke standing in for an eyelid line.
         let halfWidth = stage.width * 0.05
-        let halfHeight = stage.width * (blinking ? 0.006 : 0.021)
+        let curveDepth = stage.width * (blinking ? 0.011 : 0.027)
+        let lineWidth = stage.width * 0.015
         for cx: CGFloat in [0.415, 0.585] {
             let c = point(cx, 0.296, in: stage)
-            Shading.recess(in: CGRect(x: c.x - halfWidth, y: c.y - halfHeight,
-                                       width: halfWidth * 2, height: halfHeight * 2),
-                            into: context)
+            let eye = UIBezierPath()
+            eye.move(to: CGPoint(x: c.x - halfWidth, y: c.y))
+            eye.addQuadCurve(to: CGPoint(x: c.x + halfWidth, y: c.y),
+                              controlPoint: CGPoint(x: c.x, y: c.y + curveDepth))
+            eye.lineWidth = lineWidth
+            eye.lineCapStyle = .round
+            Theme.robeShadow.setStroke()
+            eye.stroke()
         }
     }
 }
