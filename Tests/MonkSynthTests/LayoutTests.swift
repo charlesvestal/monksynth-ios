@@ -279,4 +279,92 @@ final class LayoutTests: XCTestCase {
                 "handle hit region shorter than the 44pt HIG minimum, drawerOpen=\(open)")
         }
     }
+
+    // MARK: - Character step arrows
+
+    /// The usual size sweep: a spread of realistic host-supplied rects,
+    /// portrait and landscape, phone and tablet, plus the AUM strip where
+    /// the stage is known to collapse. Shared by every arrow test below so
+    /// they all sweep exactly the same sizes `CharacterTests`'
+    /// stage/pad-overlap sweep already uses.
+    private static let usualSizeSweep: [CGSize] = [
+        CGSize(width: 320, height: 480),
+        CGSize(width: 390, height: 844),
+        CGSize(width: 844, height: 390),
+        CGSize(width: 1024, height: 768),
+        CGSize(width: 1024, height: 1366),
+        CGSize(width: 375, height: 180),   // AUM strip — stage collapses
+        CGSize(width: 480, height: 320),
+    ]
+
+    /// Wherever the arrows are actually shown (non-collapsed stage with
+    /// enough room), both must meet the 44pt HIG minimum tap target in both
+    /// dimensions — same bar as the drawer handle and the info button.
+    func testArrowFramesMeetMinimumTapTargetWhereShown() {
+        for size in Self.usualSizeSweep {
+            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
+            guard l.leftArrow.width >= 1 else { continue }   // not shown at this size
+            XCTAssertGreaterThanOrEqual(l.leftArrow.width, 44, "left arrow too narrow at \(size)")
+            XCTAssertGreaterThanOrEqual(l.leftArrow.height, 44, "left arrow too short at \(size)")
+            XCTAssertGreaterThanOrEqual(l.rightArrow.width, 44, "right arrow too narrow at \(size)")
+            XCTAssertGreaterThanOrEqual(l.rightArrow.height, 44, "right arrow too short at \(size)")
+        }
+    }
+
+    /// Across the whole sweep, neither arrow may intersect the pad, the
+    /// controls strip, the drawer handle, or the info button — the four
+    /// things the task explicitly calls out as off-limits. (The arrows are
+    /// allowed to overlap `stage` itself, since they're drawn flanking the
+    /// character — that's the whole point.)
+    func testArrowFramesDoNotIntersectPadControlsHandleOrInfoButton() {
+        for size in Self.usualSizeSweep {
+            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
+            for (name, arrow) in [("left", l.leftArrow), ("right", l.rightArrow)] where arrow.width >= 1 {
+                XCTAssertFalse(arrow.intersects(l.pad), "\(name) arrow \(arrow) overlaps pad \(l.pad) at \(size)")
+                XCTAssertFalse(arrow.intersects(l.controls), "\(name) arrow \(arrow) overlaps controls \(l.controls) at \(size)")
+                XCTAssertFalse(arrow.intersects(l.handle), "\(name) arrow \(arrow) overlaps handle \(l.handle) at \(size)")
+                XCTAssertFalse(arrow.intersects(l.infoButton), "\(name) arrow \(arrow) overlaps infoButton \(l.infoButton) at \(size)")
+            }
+        }
+    }
+
+    /// The two arrows must never overlap each other either — a degenerate
+    /// case `arrowFrames(for:)`'s own width guard exists specifically to
+    /// prevent.
+    func testArrowFramesNeverOverlapEachOther() {
+        for size in Self.usualSizeSweep {
+            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
+            guard l.leftArrow.width >= 1 else { continue }
+            XCTAssertFalse(l.leftArrow.intersects(l.rightArrow),
+                "left arrow \(l.leftArrow) overlaps right arrow \(l.rightArrow) at \(size)")
+        }
+    }
+
+    /// Required by the task: "Hide them when the stage is collapsed". The
+    /// AUM strip (375x180) is the layout suite's own reference case for a
+    /// collapsed stage (see `testAUMStripKeepsControlsAtFullHeightAndCollapsesTheStage`).
+    func testArrowsAreAbsentWhenStageCollapses() {
+        let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 375, height: 180))
+        XCTAssertEqual(l.stage, .zero, "precondition: stage collapses at this size")
+        XCTAssertEqual(l.leftArrow, .zero, "left arrow must be hidden when the stage collapses")
+        XCTAssertEqual(l.rightArrow, .zero, "right arrow must be hidden when the stage collapses")
+    }
+
+    /// A degenerate host rect (smaller than the gutters themselves) must
+    /// still produce well-formed, non-hidden-but-broken arrow frames — i.e.
+    /// they fall back to `.zero` cleanly rather than NaN or negative,
+    /// mirroring `testNoZoneIsEverNegativeOrNaNAtAnySize`'s guarantee for
+    /// the other zones.
+    func testArrowFramesAreNeverNaNOrNegativeEvenAtDegenerateSizes() {
+        let sizes: [CGSize] = [CGSize(width: 1, height: 1), CGSize(width: 100, height: 100)]
+        for size in sizes {
+            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
+            for (name, rect) in [("left", l.leftArrow), ("right", l.rightArrow)] {
+                XCTAssertTrue(rect.width.isFinite, "\(name) arrow width not finite at \(size)")
+                XCTAssertTrue(rect.height.isFinite, "\(name) arrow height not finite at \(size)")
+                XCTAssertGreaterThanOrEqual(rect.width, 0, "\(name) arrow width negative at \(size)")
+                XCTAssertGreaterThanOrEqual(rect.height, 0, "\(name) arrow height negative at \(size)")
+            }
+        }
+    }
 }

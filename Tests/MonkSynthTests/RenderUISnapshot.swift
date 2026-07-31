@@ -295,4 +295,119 @@ final class RenderUISnapshot: XCTestCase {
         try data.write(to: URL(fileURLWithPath: "/tmp/ui_moreapps.png"))
         print("SNAPSHOT_WRITTEN /tmp/ui_moreapps.png bytes=\(data.count)")
     }
+
+    /// Renders only `rect` (in `view`'s own coordinate space) of a laid-out
+    /// view, at 1x scale so the crop math stays simple. Used below to zoom
+    /// in on the stage zone — at full-UI scale the step arrows are too
+    /// small in a screenshot to actually judge their look.
+    private func crop(_ view: UIView, to rect: CGRect) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: rect.size, format: format).image { ctx in
+            ctx.cgContext.translateBy(x: -rect.origin.x, y: -rect.origin.y)
+            view.layer.render(in: ctx.cgContext)
+        }
+    }
+
+    /// Close-up of the stage zone (character + step arrows) at a few sizes.
+    /// The arrows render as part of the whole-UI sheet (`testWriteSizeSheet`)
+    /// too, but small enough there that judging placement/contrast needs a
+    /// crop. Required visual check for the arrows task: confirm they're
+    /// visible but unobtrusive, and don't collide with the character's own
+    /// art any more than the design (arrows flank/overlap the stage's own
+    /// edges, deliberately) intends.
+    func testWriteCharacterArrowsCloseup() throws {
+        let sizes: [(String, CGSize)] = [
+            ("portrait 390x844", CGSize(width: 390, height: 844)),
+            ("landscape 844x390", CGSize(width: 844, height: 390)),
+            ("AUM tall 375x320", CGSize(width: 375, height: 320)),
+            ("iPad 1024x768", CGSize(width: 1024, height: 768)),
+        ]
+        let gap: CGFloat = 16
+        let label: CGFloat = 18
+        let margin: CGFloat = 24
+
+        var crops: [(String, UIImage)] = []
+        for (name, size) in sizes {
+            let view = PluginView(frame: CGRect(origin: .zero, size: size))
+            view.setNeedsLayout(); view.layoutIfNeeded()
+            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
+            let cropRect = l.stage.insetBy(dx: -margin, dy: -margin)
+            crops.append((name, crop(view, to: cropRect)))
+        }
+
+        let sheetW = crops.reduce(0) { $0 + $1.1.size.width + gap } + gap
+        let sheetH = (crops.map(\.1.size.height).max() ?? 0) + gap * 2 + label
+        let sheet = CGSize(width: sheetW, height: sheetH)
+        let renderer = UIGraphicsImageRenderer(size: sheet)
+        let image = renderer.image { ctx in
+            UIColor(white: 0.06, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: sheet))
+            var x = gap
+            for (name, img) in crops {
+                img.draw(at: CGPoint(x: x, y: gap + label))
+                (name as NSString).draw(
+                    at: CGPoint(x: x, y: gap),
+                    withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                                     .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+                x += img.size.width + gap
+            }
+        }
+        let data = try XCTUnwrap(image.pngData())
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_arrows.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_arrows.png bytes=\(data.count)")
+    }
+
+    /// The character picker overlay: a normal-height standalone render, the
+    /// same overlay embedded in a full `PluginView` (so the scrim/panel
+    /// read correctly against the rest of the UI), and a very short host
+    /// rect to confirm it actually scrolls rather than just clipping.
+    /// Required visual check for the picker task.
+    func testWriteCharacterPickerSheet() throws {
+        let gap: CGFloat = 20
+        let label: CGFloat = 18
+
+        func snapshot(_ view: UIView, size: CGSize) -> UIImage {
+            view.frame = CGRect(origin: .zero, size: size)
+            view.setNeedsLayout(); view.layoutIfNeeded()
+            return UIGraphicsImageRenderer(size: size).image { c in view.layer.render(in: c.cgContext) }
+        }
+
+        let standaloneSize = CGSize(width: 390, height: 700)
+        let standalone = CharacterPickerView(frame: .zero, current: CharacterRegistry.all[2])
+
+        let inContextSize = CGSize(width: 390, height: 844)
+        let inContext = PluginView(frame: CGRect(origin: .zero, size: inContextSize))
+        inContext.setNeedsLayout(); inContext.layoutIfNeeded()
+        inContext.stage.onOpenPicker?()
+
+        let shortSize = CGSize(width: 375, height: 180)
+        let short = CharacterPickerView(frame: .zero, current: CharacterRegistry.defaultCharacter)
+
+        let columns: [(String, UIView, CGSize)] = [
+            ("standalone 390x700", standalone, standaloneSize),
+            ("in PluginView 390x844", inContext, inContextSize),
+            ("AUM strip 375x180 (must scroll)", short, shortSize),
+        ]
+
+        let sheet = CGSize(width: columns.reduce(0) { $0 + $1.2.width + gap } + gap,
+                           height: (columns.map(\.2.height).max() ?? 0) + gap * 2 + label)
+        let renderer = UIGraphicsImageRenderer(size: sheet)
+        let image = renderer.image { ctx in
+            UIColor(white: 0.06, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: sheet))
+            var x = gap
+            for (name, view, size) in columns {
+                snapshot(view, size: size).draw(at: CGPoint(x: x, y: gap + label))
+                (name as NSString).draw(
+                    at: CGPoint(x: x, y: gap),
+                    withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                                     .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+                x += size.width + gap
+            }
+        }
+        let data = try XCTUnwrap(image.pngData())
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_characterpicker.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_characterpicker.png bytes=\(data.count)")
+    }
 }

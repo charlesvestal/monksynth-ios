@@ -3,11 +3,11 @@ import UIKit
 @testable import MonkSynth
 
 /// Covers `CharacterRegistry` (the ordered, bundled roster — see the
-/// characters design doc) and `CharacterView`'s tap-to-cycle. `IdleAnimator`
-/// and the mouth's vowel quantisation (shared by every character) are
-/// already covered by `IdleAnimatorTests`; this file is about the parts
-/// that are genuinely new: five distinct `Character` conformers and the
-/// machinery that selects between them.
+/// characters design doc) and `CharacterView`'s arrow-stepping/picker
+/// selection. `IdleAnimator` and the mouth's vowel quantisation (shared by
+/// every character) are already covered by `IdleAnimatorTests`; this file is
+/// about the parts that are genuinely new: six distinct `Character`
+/// conformers and the machinery that selects between them.
 final class CharacterTests: XCTestCase {
 
     // MARK: - Roster shape
@@ -46,12 +46,13 @@ final class CharacterTests: XCTestCase {
         XCTAssertEqual(CharacterRegistry.character(withID: "").id, "monk")
     }
 
-    // MARK: - Cycling
+    // MARK: - Stepping (arrows)
 
     /// Walking `character(after:)` from monk must visit every character
     /// exactly once and land back on monk — i.e. it wraps, rather than
-    /// running off the end of the array.
-    func testCyclingWrapsFromLastCharacterBackToFirst() {
+    /// running off the end of the array. This is the "next character" arrow's
+    /// underlying lookup.
+    func testCharacterAfterWrapsFromLastCharacterBackToFirst() {
         var current = CharacterRegistry.defaultCharacter
         var visited = [current.id]
         for _ in 0..<(CharacterRegistry.all.count - 1) {
@@ -59,28 +60,97 @@ final class CharacterTests: XCTestCase {
             visited.append(current.id)
         }
         XCTAssertEqual(visited, CharacterRegistry.all.map(\.id),
-                       "cycling once through should visit every character in roster order")
+                       "stepping forward once through should visit every character in roster order")
 
         let wrapped = CharacterRegistry.character(after: current)
-        XCTAssertEqual(wrapped.id, "monk", "cycling past the last character must wrap to the first")
+        XCTAssertEqual(wrapped.id, "monk", "stepping forward past the last character must wrap to the first")
     }
 
-    /// `CharacterView.cycleCharacter()` — the tap handler's actual
-    /// implementation — advances `character` and fires `onCharacterChange`
-    /// exactly once per tap, with the same wrap-around behaviour.
-    func testCharacterViewCyclesThroughEntireRosterAndWraps() {
+    /// Mirror of the above for `character(before:)` — the "previous
+    /// character" arrow's underlying lookup. Walking backward from monk
+    /// must visit the roster in reverse order and wrap from the first entry
+    /// back to the last.
+    func testCharacterBeforeWrapsFromFirstCharacterBackToLast() {
+        var current = CharacterRegistry.defaultCharacter
+        var visited = [current.id]
+        for _ in 0..<(CharacterRegistry.all.count - 1) {
+            current = CharacterRegistry.character(before: current)
+            visited.append(current.id)
+        }
+        XCTAssertEqual(visited, [CharacterRegistry.all.first!.id] + CharacterRegistry.all.dropFirst().reversed().map(\.id),
+                       "stepping backward once through should visit every character in reverse roster order")
+
+        let wrapped = CharacterRegistry.character(before: current)
+        XCTAssertEqual(wrapped.id, "monk", "stepping backward past the first character must wrap to the last")
+    }
+
+    /// `CharacterView.stepForward()` — the "next character" arrow's actual
+    /// implementation — advances `character` and fires `onCharacterSelected`
+    /// exactly once per step, with the same wrap-around behaviour as
+    /// `CharacterRegistry.character(after:)`.
+    func testStepForwardAdvancesThroughEntireRosterAndWraps() {
         let view = CharacterView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
         var changes: [String] = []
-        view.onCharacterChange = { changes.append($0.id) }
+        view.onCharacterSelected = { changes.append($0.id) }
 
-        XCTAssertEqual(view.character.id, "monk", "monk is the default before any cycling")
+        XCTAssertEqual(view.character.id, "monk", "monk is the default before any stepping")
 
         for _ in 0..<CharacterRegistry.all.count {
-            view.cycleCharacter()
+            view.stepForward()
         }
 
         XCTAssertEqual(changes, CharacterRegistry.all.dropFirst().map(\.id) + ["monk"])
-        XCTAssertEqual(view.character.id, "monk", "a full cycle returns to the default")
+        XCTAssertEqual(view.character.id, "monk", "a full forward cycle returns to the default")
+    }
+
+    /// Symmetric coverage for `stepBackward()` — the "previous character"
+    /// arrow — stepping away from and back to the default in the opposite
+    /// direction.
+    func testStepBackwardRetreatsThroughEntireRosterAndWraps() {
+        let view = CharacterView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        var changes: [String] = []
+        view.onCharacterSelected = { changes.append($0.id) }
+
+        for _ in 0..<CharacterRegistry.all.count {
+            view.stepBackward()
+        }
+
+        let expected = CharacterRegistry.all.dropFirst().reversed().map(\.id) + ["monk"]
+        XCTAssertEqual(changes, expected)
+        XCTAssertEqual(view.character.id, "monk", "a full backward cycle returns to the default")
+    }
+
+    /// `select(_:)` — what the picker overlay calls — jumps straight to the
+    /// given character (not just the adjacent one) and fires
+    /// `onCharacterSelected` with it, exactly like the arrows do for their
+    /// own step.
+    func testSelectJumpsDirectlyToTheGivenCharacterAndFiresCallback() {
+        let view = CharacterView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        var selected: [String] = []
+        view.onCharacterSelected = { selected.append($0.id) }
+
+        view.select(CowCharacter())
+
+        XCTAssertEqual(view.character.id, "cow")
+        XCTAssertEqual(selected, ["cow"])
+    }
+
+    /// Every route that changes the character — forward step, backward
+    /// step, and a direct picker selection — must load the matching voice.
+    /// `CharacterView` itself has no notion of voices (see its doc comment);
+    /// this only proves all three routes go through the single
+    /// `onCharacterSelected` callback an owner uses to do that, not that any
+    /// two of them fire a different, inconsistent set of callbacks.
+    func testEveryChangeRouteFiresTheSameSingleCallback() {
+        let view = CharacterView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        var fired = 0
+        view.onCharacterSelected = { _ in fired += 1 }
+
+        view.stepForward()
+        view.stepBackward()
+        view.select(UnicornCharacter())
+
+        XCTAssertEqual(fired, 3, "every one of stepForward/stepBackward/select must fire onCharacterSelected exactly once")
     }
 
     // MARK: - Distinct implementations, not five copies
@@ -125,12 +195,12 @@ final class CharacterTests: XCTestCase {
         XCTAssertFalse(allIdentical, "every character has the same mouth placement: \(placements)")
     }
 
-    // MARK: - Tap-to-cycle does not steal the pad's drags
+    // MARK: - The character's own tap does not steal the pad's drags
 
     /// `stage` and `pad` are separate sibling `UIView`s (`PluginView.stage`,
-    /// `PluginView.pad`) — `CharacterView`'s tap gesture is attached to
-    /// `stage` alone, and UIKit only ever delivers a touch to the (single)
-    /// subview whose frame contains it. So the tap-to-cycle gesture can
+    /// `PluginView.pad`) — `CharacterView`'s tap gesture (opens the picker)
+    /// is attached to `stage` alone, and UIKit only ever delivers a touch to
+    /// the (single) subview whose frame contains it. So that gesture can
     /// only ever "steal" a touch that was already going to `stage`, never
     /// one over `pad` — geometric non-overlap is the whole guarantee.
     /// `LayoutTests` already asserts pad-doesn't-overlap-stage for a couple
@@ -155,7 +225,7 @@ final class CharacterTests: XCTestCase {
 
     /// End-to-end version of the same guarantee using real views: laying
     /// out a `PluginView` and tapping squarely inside `pad`'s frame must
-    /// reach the pad, not `stage`'s tap-to-cycle gesture — proven here by
+    /// reach the pad, not `stage`'s own tap gesture — proven here by
     /// confirming UIKit's own hit-test resolves a point inside `pad` to
     /// `pad` (or one of its subviews), never to `stage`.
     func testHitTestInsidePadFrameNeverResolvesToStage() {
@@ -187,15 +257,40 @@ final class CharacterTests: XCTestCase {
 
     /// VoiceOver's double-tap invokes `accessibilityActivate()` on a
     /// non-`UIControl` accessibility element rather than synthesizing a
-    /// touch — this is the "expose an accessibility action" half of the
-    /// tap-to-cycle requirement.
-    func testAccessibilityActivateCyclesTheCharacter() {
+    /// touch. It must open the picker (`onOpenPicker`) — exactly what a
+    /// sighted tap does — and, crucially, must NOT itself change the
+    /// character: selection happens inside the picker, where each cell is
+    /// its own accessible element (see `CharacterPickerView`).
+    func testAccessibilityActivateOpensPickerWithoutChangingCharacter() {
         let view = CharacterView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        var openPickerCount = 0
+        view.onOpenPicker = { openPickerCount += 1 }
+        var selectedCount = 0
+        view.onCharacterSelected = { _ in selectedCount += 1 }
         XCTAssertEqual(view.character.id, "monk")
 
         let handled = view.accessibilityActivate()
 
         XCTAssertTrue(handled)
-        XCTAssertEqual(view.character.id, "fish")
+        XCTAssertEqual(openPickerCount, 1)
+        XCTAssertEqual(selectedCount, 0, "accessibilityActivate must not itself change the character")
+        XCTAssertEqual(view.character.id, "monk", "the character must be unchanged by opening the picker")
+    }
+
+    /// A plain tap on the character (the real gesture, not a stand-in call)
+    /// fires `onOpenPicker` too. `handleTap` is private, so this invokes it
+    /// the same way `RenderUISnapshot` already reaches into `PluginView`'s
+    /// own private `toggleDrawer` — a direct call to the gesture's target
+    /// action, honest about testing this module's internals rather than
+    /// synthesizing a real touch through UIKit's gesture machinery.
+    func testTapFiresOnOpenPicker() {
+        let view = CharacterView(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        var openPickerCount = 0
+        view.onOpenPicker = { openPickerCount += 1 }
+
+        view.perform(Selector(("handleTap")))
+
+        XCTAssertEqual(openPickerCount, 1)
+        XCTAssertEqual(view.character.id, "monk", "a tap must not itself change the character")
     }
 }

@@ -18,8 +18,8 @@ protocol Character {
     /// better to just not change it).
     var id: String { get }
 
-    /// Shown briefly in `CharacterView`'s tap-to-cycle overlay when the user
-    /// switches to this character.
+    /// Shown briefly in `CharacterView`'s name overlay when the user steps
+    /// or picks their way to this character.
     var displayName: String { get }
 
     /// Everything except the eyes and the mouth aperture: body, head, and
@@ -66,9 +66,10 @@ extension Character {
 /// deliberately removed after it broke archiving). Monk is first, and is the
 /// default; the rest follow in the order they were added.
 ///
-/// Order here is what tap-to-cycle walks (`CharacterView.cycleCharacter()`)
-/// — it is independent of `id`, so re-ordering this array changes cycling
-/// order without touching anything persisted.
+/// Order here is what the arrow buttons walk (`CharacterView.stepForward()`/
+/// `stepBackward()`) and the order the picker overlay lists — it is
+/// independent of `id`, so re-ordering this array changes both without
+/// touching anything persisted.
 enum CharacterRegistry {
     static let all: [Character] = [
         MonkCharacter(),
@@ -93,9 +94,18 @@ enum CharacterRegistry {
     /// The character after `current` in roster order, wrapping from the
     /// last entry back to the first. Falls back to the default if `current`
     /// somehow isn't in the roster (shouldn't happen, but degrades safely
-    /// rather than crashing on a force-unwrap).
+    /// rather than crashing on a force-unwrap). This is what the "next
+    /// character" arrow steps through.
     static func character(after current: Character) -> Character {
         guard let index = all.firstIndex(where: { $0.id == current.id }) else { return defaultCharacter }
         return all[(index + 1) % all.count]
+    }
+
+    /// The character before `current` in roster order, wrapping from the
+    /// first entry back to the last. Mirrors `character(after:)` exactly —
+    /// same fallback, same wraparound — for the "previous character" arrow.
+    static func character(before current: Character) -> Character {
+        guard let index = all.firstIndex(where: { $0.id == current.id }) else { return defaultCharacter }
+        return all[(index - 1 + all.count) % all.count]
     }
 }
