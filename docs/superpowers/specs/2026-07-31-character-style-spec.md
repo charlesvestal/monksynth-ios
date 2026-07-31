@@ -1,8 +1,25 @@
 # Character style spec — 90s CGI
 
 **Date:** 2026-07-31
-**Status:** approved
-**Supersedes the ad-hoc art in:** `MonkCharacter`, `FishCharacter`, `UnicornCharacter`, `GirlCharacter`, `OldManCharacter`, `CowCharacter`
+**Status: ATTEMPTED AND REJECTED — do not re-implement.**
+
+> Built in commit `12185ff`, reverted in `7d36148`. The approach below —
+> approximating pre-rendered 3D with Core Graphics gradients — produced glossy
+> plastic toys rather than the look of the original Delay Lama render. The
+> shading was technically correct (consistent light, no outlines, recessed
+> mouths, body-render caching) and the result was still bad. **The lesson is
+> that this look does not come from gradient shading; it comes from actual
+> rendered 3D art.**
+>
+> Character art will be supplied externally rather than drawn in code. The flat
+> vector characters remain in place as placeholders until then.
+>
+> Kept as a record so the same expensive experiment is not repeated. The
+> performance note below (caching the static body, compositing only the mouth
+> and eyes) stays valid for any future art pipeline that costs more per frame
+> than a flat fill.
+
+**Original spec follows.**
 
 ## The look
 
