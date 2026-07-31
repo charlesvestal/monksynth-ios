@@ -29,6 +29,23 @@ final class RootViewController: UIViewController {
     /// counterpart to `MonkSynthAU.fullState["characterID"]`.
     private static let characterIDDefaultsKey = "characterID"
 
+    /// The standalone's own equivalent of `MonkSynthAU`'s `PresetStoring`
+    /// conformance — see `StandalonePresetStore`'s own doc comment.
+    /// `currentSnapshot` mirrors what `MonkSynthAU.saveCurrentAsUserPreset`
+    /// reads from its own live `fullState`: whatever `audio` currently holds
+    /// plus whatever character `pluginView.stage` is currently showing.
+    /// `lazy`, not built in `init`, because it captures `self` and both
+    /// `audio`/`pluginView` need to already exist — by the time anything
+    /// actually calls into this (from `bind()`, in `viewDidLoad`), they do.
+    private lazy var presetStore = StandalonePresetStore(currentSnapshot: { [weak self] in
+        guard let self else {
+            return PresetSnapshot(params: Param.allCases.map(\.defaultValue),
+                                   characterID: CharacterRegistry.defaultCharacter.id)
+        }
+        return PresetSnapshot(params: Param.allCases.map { self.audio.value(of: $0) },
+                               characterID: self.pluginView.stage.character.id)
+    })
+
     private var pluginView: PluginView { view as! PluginView }
 
     /// Set by `startAudio()` if `LocalEngine.start()` throws. Presenting the
@@ -232,6 +249,50 @@ final class RootViewController: UIViewController {
         pluginView.showsBluetoothOption = true
         pluginView.onOpenURL = { url in UIApplication.shared.open(url) }
         pluginView.onBluetoothMIDI = { [weak self] in self?.presentBluetoothMIDI() }
+        wirePresets()
+    }
+
+    // MARK: - Presets
+
+    /// Equivalent behaviour to `AudioUnitViewController.bind()`'s own
+    /// presets wiring, backed by `presetStore` (this app's own storage)
+    /// instead of `MonkSynthAU`'s native `AUAudioUnit` machinery — see that
+    /// property's doc comment. There is no `AUParameterTree`/host to record
+    /// automation to here, same as every other UI write in this file (the
+    /// pad/knobs above, the character selector's voice load): writes go
+    /// straight into `LocalEngine`'s shadow, and each on-screen knob is
+    /// pushed explicitly since nothing observes the shadow and refreshes
+    /// them automatically the way the AUv3's parameter-tree observer does.
+    private func wirePresets() {
+        pluginView.presetStore = presetStore
+
+        pluginView.onApplyFactoryPreset = { [weak self] index in
+            guard let self, index >= 0, index < kFactoryPresets.count else { return }
+            for (i, v) in kFactoryPresets[index].values.enumerated() {
+                guard let param = Param(rawValue: UInt64(i)) else { continue }
+                self.audio.setParameter(param, v)
+                self.pluginView.controls.setValue(v, for: param)
+            }
+        }
+
+        pluginView.onApplyUserPreset = { [weak self] snapshot in
+            guard let self else { return }
+            for (i, v) in snapshot.params.enumerated() {
+                guard let param = Param(rawValue: UInt64(i)) else { continue }
+                self.audio.setParameter(param, v)
+                self.pluginView.controls.setValue(v, for: param)
+            }
+            // Direct assignment, not `pluginView.stage.select(_:)`: this
+            // updates the picture/name only, without also replaying
+            // `CharacterVoiceTable`'s voice for it — the preset's own saved
+            // params (just applied above) are what should actually sound,
+            // exactly the same reasoning `AudioUnitViewController`'s
+            // `au.onCharacterIDChange` handler already relies on for a
+            // restored session.
+            let character = CharacterRegistry.character(withID: snapshot.characterID)
+            self.pluginView.stage.character = character
+            UserDefaults.standard.set(character.id, forKey: Self.characterIDDefaultsKey)
+        }
     }
 
     func presentBluetoothMIDI() {

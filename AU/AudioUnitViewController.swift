@@ -185,6 +185,34 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
         pluginView.onOpenURL = { [weak self] url in
             self?.extensionContext?.open(url, completionHandler: nil)
         }
+
+        // Presets: `MonkSynthAU` itself is the `PresetStoring` conformer —
+        // it already carries `saveCurrentAsUserPreset`/`snapshot(forUserPresetNamed:)`/
+        // `deleteUserPreset`/`savedUserPresets` (backed by `AUAudioUnit`'s
+        // native user-preset API).
+        pluginView.presetStore = au
+        // Factory presets: reuse the EXISTING, already-tested mechanism
+        // (`MonkSynthAU.currentPreset`) rather than re-deriving anything —
+        // sound only, no character (factory presets predate the character
+        // feature and carry none).
+        pluginView.onApplyFactoryPreset = { [weak self] index in
+            guard let self, let presets = self.au?.factoryPresets, index >= 0, index < presets.count else { return }
+            self.au?.currentPreset = presets[index]
+        }
+        // User presets: apply through `fullState`, exactly like a session
+        // restore — that setter already pushes every parameter through the
+        // tree (refreshing the knobs via `bind()`'s own observer, since the
+        // write's `originator` is nil) AND resolves `characterID` through
+        // `CharacterRegistry` (falling back to monk for an id the roster no
+        // longer recognises) before firing `onCharacterIDChange`, which
+        // updates `pluginView.stage.character` above. Nothing else needs to
+        // be touched by hand.
+        pluginView.onApplyUserPreset = { [weak self] snapshot in
+            self?.au?.fullState = [
+                "monkParams": snapshot.params.withUnsafeBufferPointer { Data(buffer: $0) },
+                "characterID": snapshot.characterID,
+            ]
+        }
     }
 
     private func startUILink() {

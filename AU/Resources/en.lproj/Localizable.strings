@@ -57,6 +57,9 @@
 /* About screen: button/link that opens the More Apps screen. */
 "about.moreApps" = "More Apps";
 
+/* About screen: button/link that opens the Presets screen. */
+"about.presets" = "Presets";
+
 /* Accessibility label for the header ⓘ button that opens the about screen. */
 "about.info" = "About MonkSynth";
 
@@ -82,3 +85,36 @@
 
 /* Generic dismiss button for the audio-start-failed alert. */
 "ok" = "OK";
+
+/* Presets overlay: title. */
+"presets.title" = "Presets";
+
+/* Presets overlay: section header above the six read-only factory presets. */
+"presets.factory" = "Factory";
+
+/* Presets overlay: section header above the user's own saved presets. */
+"presets.user" = "My Presets";
+
+/* Presets overlay: shown in place of the user-presets list when none have been saved yet. */
+"presets.empty" = "No saved presets yet.";
+
+/* Presets overlay: placeholder text in the new-preset name field. */
+"presets.namePlaceholder" = "Preset name";
+
+/* Presets overlay: button that saves the current patch (sound and character) as a new user preset. Kept short — sits beside the name field at a fixed, narrow width. */
+"presets.save" = "Save";
+
+/* Presets overlay: shown when trying to save with a blank name. */
+"presets.error.emptyName" = "Enter a name for the preset.";
+
+/* Presets overlay: shown when trying to save under a name that's already taken by another saved preset. */
+"presets.error.duplicateName" = "A preset with that name already exists.";
+
+/* Presets overlay: shown when saving fails for any other reason. */
+"presets.error.saveFailed" = "Couldn't save the preset.";
+
+/* Presets overlay: shown in place of the save controls when the current host doesn't support saving user presets. */
+"presets.unsupportedHost" = "This app can't save presets here.";
+
+/* Accessibility label for a saved user preset row's delete button. */
+"presets.delete.accessibility" = "Delete this preset";
