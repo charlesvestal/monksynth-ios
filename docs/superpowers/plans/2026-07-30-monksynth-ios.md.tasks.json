@@ -132,7 +132,7 @@
     {
       "id": 24,
       "subject": "Task 15: App icon and device verification",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** A signed device build installed on hardware, with the AUv3 confirmed loading and sounding inside AUM.\n\n**Files:**\n- Create: Host/Assets.xcassets/AppIcon.appiconset/Contents.json\n- Create: Host/Assets.xcassets/AppIcon.appiconset/icon-1024.png\n- Create: scripts/run_device.sh\n\n**Acceptance Criteria:**\n- [ ] scripts/run_device.sh builds signed, installs and launches on a connected device\n- [ ] The standalone app sounds when the pad is dragged\n- [ ] MonkSynth appears in AUM's instrument list and loads its custom UI\n- [ ] Playing MIDI into the AUv3 from AUM produces sound and animates the monk\n- [ ] Rotating the device reflows portrait/landscape without clipping\n\n**Verify:** scripts/run_device.sh -> ends with `launched com.vestal.monksynth`, then the AUM checks by hand\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 15.\n\n```json:metadata\n{\"files\": [\"Host/Assets.xcassets/AppIcon.appiconset/Contents.json\", \"scripts/run_device.sh\"], \"verifyCommand\": \"scripts/run_device.sh\", \"acceptanceCriteria\": [\"scripts/run_device.sh builds signed, installs and launches on a connected device\", \"The standalone app sounds when the pad is dragged\", \"MonkSynth appears in AUM's instrument list and loads its custom UI\", \"Playing MIDI into the AUv3 from AUM produces sound and animates the monk\", \"Rotating the device reflows portrait/landscape without clipping\"], \"modelTier\": \"mechanical\"}\n```",
       "blockedBy": [
         16,
@@ -150,5 +150,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-31T08:45:12.322235+02:00"
+  "lastUpdated": "2026-07-31T08:54:28.028447+02:00"
 }
