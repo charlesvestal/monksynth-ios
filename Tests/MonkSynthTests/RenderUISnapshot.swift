@@ -475,11 +475,26 @@ final class RenderUISnapshot: XCTestCase {
         let unsupportedSize = CGSize(width: 390, height: 560)
         let unsupported = CharacterDropdownView(frame: .zero, current: CharacterRegistry.all[0], store: unsupportedStore)
 
+        // Tall enough to lay out EVERY row unscrolled — 6 built-ins, the
+        // "Factory" header + all six factory presets, the save row, and the
+        // "Saved" header + all four seeded user entries — all in view at
+        // once. None of the columns above are tall enough for this any
+        // more now that the list holds 16 rows across three groups (it used
+        // to be enough for just built-ins + a handful of saved entries);
+        // this is the one column that actually lets a human eye judge
+        // whether the three groups (unlabelled built-ins, "Factory" +
+        // star-badged rows, "Saved" + bookmark-badged rows) read as
+        // distinct from each other, rather than a scrolled-off wall of text
+        // — required visual check, see the task report.
+        let fullListSize = CGSize(width: 390, height: 1500)
+        let fullList = CharacterDropdownView(frame: .zero, current: CharacterRegistry.all[2], store: store)
+
         let columns: [(String, UIView, CGSize)] = [
             ("standalone 390x700", standalone, standaloneSize),
             ("in PluginView 390x844", inContext, inContextSize),
             ("AUM strip 375x180 (must scroll)", shortInContext, shortSize),
             ("unsupported host 390x480", unsupported, unsupportedSize),
+            ("full list unscrolled 390x1500", fullList, fullListSize),
         ]
 
         let sheet = CGSize(width: columns.reduce(0) { $0 + $1.2.width + gap } + gap,
