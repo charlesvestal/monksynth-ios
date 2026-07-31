@@ -90,20 +90,14 @@ final class PluginView: UIView {
 
     /// Where user presets actually live — set by the owning controller
     /// (`AudioUnitViewController` hands its `MonkSynthAU`;
-    /// `RootViewController` hands its own `StandalonePresetStore`) before
-    /// the presets overlay can ever be opened. `showPresets()` no-ops if
-    /// this is still nil, which should never happen in practice but keeps
-    /// the entry point from crashing on a misconfigured container.
+    /// `RootViewController` hands its own `StandalonePresetStore`). Handed
+    /// straight to `CharacterDropdownView`, which is now the single place
+    /// saved entries are listed, saved, and deleted (see the task: one
+    /// list, one picker, no separate presets overlay). `nil` is tolerated —
+    /// the dropdown still opens and lists the built-in roster, just with no
+    /// saved entries and no save/delete UI — so a misconfigured container
+    /// degrades rather than crashing the entry point.
     var presetStore: PresetStoring?
-    /// A factory preset row was tapped in `PresetsView` — the owner applies
-    /// it (sound only, via whichever mechanism already exists for factory
-    /// presets: `MonkSynthAU.currentPreset` on the AUv3 side, the same
-    /// `kFactoryPresets` values replayed directly on the standalone side).
-    var onApplyFactoryPreset: ((Int) -> Void)?
-    /// A user preset row was tapped, already resolved to a full
-    /// `PresetSnapshot` — the owner applies both the params and the
-    /// character.
-    var onApplyUserPreset: ((PresetSnapshot) -> Void)?
 
     /// Header ⓘ button that opens `AboutView`. Visually a small glyph, but
     /// sized to the full 44pt HIG minimum in both dimensions (see
@@ -113,7 +107,6 @@ final class PluginView: UIView {
     private var aboutView: AboutView?
     private var moreAppsView: MoreAppsView?
     private var characterDropdownView: CharacterDropdownView?
-    private var presetsView: PresetsView?
 
     /// Minimum tap target per Apple's HIG.
     static let infoButtonSize: CGFloat = 44
@@ -252,10 +245,6 @@ final class PluginView: UIView {
             self?.hideAbout()
             self?.showMoreApps()
         }
-        a.onPresets = { [weak self] in
-            self?.hideAbout()
-            self?.showPresets()
-        }
         addSubview(a)
         aboutView = a
         setNeedsLayout()
@@ -281,30 +270,6 @@ final class PluginView: UIView {
         moreAppsView = nil
     }
 
-    // MARK: - Presets
-
-    private func showPresets() {
-        guard presetsView == nil, let store = presetStore else { return }
-        let p = PresetsView(frame: bounds, store: store)
-        p.onClose = { [weak self] in self?.hidePresets() }
-        p.onSelectFactoryPreset = { [weak self] index in
-            self?.onApplyFactoryPreset?(index)
-            self?.hidePresets()
-        }
-        p.onSelectUserPreset = { [weak self] snapshot in
-            self?.onApplyUserPreset?(snapshot)
-            self?.hidePresets()
-        }
-        addSubview(p)
-        presetsView = p
-        setNeedsLayout()
-    }
-
-    private func hidePresets() {
-        presetsView?.removeFromSuperview()
-        presetsView = nil
-    }
-
     // MARK: - Character selector
 
     private func installCharacterSelector() {
@@ -326,7 +291,7 @@ final class PluginView: UIView {
 
     private func showCharacterDropdown() {
         guard characterDropdownView == nil else { return }
-        let dropdown = CharacterDropdownView(frame: bounds, current: stage.character)
+        let dropdown = CharacterDropdownView(frame: bounds, current: stage.character, store: presetStore)
         dropdown.onClose = { [weak self] in self?.hideCharacterDropdown() }
         dropdown.onSelect = { [weak self] character in
             self?.stage.select(character)
@@ -696,10 +661,6 @@ final class PluginView: UIView {
         if let characterDropdownView {
             characterDropdownView.frame = bounds
             bringSubviewToFront(characterDropdownView)
-        }
-        if let presetsView {
-            presetsView.frame = bounds
-            bringSubviewToFront(presetsView)
         }
     }
 }

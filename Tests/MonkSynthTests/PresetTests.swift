@@ -202,9 +202,8 @@ final class PresetTests: XCTestCase {
     }
 
     /// "Loading restores both" — applying a saved snapshot's params +
-    /// character back into a fresh AU (mirroring how
-    /// `AudioUnitViewController.onApplyUserPreset` applies one via
-    /// `fullState`) reproduces exactly what was saved.
+    /// character back into a fresh AU via `fullState` (the same mechanism a
+    /// session restore uses) reproduces exactly what was saved.
     func testLoadingRestoresParametersAndCharacter() throws {
         let (source, _) = try makeAUWithFakeBackend()
         source.parameterTree!.parameter(withAddress: Param.aspiration.rawValue)!.value = 0.37

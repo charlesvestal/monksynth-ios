@@ -363,10 +363,18 @@ final class EditorBindingTests: XCTestCase {
         param.setValue(0.5, originator: nil)   // must not crash
     }
 
-    // MARK: - Presets
+    // MARK: - Presets / saved characters
+    //
+    // Upstream's six factory presets stay reachable through `MonkSynthAU.
+    // factoryPresets`/`currentPreset` for a HOST's own preset UI (see
+    // `PresetTests`), but this app's own UI no longer surfaces them at all
+    // — the deleted `PresetsView` used to; now `CharacterDropdownView` is
+    // the only in-app picker, and it lists only characters (built-in plus
+    // the user's own saved entries), never the factory bank. See the task:
+    // "I want only the characters as presets."
 
-    /// `bind()` hands `MonkSynthAU` itself to `pluginView` as the presets
-    /// overlay's `PresetStoring` — it already conforms (see `MonkSynthAU`'s
+    /// `bind()` hands `MonkSynthAU` itself to `pluginView` as the character
+    /// dropdown's `PresetStoring` — it already conforms (see `MonkSynthAU`'s
     /// "User presets" section).
     func testBindWiresTheAUAsThePresetStore() throws {
         let vc = AudioUnitViewController()
@@ -377,42 +385,12 @@ final class EditorBindingTests: XCTestCase {
         XCTAssertTrue(pluginView.presetStore === unit)
     }
 
-    /// Tapping a factory preset row in `PresetsView` applies it through the
-    /// existing, already-tested `MonkSynthAU.currentPreset` mechanism —
-    /// sound only, matching `PresetTests.testSelectingPresetUpdatesShadowAndTree`.
-    func testApplyingFactoryPresetFromPresetsOverlayUpdatesShadowAndTree() throws {
-        let vc = AudioUnitViewController()
-        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
-        vc.loadViewIfNeeded()
-        let pluginView = vc.view as! PluginView
-
-        pluginView.onApplyFactoryPreset?(2)   // Monastary
-
-        let expected = kFactoryPresets[2].values
-        for (i, want) in expected.enumerated() {
-            XCTAssertEqual(param_shadow_get(unit.shadow, Param.address(atIndex: i)), want, accuracy: 1e-5)
-        }
-    }
-
-    /// An out-of-range factory index (defensive: `PresetsView` itself always
-    /// hands back a valid `kFactoryPresets` index, but the closure guards
-    /// anyway) must not crash.
-    func testApplyingOutOfRangeFactoryPresetIndexDoesNotCrash() throws {
-        let vc = AudioUnitViewController()
-        _ = try vc.createAudioUnit(with: makeDescription())
-        vc.loadViewIfNeeded()
-        let pluginView = vc.view as! PluginView
-
-        pluginView.onApplyFactoryPreset?(999)   // must not crash
-        pluginView.onApplyFactoryPreset?(-1)    // must not crash
-    }
-
-    /// Applying a resolved user-preset snapshot — what `PresetsView` hands
-    /// back after a row tap — updates both the AU's params AND its
-    /// character, through the same `fullState` path a session restore
-    /// already uses, and that in turn refreshes the visible character (via
-    /// `au.onCharacterIDChange`, wired in `bind()`).
-    func testApplyingUserPresetSnapshotUpdatesParametersAndCharacter() throws {
+    /// Selecting a saved user entry (a `UserCharacter`) through the same
+    /// `stage.select(_:)` route the dropdown uses must apply ITS OWN saved
+    /// parameters — never `CharacterVoiceTable`'s voice for the face it
+    /// happens to be drawn with (see the task's decision 5: a saved entry
+    /// whose face is "cow" must not get the cow voice stomped over it).
+    func testSelectingAUserCharacterAppliesItsSavedParametersNotTheFacesVoice() throws {
         let vc = AudioUnitViewController()
         let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
         vc.loadViewIfNeeded()
@@ -420,32 +398,60 @@ final class EditorBindingTests: XCTestCase {
 
         var params = Param.allCases.map(\.defaultValue)
         params[Int(Param.headSize.rawValue)] = 0.66
-        let snapshot = PresetSnapshot(params: params, characterID: "fish")
+        let saved = UserCharacter(name: "My Patch", faceID: "cow", params: params)
 
-        pluginView.onApplyUserPreset?(snapshot)
+        pluginView.stage.select(saved)
 
-        pollUntil { unit.characterID == "fish" }
-        XCTAssertEqual(unit.characterID, "fish")
+        XCTAssertEqual(pluginView.stage.character.id, "user:My Patch")
+        XCTAssertEqual(pluginView.stage.character.displayName, "My Patch")
         XCTAssertEqual(param_shadow_get(unit.shadow, kParamHeadSize), 0.66, accuracy: 1e-6)
-        pollUntil { pluginView.stage.character.id == "fish" }
-        XCTAssertEqual(pluginView.stage.character.id, "fish")
+        // Cow's own built-in voice sets headSize to 0.08 (see
+        // `CharacterVoiceTable.cow`) — proving the tree holds 0.66, not
+        // that, is what actually distinguishes "loaded the saved patch"
+        // from "loaded the face's voice".
+        let cowsOwnHeadSize = CharacterVoiceTable.cow[.headSize] ?? -1
+        XCTAssertEqual(cowsOwnHeadSize, 0.08, accuracy: 1e-6, "test assumption about cow's own voice is stale")
+        XCTAssertGreaterThan(abs(param_shadow_get(unit.shadow, kParamHeadSize) - cowsOwnHeadSize), 0.1)
     }
 
-    /// A user preset saved under a characterID the roster no longer
-    /// recognises must fall back to monk when applied — `MonkSynthAU.
-    /// fullState`'s setter already guarantees this; this test proves the
-    /// presets-overlay application path actually goes through it.
-    func testApplyingUserPresetWithUnknownCharacterIDFallsBackToMonk() throws {
+    /// `characterID` persists the saved entry's own built-in FACE id, never
+    /// its namespaced `"user:…"` id — `MonkSynthAU.setCharacterID`'s own doc
+    /// comment explains why: `CharacterRegistry` could never resolve a
+    /// `"user:…"` id back into anything meaningful.
+    func testSelectingAUserCharacterPersistsItsFaceIDNotItsOwnID() throws {
         let vc = AudioUnitViewController()
         let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
         vc.loadViewIfNeeded()
         let pluginView = vc.view as! PluginView
 
-        let snapshot = PresetSnapshot(params: Param.allCases.map(\.defaultValue),
-                                       characterID: "some-character-that-was-removed")
-        pluginView.onApplyUserPreset?(snapshot)
+        let saved = UserCharacter(name: "Ghost Voice", faceID: "unicorn", params: Param.allCases.map(\.defaultValue))
+        pluginView.stage.select(saved)
 
-        pollUntil { unit.characterID == CharacterRegistry.defaultCharacter.id }
-        XCTAssertEqual(unit.characterID, CharacterRegistry.defaultCharacter.id)
+        XCTAssertEqual(unit.characterID, "unicorn")
+    }
+
+    /// Regression coverage for the exact bug the task's decision 5 warns
+    /// about: `onCharacterIDChange` fires asynchronously
+    /// (`DispatchQueue.main.async`, see `bind()`), so if `setCharacterID`
+    /// still notified it the way it used to, a saved entry's display would
+    /// silently revert to its plain built-in face a moment after selection.
+    /// Polling well past that async hop must show the selection is stable.
+    func testSelectingAUserCharacterDoesNotRevertToItsFaceOnTheNextRunLoopTurn() throws {
+        let vc = AudioUnitViewController()
+        _ = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+        let pluginView = vc.view as! PluginView
+
+        let saved = UserCharacter(name: "Sticky", faceID: "girl", params: Param.allCases.map(\.defaultValue))
+        pluginView.stage.select(saved)
+        XCTAssertEqual(pluginView.stage.character.id, "user:Sticky")
+
+        // Drain the run loop the same way `pollUntil` does elsewhere in this
+        // file, long enough for the async hop `onCharacterIDChange` would
+        // have used to have definitely happened, then assert the selection
+        // never moved.
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertEqual(pluginView.stage.character.id, "user:Sticky",
+            "selecting a saved character must not silently revert to its built-in face")
     }
 }

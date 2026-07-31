@@ -2,13 +2,17 @@ import XCTest
 import AVFoundation
 @testable import MonkSynth
 
-/// Covers `RootViewController`'s presets wiring — the standalone
-/// counterpart to `EditorBindingTests`'s "Presets" section. `RootViewController`,
-/// `LocalEngine`, and its `presetStore` are all private, so these tests only
-/// reach in through `PluginView`'s own public surface (`view as!
-/// MonkSynth.PluginView`), checking that applying a preset lands on the
-/// visible knobs/character exactly the way a real tap on a `PresetsView` row
-/// would.
+/// Covers `RootViewController`'s character/preset-store wiring — the
+/// standalone counterpart to `EditorBindingTests`'s "Presets / saved
+/// characters" section. `RootViewController`, `LocalEngine`, and its
+/// `presetStore` are all private, so these tests only reach in through
+/// `PluginView`'s own public surface (`view as! MonkSynth.PluginView`),
+/// checking that selecting a saved character lands on the visible
+/// knobs/character exactly the way a real tap on a `CharacterDropdownView`
+/// row would. Upstream's six factory presets stay reachable through
+/// `MonkSynthAU.factoryPresets`/`currentPreset` for hosts (`PresetTests`),
+/// but the deleted `PresetsView` was this app's only in-app UI for them —
+/// there is no standalone-side equivalent to cover any more.
 ///
 /// `RootViewController.viewDidLoad()` unconditionally starts a real
 /// `LocalEngine` (see `LocalEngineTests`, which already proves that works in
@@ -27,61 +31,30 @@ import AVFoundation
 /// exact same duplication for `Param`/`XYPadView`.
 final class RootViewControllerPresetsTests: XCTestCase {
 
-    func testApplyingFactoryPresetUpdatesOnScreenKnobs() {
-        let vc = RootViewController()
-        vc.loadViewIfNeeded()
-        let pluginView = vc.view as! MonkSynth.PluginView
-
-        pluginView.onApplyFactoryPreset?(0)   // Dorje
-
-        let expected = kFactoryPresets[0].values[Int(Param.headSize.rawValue)]
-        XCTAssertEqual(pluginView.controls.knob(for: .headSize)?.value ?? -1, expected, accuracy: 1e-5)
-    }
-
-    func testApplyingOutOfRangeFactoryPresetIndexDoesNotCrash() {
-        let vc = RootViewController()
-        vc.loadViewIfNeeded()
-        let pluginView = vc.view as! MonkSynth.PluginView
-
-        pluginView.onApplyFactoryPreset?(999)
-        pluginView.onApplyFactoryPreset?(-1)
-    }
-
-    /// "Loading restores both" — applying a resolved user-preset snapshot
-    /// updates both the on-screen knobs AND the visible character,
-    /// synchronously (no host/observer round trip to wait on, unlike the
-    /// AUv3 path).
-    func testApplyingUserPresetSnapshotUpdatesKnobsAndCharacter() {
+    /// Selecting a saved user entry updates both the on-screen knobs AND the
+    /// visible character, synchronously (no host/observer round trip to
+    /// wait on, unlike the AUv3 path) — using its OWN saved parameters, not
+    /// `CharacterVoiceTable`'s voice for the face it happens to be drawn
+    /// with (see the task's decision 5).
+    func testSelectingAUserCharacterUpdatesKnobsAndCharacterUsingItsSavedParameters() {
         let vc = RootViewController()
         vc.loadViewIfNeeded()
         let pluginView = vc.view as! MonkSynth.PluginView
 
         var params = Param.allCases.map(\.defaultValue)
         params[Int(Param.headSize.rawValue)] = 0.66
-        let snapshot = MonkSynth.PresetSnapshot(params: params, characterID: "fish")
+        let saved = MonkSynth.UserCharacter(name: "My Patch", faceID: "fish", params: params)
 
-        pluginView.onApplyUserPreset?(snapshot)
+        pluginView.stage.select(saved)
 
         XCTAssertEqual(pluginView.controls.knob(for: .headSize)?.value ?? -1, 0.66, accuracy: 1e-6)
-        XCTAssertEqual(pluginView.stage.character.id, "fish")
+        XCTAssertEqual(pluginView.stage.character.id, "user:My Patch")
+        XCTAssertEqual(pluginView.stage.character.displayName, "My Patch")
     }
 
-    /// An unknown characterID falls back to monk on the standalone path too.
-    func testApplyingUserPresetWithUnknownCharacterIDFallsBackToMonk() {
-        let vc = RootViewController()
-        vc.loadViewIfNeeded()
-        let pluginView = vc.view as! MonkSynth.PluginView
-
-        let snapshot = MonkSynth.PresetSnapshot(params: Param.allCases.map(\.defaultValue),
-                                                 characterID: "some-character-that-was-removed")
-        pluginView.onApplyUserPreset?(snapshot)
-
-        XCTAssertEqual(pluginView.stage.character.id, CharacterRegistry.defaultCharacter.id)
-    }
-
-    /// `RootViewController` hands `pluginView` its own `StandalonePresetStore`
-    /// (not nil, and always reporting `supportsUserPresets == true` — see
-    /// that type's doc comment).
+    /// `RootViewController` hands `pluginView` its own App-Group-backed
+    /// `presetStore` (not nil, and always reporting `supportsUserPresets ==
+    /// true` — see `SharedPresetStore`'s doc comment).
     func testPresetStoreIsWiredAndSupportsUserPresets() {
         let vc = RootViewController()
         vc.loadViewIfNeeded()

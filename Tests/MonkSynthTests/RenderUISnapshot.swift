@@ -418,17 +418,27 @@ final class RenderUISnapshot: XCTestCase {
         print("SNAPSHOT_WRITTEN /tmp/ui_characterselector_longname.png bytes=\(data.count)")
     }
 
-    /// The character dropdown overlay (opened by tapping the selector's name): a
-    /// normal-height standalone render, the same overlay embedded in a full
-    /// `PluginView` (so the scrim/panel read correctly against the rest of
-    /// the UI), and — the specific failure mode the old character-art grid
-    /// had — the exact AUM-strip size (375×180) to confirm a plain list of
-    /// names actually scrolls and stays usable there, unlike the grid it
-    /// replaced ("a clipped sliver of one row plus a Close button filling
-    /// the panel"). Required visual check.
+    /// The character dropdown overlay (opened by tapping the selector's
+    /// name): built-ins AND a handful of saved user entries — the merged
+    /// "one list" this task collapses characters and presets into — at a
+    /// tall standalone size, embedded in a full `PluginView` (so the
+    /// scrim/panel read correctly against the rest of the UI), and — the
+    /// specific failure mode the old character-art grid had, still the
+    /// hardest case now that the list is longer and carries a save row too
+    /// — the exact AUM-strip size (375×180), to confirm it stays legible,
+    /// scrollable, and that the save/delete affordances and the
+    /// built-in-vs-saved distinction all still read at that size. Required
+    /// visual check.
     func testWriteCharacterDropdownSheet() throws {
         let gap: CGFloat = 20
         let label: CGFloat = 18
+
+        let store = DropdownRenderFakeStore(presets: [
+            ("Sunrise Chant", "monk"),
+            ("Bubbles", "fish"),
+            ("Stardust", "unicorn"),
+            ("Schoolyard", "girl"),
+        ])
 
         func snapshot(_ view: UIView, size: CGSize) -> UIImage {
             view.frame = CGRect(origin: .zero, size: size)
@@ -437,10 +447,11 @@ final class RenderUISnapshot: XCTestCase {
         }
 
         let standaloneSize = CGSize(width: 390, height: 700)
-        let standalone = CharacterDropdownView(frame: .zero, current: CharacterRegistry.all[2])
+        let standalone = CharacterDropdownView(frame: .zero, current: CharacterRegistry.all[2], store: store)
 
         let inContextSize = CGSize(width: 390, height: 844)
         let inContext = PluginView(frame: CGRect(origin: .zero, size: inContextSize))
+        inContext.presetStore = store
         inContext.setNeedsLayout(); inContext.layoutIfNeeded()
         inContext.characterSelector.onOpenDropdown?()
 
@@ -450,13 +461,25 @@ final class RenderUISnapshot: XCTestCase {
         // over the real header/pad/controls) still works at strip height,
         // not only the overlay in isolation.
         let shortInContext = PluginView(frame: CGRect(origin: .zero, size: shortSize))
+        shortInContext.presetStore = store
         shortInContext.setNeedsLayout(); shortInContext.layoutIfNeeded()
         shortInContext.characterSelector.onOpenDropdown?()
+
+        // Unsupported-host state: no save UI, no delete buttons — the other
+        // degrade path a real AUv3 host can trigger. Tall enough that the
+        // seeded read-only entry is actually visible without scrolling, so
+        // this column shows the whole degrade path (built-ins, the
+        // explanatory line in place of Save, and a saved entry listed but
+        // with no delete control) at a glance.
+        let unsupportedStore = DropdownRenderFakeStore(presets: [("Read Only", "monk")], supportsUserPresets: false)
+        let unsupportedSize = CGSize(width: 390, height: 560)
+        let unsupported = CharacterDropdownView(frame: .zero, current: CharacterRegistry.all[0], store: unsupportedStore)
 
         let columns: [(String, UIView, CGSize)] = [
             ("standalone 390x700", standalone, standaloneSize),
             ("in PluginView 390x844", inContext, inContextSize),
             ("AUM strip 375x180 (must scroll)", shortInContext, shortSize),
+            ("unsupported host 390x480", unsupported, unsupportedSize),
         ]
 
         let sheet = CGSize(width: columns.reduce(0) { $0 + $1.2.width + gap } + gap,
@@ -479,83 +502,15 @@ final class RenderUISnapshot: XCTestCase {
         try data.write(to: URL(fileURLWithPath: "/tmp/ui_characterdropdown.png"))
         print("SNAPSHOT_WRITTEN /tmp/ui_characterdropdown.png bytes=\(data.count)")
     }
-
-    /// The presets overlay (opened via the about screen's "Presets" link): a
-    /// mix of the six read-only factory presets and several user presets —
-    /// each showing the character face it was saved with — at a normal
-    /// height, a mid height, and the AUM-strip size (375×180) to confirm it
-    /// scrolls and stays usable there too. Required visual check for the
-    /// "save your own patch with a name and the current character as its
-    /// face" task.
-    func testWriteMonkPresetsSheet() throws {
-        let gap: CGFloat = 20
-        let label: CGFloat = 18
-
-        let store = PresetsRenderFakeStore(presets: [
-            ("Sunrise Chant", "monk"),
-            ("Bubbles", "fish"),
-            ("Stardust", "unicorn"),
-            ("Schoolyard", "girl"),
-            ("Grumbles", "oldman"),
-            ("Pasture", "cow"),
-        ])
-
-        func snapshot(_ view: UIView, size: CGSize) -> UIImage {
-            view.frame = CGRect(origin: .zero, size: size)
-            view.setNeedsLayout(); view.layoutIfNeeded()
-            return UIGraphicsImageRenderer(size: size).image { c in view.layer.render(in: c.cgContext) }
-        }
-
-        let tallSize = CGSize(width: 390, height: 844)
-        let tall = PresetsView(frame: .zero, store: store)
-
-        let midSize = CGSize(width: 390, height: 480)
-        let mid = PresetsView(frame: .zero, store: store)
-
-        let shortSize = CGSize(width: 375, height: 180)
-        let short = PresetsView(frame: .zero, store: store)
-
-        // Unsupported-host state: no save UI, no delete buttons — the other
-        // required-by-the-task degrade path.
-        let unsupportedStore = PresetsRenderFakeStore(presets: [("Read Only", "monk")], supportsUserPresets: false)
-        let unsupported = PresetsView(frame: .zero, store: unsupportedStore)
-
-        let columns: [(String, UIView, CGSize)] = [
-            ("tall 390x844", tall, tallSize),
-            ("mid 390x480", mid, midSize),
-            ("AUM strip 375x180 (must scroll)", short, shortSize),
-            ("unsupported host 390x480", unsupported, midSize),
-        ]
-
-        let sheet = CGSize(width: columns.reduce(0) { $0 + $1.2.width + gap } + gap,
-                           height: (columns.map(\.2.height).max() ?? 0) + gap * 2 + label)
-        let renderer = UIGraphicsImageRenderer(size: sheet)
-        let image = renderer.image { ctx in
-            UIColor(white: 0.06, alpha: 1).setFill()
-            ctx.fill(CGRect(origin: .zero, size: sheet))
-            var x = gap
-            for (name, view, size) in columns {
-                snapshot(view, size: size).draw(at: CGPoint(x: x, y: gap + label))
-                (name as NSString).draw(
-                    at: CGPoint(x: x, y: gap),
-                    withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
-                                     .foregroundColor: UIColor(white: 0.75, alpha: 1)])
-                x += size.width + gap
-            }
-        }
-        let data = try XCTUnwrap(image.pngData())
-        try data.write(to: URL(fileURLWithPath: "/tmp/ui_presets.png"))
-        print("SNAPSHOT_WRITTEN /tmp/ui_presets.png bytes=\(data.count)")
-    }
 }
 
 /// Deterministic, in-memory `PresetStoring` fixture for
-/// `testWriteMonkPresetsSheet` — mirrors the same shape
-/// `PresetsViewTests`'s own private fake uses, but this one needs to be
-/// visible to this file specifically (that one is private to
-/// `PresetsViewTests.swift`) and lets the caller seed a specific character
-/// per row up front, which is exactly what a render sheet needs.
-private final class PresetsRenderFakeStore: PresetStoring {
+/// `testWriteCharacterDropdownSheet` — mirrors the fake
+/// `CharacterDropdownViewTests`'s own private one uses, but this one needs
+/// to be visible to this file specifically (that one is private to
+/// `CharacterDropdownViewTests.swift`) and lets the caller seed a specific
+/// character per row up front, which is exactly what a render sheet needs.
+private final class DropdownRenderFakeStore: PresetStoring {
     let supportsUserPresets: Bool
     private(set) var savedUserPresets: [SavedPreset]
 

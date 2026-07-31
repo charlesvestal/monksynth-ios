@@ -175,30 +175,44 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
     // It still has to travel with sessions and presets, so it rides in
     // `fullState` under `"characterID"` alongside `"monkParams"` instead.
 
-    /// The selected character's `id`. Read by `AudioUnitViewController` at
-    /// bind time to seed the visible `CharacterView`, and written by it
-    /// whenever the user changes character — an arrow step or a picker
-    /// selection (`setCharacterID`). Defaults to
+    /// The selected character's built-in FACE `id` — always one of
+    /// `CharacterRegistry.all`'s own ids, never a saved user entry's own
+    /// (non-built-in) id; see `setCharacterID`. Read by
+    /// `AudioUnitViewController` at bind time to seed the visible
+    /// `CharacterView`, and written by it whenever the user changes
+    /// character — an arrow step or a dropdown selection (`setCharacterID`,
+    /// always passed `Character.faceID`, never `Character.id`). Defaults to
     /// `CharacterRegistry.defaultCharacter` (monk) until a session restores
     /// something else.
-    private(set) var characterID: String = CharacterRegistry.defaultCharacter.id {
-        didSet {
-            guard oldValue != characterID else { return }
-            onCharacterIDChange?(characterID)
-        }
-    }
+    private(set) var characterID: String = CharacterRegistry.defaultCharacter.id
 
-    /// Fired whenever `characterID` changes — including from `setCharacterID`
-    /// itself. Unlike the `AUParameter` originator-token dance
-    /// `AudioUnitViewController.bind()` uses to stop a UI write bouncing
-    /// straight back into the control that made it, no such guard is needed
-    /// here: re-applying the same character id the view just produced is
-    /// idempotent (a redraw, not a fight with an in-progress drag), so a
-    /// plain callback is enough.
+    /// Fired only when `characterID` changes because of a genuinely
+    /// EXTERNAL restore — `fullState`'s setter, a host loading a saved
+    /// session or reapplying a preset — reaching in while the editor may
+    /// already be showing. Deliberately NOT fired by `setCharacterID` (the
+    /// UI -> AU direction): that method is only ever called after
+    /// `CharacterView.applyCharacter` has already updated the visible
+    /// character itself (see `CharacterView.onCharacterSelected`'s doc
+    /// comment), so re-notifying here would at best be a redundant echo
+    /// (harmless for a built-in, since re-resolving its own id yields back
+    /// the identical character) and at worst actively wrong: a saved user
+    /// entry's on-screen NAME can't be reconstructed by resolving a bare
+    /// built-in face id back through `CharacterRegistry` — that only ever
+    /// yields a plain built-in character — so firing this from
+    /// `setCharacterID` would silently revert e.g. "My Patch" back to
+    /// whatever built-in face it was saved with, a moment after the user
+    /// picked it (the observer hops to `DispatchQueue.main.async`, so the
+    /// revert would land on the very next run-loop turn).
     var onCharacterIDChange: ((String) -> Void)?
 
     /// UI -> AU write: `AudioUnitViewController` calls this when the user
-    /// changes the character (an arrow step or a picker selection).
+    /// changes the character — an arrow step, or a dropdown selection of
+    /// either a built-in or a saved user entry — always passing
+    /// `Character.faceID` (never `Character.id`), so `characterID` here
+    /// stays a real built-in id in every case, exactly what
+    /// `currentSnapshotForPresetStore()` needs when the user later saves
+    /// the current patch under a new name. Deliberately does not fire
+    /// `onCharacterIDChange` — see that property's doc comment.
     func setCharacterID(_ id: String) {
         characterID = id
     }
@@ -234,7 +248,14 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
             // default (monk) for a missing key (an older save) or an
             // unrecognised id (a character renamed/removed since), so this
             // always lands on a real character rather than a blank stage.
-            characterID = CharacterRegistry.character(withID: newValue?["characterID"] as? String).id
+            // This IS a genuine external restore, so — unlike
+            // `setCharacterID` — `onCharacterIDChange` fires when the
+            // resolved id actually changed, mirroring the guard the old
+            // `didSet` used to apply unconditionally.
+            let resolved = CharacterRegistry.character(withID: newValue?["characterID"] as? String).id
+            let changed = resolved != characterID
+            characterID = resolved
+            if changed { onCharacterIDChange?(resolved) }
         }
     }
 

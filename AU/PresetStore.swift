@@ -1,13 +1,14 @@
 import AVFoundation
 
-/// A saved user preset's identity as shown in the presets overlay's list:
-/// its name and the character it was saved with — "a name and the current
-/// character as its face", per the task. `characterID` here is always
-/// already resolved through `CharacterRegistry.character(withID:)` by
-/// whichever `PresetStoring` conformer produced it, so it never names a
+/// A saved user preset's identity as shown in the character dropdown's
+/// list: its name and the character it was saved with — "a name and the
+/// current character as its face", per the task. `characterID` here is
+/// always already resolved through `CharacterRegistry.character(withID:)`
+/// by whichever `PresetStoring` conformer produced it, so it never names a
 /// character the roster doesn't currently recognise (see that function's
-/// fallback-to-monk doc comment) — a `PresetsView` row can hand it straight
-/// to `CharacterView.thumbnail(of:size:)` without checking first.
+/// fallback-to-monk doc comment) — `UserCharacter` (which wraps exactly
+/// this data as a first-class `Character`) can hand it straight to
+/// `CharacterRegistry.character(withID:)` without checking first.
 struct SavedPreset: Equatable {
     let name: String
     let characterID: String
@@ -28,8 +29,9 @@ struct PresetSnapshot {
     var characterID: String
 }
 
-/// What a save attempt reports back, driving the presets overlay's inline
-/// feedback — see the task's "empty name" / "duplicate name" edge cases.
+/// What a save attempt reports back, driving the character dropdown's
+/// inline feedback — see the task's "empty name" / "duplicate name" edge
+/// cases.
 enum PresetSaveResult: Equatable {
     case success
     case emptyName
@@ -43,8 +45,8 @@ enum PresetSaveResult: Equatable {
 /// `saveUserPreset`/`deleteUserPreset`/`userPresets`/`presetState(for:)` —
 /// see that conformance) and the standalone app's own storage
 /// (`StandalonePresetStore`, which has no `AUAudioUnit` to lean on) — so
-/// `PresetsView` and its owner (`PluginView`) never need to know which
-/// container they're running in. Mirrors the split
+/// `CharacterDropdownView` and its owner (`PluginView`) never need to know
+/// which container they're running in. Mirrors the split
 /// `PluginView.onOpenURL`/`AudioUnitViewController`/`RootViewController`
 /// already draw for "how do I open a URL".
 protocol PresetStoring: AnyObject {
@@ -52,9 +54,9 @@ protocol PresetStoring: AnyObject {
     /// host can report this false — see `AUAudioUnit.supportsUserPresets`'s
     /// own doc comment, "host applications can use this property to
     /// determine whether to enable UI for saving/deleting user presets" —
-    /// and `PresetsView` must hide its save/delete controls rather than
-    /// offer a button that cannot work. The standalone always supports it:
-    /// it owns its storage outright.
+    /// and `CharacterDropdownView` must hide its save/delete controls
+    /// rather than offer a button that cannot work. The standalone always
+    /// supports it: it owns its storage outright.
     var supportsUserPresets: Bool { get }
 
     /// Every currently saved user preset's name + characterID, in a stable
@@ -62,8 +64,9 @@ protocol PresetStoring: AnyObject {
     var savedUserPresets: [SavedPreset] { get }
 
     /// The full params+character for a saved preset, looked up by name —
-    /// what `PresetsView` resolves before applying a user-preset row. Nil if
-    /// `name` no longer exists (e.g. deleted from under the overlay).
+    /// what `UserCharacter.all(from:)` resolves for every saved entry
+    /// before handing it to `CharacterDropdownView` as a row. Nil if `name`
+    /// no longer exists (e.g. deleted from under the overlay).
     func snapshot(forUserPresetNamed name: String) -> PresetSnapshot?
 
     /// Saves whatever is currently loaded — sound and character — as a new

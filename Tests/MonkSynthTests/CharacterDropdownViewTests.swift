@@ -1,16 +1,60 @@
 import XCTest
 import UIKit
+import AVFoundation
 @testable import MonkSynth
 
-/// Covers `CharacterDropdownView` — the plain-text-list overlay tapping
-/// `CharacterSelector`'s name opens, replacing the old character-art grid
-/// (`CharacterPickerView`) — plus `PluginView`'s wiring of it (opening from
+/// Covers `CharacterDropdownView` — the single overlay tapping
+/// `CharacterSelector`'s name opens, listing the built-in roster AND the
+/// user's own saved entries as one merged list (see the task: "Why are the
+/// presets and characters different? It should be one list"), plus saving
+/// the current patch and deleting a saved entry — the deleted `PresetsView`'s
+/// job, now folded in here — and `PluginView`'s wiring of it (opening from
 /// the selector, applying and dismissing on a row tap). `CharacterDropdownRow`
 /// is private to `CharacterDropdownView.swift`, so these tests reach it the
 /// same way the old suite reached `CharacterCell`: via public
 /// `UIView`/`UIControl` APIs (`subviews`, `isAccessibilityElement`,
 /// `accessibilityLabel`, `sendActions(for:)`) rather than the concrete type.
 final class CharacterDropdownViewTests: XCTestCase {
+
+    // MARK: - Fake store
+
+    /// In-memory `PresetStoring` fixture — mirrors the fake the deleted
+    /// `PresetsViewTests` used, so this file never touches
+    /// `MonkSynthAU`'s real `AUAudioUnit`-backed storage nor
+    /// `StandalonePresetStore`'s `UserDefaults` (both covered separately).
+    private final class FakePresetStore: PresetStoring {
+        var supportsUserPresets: Bool
+        private(set) var savedUserPresets: [SavedPreset] = []
+        private var snapshots: [String: PresetSnapshot] = [:]
+
+        init(supportsUserPresets: Bool = true) { self.supportsUserPresets = supportsUserPresets }
+
+        func snapshot(forUserPresetNamed name: String) -> PresetSnapshot? { snapshots[name] }
+
+        @discardableResult
+        func saveCurrentAsUserPreset(named name: String) -> PresetSaveResult {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return .emptyName }
+            guard !savedUserPresets.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame })
+            else { return .duplicateName }
+            savedUserPresets.append(SavedPreset(name: trimmed, characterID: "fish"))
+            snapshots[trimmed] = PresetSnapshot(params: Param.allCases.map(\.defaultValue), characterID: "fish")
+            return .success
+        }
+
+        func deleteUserPreset(named name: String) {
+            savedUserPresets.removeAll { $0.name == name }
+            snapshots[name] = nil
+        }
+
+        /// Test-only seam for seeding rows directly, bypassing `save`'s
+        /// hardcoded "fish" character — lets tests exercise a specific
+        /// character face (and specific params) per row.
+        func seed(_ preset: SavedPreset, params: [AUValue] = Param.allCases.map(\.defaultValue)) {
+            savedUserPresets.append(preset)
+            snapshots[preset.name] = PresetSnapshot(params: params, characterID: preset.characterID)
+        }
+    }
 
     // MARK: - Helpers
 
@@ -44,20 +88,40 @@ final class CharacterDropdownViewTests: XCTestCase {
         return nil
     }
 
+    private func firstTextField(in view: UIView) -> UITextField? {
+        if let tf = view as? UITextField { return tf }
+        for sub in view.subviews {
+            if let found = firstTextField(in: sub) { return found }
+        }
+        return nil
+    }
+
     private func makeDropdown(current: Character = CharacterRegistry.defaultCharacter,
+                               store: PresetStoring? = nil,
                                size: CGSize = CGSize(width: 390, height: 700)) -> CharacterDropdownView {
-        let dropdown = CharacterDropdownView(frame: CGRect(origin: .zero, size: size), current: current)
+        let dropdown = CharacterDropdownView(frame: CGRect(origin: .zero, size: size), current: current, store: store)
         dropdown.setNeedsLayout()
         dropdown.layoutIfNeeded()
         return dropdown
     }
 
-    // MARK: - Lists every registered character
+    /// Drives a save exactly the way pressing Return in the name field
+    /// would, mirroring the deleted `PresetsViewTests`'s identical helper.
+    private func triggerSave(in view: CharacterDropdownView) {
+        guard let field = firstTextField(in: view) else {
+            XCTFail("no name field found — is the store's supportsUserPresets true?")
+            return
+        }
+        _ = field.delegate?.textFieldShouldReturn?(field)
+    }
+
+    // MARK: - Lists every registered character (no store)
 
     /// The count is derived from `CharacterRegistry.all` itself, not
     /// hardcoded — the roster is expected to grow, and this test must keep
-    /// passing without editing it when that happens.
-    func testDropdownListsExactlyOneRowPerRegisteredCharacter() {
+    /// passing without editing it when that happens. No store wired: this
+    /// is the "bare `PluginView`, nothing saved yet" case.
+    func testDropdownListsExactlyOneRowPerRegisteredCharacterWithNoStore() {
         let dropdown = makeDropdown()
         let labels = accessibleLabels(in: dropdown)
         XCTAssertEqual(labels.count, CharacterRegistry.all.count,
@@ -66,11 +130,52 @@ final class CharacterDropdownViewTests: XCTestCase {
             "every character's display name must appear exactly among the dropdown's rows")
     }
 
+    // MARK: - Merged list: built-ins, then user entries
+
+    /// The dropdown's list is built-ins followed by user entries, and its
+    /// count is derived from the registry plus the store — never hardcoded.
+    /// This is the actual "one list" the task asks for.
+    func testDropdownListsBuiltInsFollowedByUserEntriesFromTheStore() {
+        let store = FakePresetStore()
+        store.seed(SavedPreset(name: "Sunrise", characterID: "unicorn"))
+        store.seed(SavedPreset(name: "Bubbles", characterID: "fish"))
+        let dropdown = makeDropdown(store: store)
+
+        // Delete buttons are separately accessible too (their own label,
+        // "Delete this preset" — see `CharacterDropdownRow`), so filter
+        // those out to count just the character ROWS themselves.
+        let deleteLabel = NSLocalizedString("presets.delete.accessibility", comment: "")
+        let rowLabels = accessibleLabels(in: dropdown).filter { $0 != deleteLabel }
+        let expectedCount = CharacterDropdownView.characters(from: store).count
+        XCTAssertEqual(expectedCount, CharacterRegistry.all.count + 2)
+        XCTAssertEqual(rowLabels.count, expectedCount,
+            "row count must equal the registry plus the store's saved entries, not a hardcoded number")
+
+        let expectedNames = Set(CharacterRegistry.all.map(\.displayName) + ["Sunrise", "Bubbles"])
+        XCTAssertEqual(Set(rowLabels), expectedNames)
+    }
+
+    /// Built-ins always come first, in registry order, with user entries
+    /// after them — proven by walking the merged list `CharacterDropdownView`
+    /// itself derives, matching the task's decision 4.
+    func testMergedListPutsBuiltInsBeforeUserEntries() {
+        let store = FakePresetStore()
+        store.seed(SavedPreset(name: "Zzz First Alphabetically", characterID: "monk"))
+
+        let merged = CharacterDropdownView.characters(from: store)
+        XCTAssertEqual(Array(merged.prefix(CharacterRegistry.all.count)).map(\.id),
+                        CharacterRegistry.all.map(\.id))
+        XCTAssertEqual(merged.last?.displayName, "Zzz First Alphabetically",
+            "a user entry must never sort ahead of the built-in roster, even alphabetically")
+    }
+
     // MARK: - Rows meet the 44pt HIG row height
 
     func testEveryRowIs44PointsTall() {
-        let dropdown = makeDropdown()
-        for character in CharacterRegistry.all {
+        let store = FakePresetStore()
+        store.seed(SavedPreset(name: "Saved One", characterID: "cow"))
+        let dropdown = makeDropdown(store: store)
+        for character in CharacterDropdownView.characters(from: store) {
             let row = accessibleView(labeled: character.displayName, in: dropdown)
             XCTAssertEqual(row?.bounds.height ?? -1, 44, accuracy: 0.5,
                 "\(character.id)'s row must be 44pt tall")
@@ -93,6 +198,23 @@ final class CharacterDropdownViewTests: XCTestCase {
         }
     }
 
+    /// A saved user entry can be the current character too — not just a
+    /// built-in — and gets the exact same "selected" treatment.
+    func testCurrentUserEntryRowIsMarkedSelected() throws {
+        let store = FakePresetStore()
+        store.seed(SavedPreset(name: "My Patch", characterID: "girl"))
+        let current = try XCTUnwrap(UserCharacter.all(from: store).first)
+        let dropdown = makeDropdown(current: current, store: store)
+
+        let row = try XCTUnwrap(accessibleView(labeled: "My Patch", in: dropdown))
+        XCTAssertTrue(row.accessibilityTraits.contains(.selected))
+
+        for builtin in CharacterRegistry.all {
+            let builtinRow = try XCTUnwrap(accessibleView(labeled: builtin.displayName, in: dropdown))
+            XCTAssertFalse(builtinRow.accessibilityTraits.contains(.selected))
+        }
+    }
+
     // MARK: - Selecting a row
 
     func testTappingARowFiresOnSelectWithThatCharacterAndNoOthers() throws {
@@ -106,6 +228,29 @@ final class CharacterDropdownViewTests: XCTestCase {
         row.sendActions(for: .touchUpInside)
 
         XCTAssertEqual(selections, [target.id])
+    }
+
+    /// Selecting a SAVED entry's row fires `onSelect` with a real
+    /// `UserCharacter`, carrying its own saved parameters — not merely its
+    /// name — so the owner can restore the saved sound, not the face's
+    /// built-in voice (task decision 5).
+    func testTappingAUserEntryRowFiresOnSelectWithItsSavedParameters() throws {
+        let store = FakePresetStore()
+        var params = Param.allCases.map(\.defaultValue)
+        params[Int(Param.headSize.rawValue)] = 0.42
+        store.seed(SavedPreset(name: "Custom", characterID: "cow"), params: params)
+        let dropdown = makeDropdown(store: store)
+
+        var selected: Character?
+        dropdown.onSelect = { selected = $0 }
+
+        let row = try XCTUnwrap(accessibleView(labeled: "Custom", in: dropdown) as? UIControl)
+        row.sendActions(for: .touchUpInside)
+
+        let user = try XCTUnwrap(selected as? UserCharacter)
+        XCTAssertEqual(user.name, "Custom")
+        XCTAssertEqual(user.faceID, "cow")
+        XCTAssertEqual(user.savedParameters?[.headSize], 0.42)
     }
 
     // MARK: - Dismissal
@@ -132,12 +277,135 @@ final class CharacterDropdownViewTests: XCTestCase {
     /// scroll rather than merely a scroll view that happens to never need
     /// to move. This is exactly the failure mode the old art grid had at
     /// AUM-strip sizes ("a clipped sliver of one row plus a Close button");
-    /// a plain list of 44pt rows must scroll cleanly here instead.
+    /// a plain list of 44pt rows — now with user entries and the save
+    /// section besides — must scroll cleanly here instead.
     func testContentExceedsVisibleAreaAtAVeryShortHostRect() throws {
-        let dropdown = makeDropdown(size: CGSize(width: 375, height: 180))
+        let store = FakePresetStore()
+        for i in 0..<5 { store.seed(SavedPreset(name: "Preset \(i)", characterID: "monk")) }
+        let dropdown = makeDropdown(store: store, size: CGSize(width: 375, height: 180))
         let scrollView = try XCTUnwrap(firstScrollView(in: dropdown))
         XCTAssertGreaterThan(scrollView.contentSize.height, scrollView.bounds.height,
             "at a very short host rect the dropdown's content must exceed the visible area")
+    }
+
+    // MARK: - Saving
+
+    func testSavingValidNameAddsItToTheListAsAUserEntry() throws {
+        let store = FakePresetStore()
+        let dropdown = makeDropdown(store: store)
+        let field = try XCTUnwrap(firstTextField(in: dropdown))
+
+        field.text = "Brand New"
+        triggerSave(in: dropdown)
+
+        XCTAssertEqual(store.savedUserPresets.map(\.name), ["Brand New"])
+        XCTAssertEqual(field.text, "")
+        XCTAssertTrue(accessibleLabels(in: dropdown).contains("Brand New"),
+            "a freshly-saved entry must appear in the dropdown's own list without needing to reopen it")
+    }
+
+    func testSavingWithEmptyNameCreatesNothing() throws {
+        let store = FakePresetStore()
+        let dropdown = makeDropdown(store: store)
+        let field = try XCTUnwrap(firstTextField(in: dropdown))
+
+        field.text = "   "
+        triggerSave(in: dropdown)
+
+        XCTAssertTrue(store.savedUserPresets.isEmpty)
+    }
+
+    func testSavingWithDuplicateNameCreatesNothingNew() throws {
+        let store = FakePresetStore()
+        let dropdown = makeDropdown(store: store)
+        let field = try XCTUnwrap(firstTextField(in: dropdown))
+
+        field.text = "Same Name"
+        triggerSave(in: dropdown)
+        field.text = "Same Name"
+        triggerSave(in: dropdown)
+
+        XCTAssertEqual(store.savedUserPresets.count, 1)
+    }
+
+    /// No store at all (some tests construct a bare `PluginView`) must not
+    /// offer save UI that cannot work.
+    func testNoStoreOffersNoSaveUI() {
+        let dropdown = makeDropdown(store: nil)
+        XCTAssertNil(firstTextField(in: dropdown))
+    }
+
+    /// A host that declines user presets (`supportsUserPresets == false`)
+    /// degrades the same way — no save UI offered.
+    func testUnsupportedStoreOffersNoSaveUI() {
+        let store = FakePresetStore(supportsUserPresets: false)
+        let dropdown = makeDropdown(store: store)
+        XCTAssertNil(firstTextField(in: dropdown))
+    }
+
+    // MARK: - Deleting: user entries only
+
+    func testDeletingAUserEntryRemovesItFromTheList() throws {
+        let store = FakePresetStore()
+        store.seed(SavedPreset(name: "Temp", characterID: "cow"))
+        let dropdown = makeDropdown(store: store)
+        XCTAssertTrue(accessibleLabels(in: dropdown).contains("Temp"))
+
+        let deleteButton = try XCTUnwrap(accessibleView(
+            labeled: NSLocalizedString("presets.delete.accessibility", comment: ""), in: dropdown) as? UIControl)
+        deleteButton.sendActions(for: .touchUpInside)
+
+        XCTAssertTrue(store.savedUserPresets.isEmpty)
+        XCTAssertFalse(accessibleLabels(in: dropdown).contains("Temp"))
+    }
+
+    /// Built-in characters can never be deleted — no delete control exists
+    /// on their rows at all, regardless of how many user entries exist
+    /// alongside them.
+    func testBuiltInCharactersOfferNoDeleteControl() {
+        let store = FakePresetStore()
+        store.seed(SavedPreset(name: "Some Save", characterID: "monk"))
+        let dropdown = makeDropdown(store: store)
+
+        // Exactly one delete control exists in the whole panel — the single
+        // user entry's — never one per built-in row.
+        let deleteLabel = NSLocalizedString("presets.delete.accessibility", comment: "")
+        func countDeleteControls(in view: UIView) -> Int {
+            var count = view.isAccessibilityElement && view.accessibilityLabel == deleteLabel ? 1 : 0
+            for sub in view.subviews { count += countDeleteControls(in: sub) }
+            return count
+        }
+        XCTAssertEqual(countDeleteControls(in: dropdown), 1)
+    }
+
+    /// When the store doesn't support user presets, even a saved entry's
+    /// row offers no delete control — mirrors `PresetStoring.
+    /// supportsUserPresets`'s "don't offer a control that cannot work"
+    /// contract.
+    func testUnsupportedStoreOffersNoDeleteControlEvenForExistingEntries() {
+        let store = FakePresetStore(supportsUserPresets: false)
+        store.seed(SavedPreset(name: "Read Only", characterID: "monk"))
+        let dropdown = makeDropdown(store: store)
+
+        XCTAssertNil(accessibleView(
+            labeled: NSLocalizedString("presets.delete.accessibility", comment: ""), in: dropdown))
+        XCTAssertTrue(accessibleLabels(in: dropdown).contains("Read Only"), "the row itself still lists, read-only")
+    }
+
+    // MARK: - Factory presets are absent from the in-app list
+
+    /// Upstream's six factory presets stay available to HOSTS through
+    /// `MonkSynthAU.factoryPresets`/`currentPreset` (see `PresetTests`), but
+    /// must never appear in this app's own picker — the task's decision 2.
+    func testFactoryPresetNamesNeverAppearInTheDropdown() {
+        let store = FakePresetStore()
+        store.seed(SavedPreset(name: "Something", characterID: "monk"))
+        let dropdown = makeDropdown(store: store)
+
+        let labels = Set(accessibleLabels(in: dropdown))
+        for factoryName in kFactoryPresets.map(\.name) {
+            XCTAssertFalse(labels.contains(factoryName), "factory preset \"\(factoryName)\" leaked into the in-app list")
+        }
     }
 
     // MARK: - PluginView wiring
@@ -176,6 +444,25 @@ final class CharacterDropdownViewTests: XCTestCase {
         XCTAssertEqual(view.stage.character.id, target.id)
         XCTAssertFalse(view.subviews.contains(where: { $0 is CharacterDropdownView }),
             "selecting a character must dismiss the dropdown overlay")
+    }
+
+    /// `PluginView` hands its own `presetStore` straight to the dropdown, so
+    /// a real app's saved entries actually show up through the real wiring,
+    /// not just when a test constructs `CharacterDropdownView` directly.
+    func testPluginViewPassesItsPresetStoreToTheDropdown() throws {
+        let view = PluginView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let store = FakePresetStore()
+        store.seed(SavedPreset(name: "Via PluginView", characterID: "fish"))
+        view.presetStore = store
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+
+        view.characterSelector.onOpenDropdown?()
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+
+        let dropdown = try XCTUnwrap(view.subviews.first(where: { $0 is CharacterDropdownView }) as? CharacterDropdownView)
+        XCTAssertTrue(accessibleLabels(in: dropdown).contains("Via PluginView"))
     }
 
     /// Tapping outside the dropdown dismisses it without changing the

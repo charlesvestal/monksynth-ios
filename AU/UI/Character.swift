@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 
 /// Everything appearance-specific about a MonkSynth character: body, eyes,
@@ -65,6 +66,36 @@ protocol Character {
     /// to implement this itself — the default is everything it used to get
     /// for free.
     func drawMouth(in stage: CGRect, vowel: Float, amplitudeBoost: CGFloat)
+
+    /// The built-in face this character's identity should be persisted
+    /// under — what `SavedPreset.characterID`/`PresetSnapshot.characterID`
+    /// must always hold, since those are read back through
+    /// `CharacterRegistry.character(withID:)` (see that function's
+    /// fallback-to-monk doc comment) and can never resolve a saved entry's
+    /// own unique `id`. Every built-in character's own `id` already IS its
+    /// face, so the default below (see the extension) just reuses it — only
+    /// `UserCharacter` overrides this, answering with the built-in face id
+    /// it was SAVED with rather than its own (non-built-in) `id`.
+    var faceID: String { get }
+
+    /// Non-nil only for a saved user entry (`UserCharacter`): the exact
+    /// parameters it was saved with. Selecting a character whose
+    /// `savedParameters` is non-nil must apply THIS, never
+    /// `CharacterVoiceTable.voice(for:)` — the whole point of a saved entry
+    /// is that its own sound, not its face's built-in voice, is what should
+    /// load. Every built-in character answers nil here (see the default
+    /// below), so `CharacterVoiceTable.voice(for:)` is what loads for them,
+    /// exactly as before this type existed.
+    var savedParameters: [Param: AUValue]? { get }
+}
+
+extension Character {
+    /// Default for every built-in character: its own `id` is its face.
+    var faceID: String { id }
+
+    /// Default for every built-in character: no saved sound of its own —
+    /// selecting it should load `CharacterVoiceTable.voice(for:)` instead.
+    var savedParameters: [Param: AUValue]? { nil }
 }
 
 extension Character {
