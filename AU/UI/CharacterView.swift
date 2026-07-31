@@ -40,11 +40,11 @@ final class CharacterView: UIView {
     /// `CharacterRegistry`). Settable directly (state restore, or an owner
     /// applying a value read from `fullState`/`UserDefaults`); `stepForward()`/
     /// `stepBackward()`/`select(_:)` are just this setter plus a roster
-    /// lookup plus the name overlay and `onCharacterSelected`.
+    /// lookup plus `onCharacterSelected`.
     var character: Character = MonkCharacter() {
         didSet {
-            updateAccessibility()
             setNeedsDisplay()
+            onCharacterChanged?(character)
         }
     }
 
@@ -59,20 +59,26 @@ final class CharacterView: UIView {
     /// sound") because a long-press could change the character WITHOUT its
     /// voice. That escape hatch is gone — the user rejected it explicitly
     /// ("have arrows instead of tap to change. Then you know what's
-    /// happening"): an arrow or a picker selection is unambiguous, so there
-    /// is no accidental-sound-change case left to guard against. One
+    /// happening"): an arrow or a dropdown selection is unambiguous, so
+    /// there is no accidental-sound-change case left to guard against. One
     /// callback, always both effects: the owner (`AudioUnitViewController`/
     /// `RootViewController`) persists `character.id` AND loads
     /// `CharacterVoiceTable.voice(for:)` into the parameter tree via
     /// `setValue(_:originator:)`, every time, no modes.
     var onCharacterSelected: ((Character) -> Void)?
 
-    /// Fired when the user taps (or VoiceOver-activates) the character
-    /// itself. `CharacterView` has no notion of overlays — exactly as it has
-    /// no notion of parameters or voices (see the class doc comment) — so
-    /// the owner (`PluginView`) is what actually presents the character
-    /// picker in response.
-    var onOpenPicker: (() -> Void)?
+    /// Fired on EVERY change to `character` — both user-driven (routed
+    /// through `applyCharacter`, which also fires `onCharacterSelected`) and
+    /// purely programmatic (a direct `character = ...` assignment, e.g.
+    /// `AudioUnitViewController` seeding from `au.characterID` at bind time,
+    /// or reacting to `onCharacterIDChange` when a session/preset restores
+    /// later; `RootViewController` restoring from `UserDefaults`). Those
+    /// direct-assignment routes never go through `applyCharacter`, so
+    /// `onCharacterSelected` alone can't keep `PluginView.characterSelector`'s
+    /// name label in sync with them — this fires unconditionally instead,
+    /// specifically for that purpose. `onCharacterSelected` stays scoped to
+    /// the narrower "the user changed it, go persist + load its voice" case.
+    var onCharacterChanged: ((Character) -> Void)?
 
     // MARK: - Idle animation
 
@@ -109,13 +115,14 @@ final class CharacterView: UIView {
         super.init(frame: frame)
         backgroundColor = .clear
         contentMode = .redraw
-        isAccessibilityElement = true
-        accessibilityTraits = .button
-        updateAccessibility()
-
-        addSubview(nameOverlay)
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
-        addGestureRecognizer(tap)
+        // Purely decorative now: the character art has no gesture of its
+        // own (see the class doc comment on `onCharacterSelected`/
+        // `onCharacterChanged`) — `CharacterSelector` is the single place
+        // that names the current character and lets it be changed, so this
+        // view is neither interactive nor an accessibility element, rather
+        // than duplicating what the selector already offers.
+        isUserInteractionEnabled = false
+        isAccessibilityElement = false
 
         // Reduce Motion can be toggled while the view is on screen; react so
         // an idle shuffle in progress freezes immediately rather than
@@ -144,25 +151,25 @@ final class CharacterView: UIView {
         updateDisplayLink()
     }
 
-    // MARK: - Stepping and selecting (arrows / picker)
+    // MARK: - Stepping and selecting (CharacterSelector's ‹/›/dropdown)
 
     /// Advances to the next character in `CharacterRegistry.all`, wrapping
-    /// from the last entry back to the first. What the "next character"
-    /// arrow calls.
+    /// from the last entry back to the first. What `CharacterSelector`'s
+    /// `›` button calls (via `PluginView`).
     func stepForward() {
         applyCharacter(CharacterRegistry.character(after: character))
     }
 
     /// Steps to the previous character, wrapping from the first entry back
-    /// to the last. What the "previous character" arrow calls.
+    /// to the last. What `CharacterSelector`'s `‹` button calls.
     func stepBackward() {
         applyCharacter(CharacterRegistry.character(before: character))
     }
 
-    /// Jumps straight to `newCharacter` — what the picker overlay calls
-    /// when the user taps a cell. Applies unconditionally, even if
+    /// Jumps straight to `newCharacter` — what `CharacterDropdownView` calls
+    /// when the user taps a row. Applies unconditionally, even if
     /// `newCharacter` is already the current one: re-loading the same
-    /// voice is a harmless no-op, and treating "tapped the character
+    /// voice is a harmless no-op, and treating "picked the character
     /// that's already selected" as a special case would just be extra
     /// branching for no observable benefit.
     func select(_ newCharacter: Character) {
@@ -170,79 +177,13 @@ final class CharacterView: UIView {
     }
 
     /// The one place `character` actually changes in response to the user:
-    /// updates the picture, fires `onCharacterSelected` (persist id + load
-    /// voice — see that property's doc comment), and briefly overlays the
-    /// new name. Shared by `stepForward`/`stepBackward`/`select` so all
-    /// three routes behave identically, per the task's "one behaviour, no
-    /// modes".
+    /// updates the picture and fires `onCharacterSelected` (persist id +
+    /// load voice — see that property's doc comment). Shared by
+    /// `stepForward`/`stepBackward`/`select` so all three routes behave
+    /// identically, per the task's "one behaviour, no modes".
     private func applyCharacter(_ next: Character) {
         character = next
         onCharacterSelected?(next)
-        showNameOverlay(next.displayName)
-    }
-
-    /// A tap on the character itself opens the picker — it does not, by
-    /// itself, change anything. See `onOpenPicker`.
-    @objc private func handleTap() {
-        onOpenPicker?()
-    }
-
-    /// VoiceOver's double-tap is the direct equivalent of a sighted user's
-    /// single tap (it's how a non-`UIControl` accessibility element exposes
-    /// its primary action) — so this mirrors `handleTap`: it opens the
-    /// picker, it does not change the character. Once the picker is open,
-    /// each of its cells is its own accessible element a VoiceOver user can
-    /// navigate to and double-tap to select — see `CharacterPickerView`.
-    override func accessibilityActivate() -> Bool {
-        onOpenPicker?()
-        return true
-    }
-
-    private func updateAccessibility() {
-        let format = NSLocalizedString(
-            "character.accessibility",
-            comment: "Accessibility label for the character view; %@ is the current character's display name.")
-        accessibilityLabel = String(format: format, character.displayName)
-        accessibilityHint = NSLocalizedString(
-            "character.accessibilityHint",
-            comment: "Accessibility hint for the character view, explaining that it opens a picker.")
-    }
-
-    // MARK: - Name overlay
-
-    /// Small pill showing the character's name for ~1s after a step/select.
-    /// `isUserInteractionEnabled` stays at its default `false` so taps
-    /// landing on it still reach `CharacterView`'s own tap gesture rather
-    /// than being swallowed by the label.
-    private let nameOverlay: UILabel = {
-        let label = UILabel()
-        label.font = Theme.label(15, weight: .semibold)
-        label.textColor = Theme.textPrimary
-        label.textAlignment = .center
-        label.alpha = 0
-        label.backgroundColor = Theme.panel.withAlphaComponent(0.88)
-        label.layer.cornerRadius = 8
-        label.layer.masksToBounds = true
-        return label
-    }()
-
-    private func showNameOverlay(_ name: String) {
-        nameOverlay.text = "  \(name)  "
-        nameOverlay.layer.removeAllAnimations()
-        nameOverlay.alpha = 1
-        setNeedsLayout()
-        layoutIfNeeded()
-        UIView.animate(withDuration: 0.35, delay: 0.65, options: [.beginFromCurrentState], animations: {
-            self.nameOverlay.alpha = 0
-        })
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let fitting = nameOverlay.sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude))
-        let width = min(bounds.width, fitting.width)
-        let height = fitting.height + 4
-        nameOverlay.frame = CGRect(x: (bounds.width - width) / 2, y: 6, width: width, height: height)
     }
 
     // MARK: - Display link
@@ -352,34 +293,5 @@ final class CharacterView: UIView {
         Theme.robeShadow.withAlphaComponent(0.5).setStroke()
         mouth.lineWidth = stage.width * 0.008
         mouth.stroke()
-    }
-
-    // MARK: - Static snapshot rendering (for the character picker)
-
-    /// Renders `character`'s idle pose into a plain, standalone image sized
-    /// `size` — how the picker overlay (`CharacterPickerView`) shows each
-    /// roster entry's art. Reuses this view's own `draw(_:)` (a temporary,
-    /// never-window-attached instance) rather than the picker reimplementing
-    /// any character drawing itself, per the task's "render each character's
-    /// actual art in the cell... reuse rather than reimplement".
-    ///
-    /// Deliberately a one-shot render, not N live `CharacterView`s embedded
-    /// in the grid: a `CharacterView` starts its own idle-animation
-    /// `CADisplayLink` as soon as it's attached to a window (see
-    /// `didMoveToWindow`/`updateDisplayLink`), so a picker listing a roster
-    /// that's "about to grow well beyond six" would otherwise spin up one
-    /// display link per cell for no visible benefit — the picker is a
-    /// momentary overlay, not a place anyone watches for idle fidgeting.
-    /// This view is never added to a window, so no display link is ever
-    /// created; the returned `UIImage` is completely static.
-    static func snapshot(of character: Character, size: CGSize) -> UIImage {
-        let view = CharacterView(frame: CGRect(origin: .zero, size: size))
-        view.character = character
-        view.backgroundColor = .clear
-        view.setNeedsLayout()
-        view.layoutIfNeeded()
-        return UIGraphicsImageRenderer(size: size).image { ctx in
-            view.layer.render(in: ctx.cgContext)
-        }
     }
 }

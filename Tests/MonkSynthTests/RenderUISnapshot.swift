@@ -309,61 +309,71 @@ final class RenderUISnapshot: XCTestCase {
         }
     }
 
-    /// Close-up of the stage zone (character + step arrows) at a few sizes.
-    /// The arrows render as part of the whole-UI sheet (`testWriteSizeSheet`)
-    /// too, but small enough there that judging placement/contrast needs a
-    /// crop. Required visual check for the arrows task: confirm they're
-    /// visible but unobtrusive, and don't collide with the character's own
-    /// art any more than the design (arrows flank/overlap the stage's own
-    /// edges, deliberately) intends.
-    func testWriteCharacterArrowsCloseup() throws {
+    /// Close-up of the header row (character selector + info button) at a
+    /// spread of sizes, including 375×180 — the AUM strip, the specific
+    /// size the task calls out by name as the one the old edge arrows
+    /// failed at (they vanished entirely once the stage collapsed there).
+    /// Rendered at full-UI scale the header is too small in a screenshot to
+    /// judge legibility/collision, so this crops in. Required visual check:
+    /// confirm the name is legible, the ‹/⌄/› glyphs are unambiguous, and
+    /// nothing collides with the info button — at every size, not just the
+    /// roomy ones.
+    func testWriteCharacterSelectorCloseup() throws {
         let sizes: [(String, CGSize)] = [
+            ("AUM strip 375x180", CGSize(width: 375, height: 180)),
+            ("AUM tall 375x320", CGSize(width: 375, height: 320)),
             ("portrait 390x844", CGSize(width: 390, height: 844)),
             ("landscape 844x390", CGSize(width: 844, height: 390)),
-            ("AUM tall 375x320", CGSize(width: 375, height: 320)),
             ("iPad 1024x768", CGSize(width: 1024, height: 768)),
         ]
         let gap: CGFloat = 16
         let label: CGFloat = 18
-        let margin: CGFloat = 24
+        let margin: CGFloat = 12
 
         var crops: [(String, UIImage)] = []
         for (name, size) in sizes {
             let view = PluginView(frame: CGRect(origin: .zero, size: size))
             view.setNeedsLayout(); view.layoutIfNeeded()
             let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
-            let cropRect = l.stage.insetBy(dx: -margin, dy: -margin)
+            // The whole header band, not just the selector's own rect —
+            // showing `infoButton` alongside it is what makes "nothing
+            // collides" actually checkable by eye.
+            let bandHeight = max(l.characterSelector.maxY, l.infoButton.maxY) + margin
+            let cropRect = CGRect(x: 0, y: 0, width: size.width, height: min(size.height, bandHeight))
             crops.append((name, crop(view, to: cropRect)))
         }
 
-        let sheetW = crops.reduce(0) { $0 + $1.1.size.width + gap } + gap
-        let sheetH = (crops.map(\.1.size.height).max() ?? 0) + gap * 2 + label
+        let sheetW = (crops.map(\.1.size.width).max() ?? 0) + gap * 2
+        let sheetH = crops.reduce(0) { $0 + $1.1.size.height + gap + label } + gap
         let sheet = CGSize(width: sheetW, height: sheetH)
         let renderer = UIGraphicsImageRenderer(size: sheet)
         let image = renderer.image { ctx in
             UIColor(white: 0.06, alpha: 1).setFill()
             ctx.fill(CGRect(origin: .zero, size: sheet))
-            var x = gap
+            var y = gap
             for (name, img) in crops {
-                img.draw(at: CGPoint(x: x, y: gap + label))
+                img.draw(at: CGPoint(x: gap, y: y + label))
                 (name as NSString).draw(
-                    at: CGPoint(x: x, y: gap),
+                    at: CGPoint(x: gap, y: y),
                     withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
                                      .foregroundColor: UIColor(white: 0.75, alpha: 1)])
-                x += img.size.width + gap
+                y += img.size.height + gap + label
             }
         }
         let data = try XCTUnwrap(image.pngData())
-        try data.write(to: URL(fileURLWithPath: "/tmp/ui_arrows.png"))
-        print("SNAPSHOT_WRITTEN /tmp/ui_arrows.png bytes=\(data.count)")
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_characterselector.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_characterselector.png bytes=\(data.count)")
     }
 
-    /// The character picker overlay: a normal-height standalone render, the
-    /// same overlay embedded in a full `PluginView` (so the scrim/panel
-    /// read correctly against the rest of the UI), and a very short host
-    /// rect to confirm it actually scrolls rather than just clipping.
-    /// Required visual check for the picker task.
-    func testWriteCharacterPickerSheet() throws {
+    /// The character dropdown overlay (opened from the selector's `⌄`): a
+    /// normal-height standalone render, the same overlay embedded in a full
+    /// `PluginView` (so the scrim/panel read correctly against the rest of
+    /// the UI), and — the specific failure mode the old character-art grid
+    /// had — the exact AUM-strip size (375×180) to confirm a plain list of
+    /// names actually scrolls and stays usable there, unlike the grid it
+    /// replaced ("a clipped sliver of one row plus a Close button filling
+    /// the panel"). Required visual check.
+    func testWriteCharacterDropdownSheet() throws {
         let gap: CGFloat = 20
         let label: CGFloat = 18
 
@@ -374,20 +384,26 @@ final class RenderUISnapshot: XCTestCase {
         }
 
         let standaloneSize = CGSize(width: 390, height: 700)
-        let standalone = CharacterPickerView(frame: .zero, current: CharacterRegistry.all[2])
+        let standalone = CharacterDropdownView(frame: .zero, current: CharacterRegistry.all[2])
 
         let inContextSize = CGSize(width: 390, height: 844)
         let inContext = PluginView(frame: CGRect(origin: .zero, size: inContextSize))
         inContext.setNeedsLayout(); inContext.layoutIfNeeded()
-        inContext.stage.onOpenPicker?()
+        inContext.characterSelector.onOpenDropdown?()
 
         let shortSize = CGSize(width: 375, height: 180)
-        let short = CharacterPickerView(frame: .zero, current: CharacterRegistry.defaultCharacter)
+        // The dropdown open AT the AUM strip's own PluginView, not just the
+        // standalone overlay at that size — proves the whole stack (scrim
+        // over the real header/pad/controls) still works at strip height,
+        // not only the overlay in isolation.
+        let shortInContext = PluginView(frame: CGRect(origin: .zero, size: shortSize))
+        shortInContext.setNeedsLayout(); shortInContext.layoutIfNeeded()
+        shortInContext.characterSelector.onOpenDropdown?()
 
         let columns: [(String, UIView, CGSize)] = [
             ("standalone 390x700", standalone, standaloneSize),
             ("in PluginView 390x844", inContext, inContextSize),
-            ("AUM strip 375x180 (must scroll)", short, shortSize),
+            ("AUM strip 375x180 (must scroll)", shortInContext, shortSize),
         ]
 
         let sheet = CGSize(width: columns.reduce(0) { $0 + $1.2.width + gap } + gap,
@@ -407,7 +423,7 @@ final class RenderUISnapshot: XCTestCase {
             }
         }
         let data = try XCTUnwrap(image.pngData())
-        try data.write(to: URL(fileURLWithPath: "/tmp/ui_characterpicker.png"))
-        print("SNAPSHOT_WRITTEN /tmp/ui_characterpicker.png bytes=\(data.count)")
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_characterdropdown.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_characterdropdown.png bytes=\(data.count)")
     }
 }
