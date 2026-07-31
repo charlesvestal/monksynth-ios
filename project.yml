@@ -40,6 +40,7 @@ targets:
         embed: true
       - sdk: AVFoundation.framework
       - sdk: CoreMIDI.framework
+      - sdk: CoreAudioKit.framework
   MonkSynthAU:
     type: app-extension
     platform: iOS

@@ -1,0 +1,18 @@
+import UIKit
+
+/// Creates the single window this app uses and installs `RootViewController`
+/// — the standalone instrument's UI (same `PluginView` the AUv3 uses, over a
+/// `LocalEngine`) — as its root.
+final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+
+    var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession,
+               options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = scene as? UIWindowScene else { return }
+        let window = UIWindow(windowScene: windowScene)
+        window.rootViewController = RootViewController()
+        window.makeKeyAndVisible()
+        self.window = window
+    }
+}
