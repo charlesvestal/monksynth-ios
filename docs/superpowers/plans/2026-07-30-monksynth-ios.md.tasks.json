@@ -46,7 +46,7 @@
     {
       "id": 15,
       "subject": "Task 6: Render block and parity gate",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** A realtime-safe internalRenderBlock that applies parameters, handles MIDI and XY semantics, and renders - proven bit-identical to the C golden from Task 2.\n\n**Files:**\n- Create: AU/RenderContext.swift\n- Modify: AU/MonkSynthAU.swift\n- Create: Tests/MonkSynthTests/ParityTests.swift\n- Create: Tests/MonkSynthTests/Resources/golden_44k.f32\n- Modify: project.yml\n\n**Acceptance Criteria:**\n- [ ] allocateRenderResources creates the engine at the host sample rate; deallocate frees it\n- [ ] Render block performs no allocation, locking, Swift runtime metadata calls, or print\n- [ ] Replaying the parity script through RenderContext matches golden_44k.f32 byte-for-byte\n- [ ] Note-off while the XY pad is held re-asserts XY pitch (upstream processor.cpp:268-276)\n\n**Verify:** scripts/test.sh MonkSynthTests/ParityTests -> `Executed 2 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 6.\n\n```json:metadata\n{\"files\": [\"AU/RenderContext.swift\", \"AU/MonkSynthAU.swift\", \"Tests/MonkSynthTests/ParityTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/ParityTests\", \"acceptanceCriteria\": [\"allocateRenderResources creates the engine at the host sample rate; deallocate frees it\", \"Render block performs no allocation, locking, Swift runtime metadata calls, or print\", \"Replaying the parity script through RenderContext matches golden_44k.f32 byte-for-byte\", \"Note-off while the XY pad is held re-asserts XY pitch (upstream processor.cpp:268-276)\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         11,
@@ -56,7 +56,7 @@
     {
       "id": 16,
       "subject": "Task 7: State persistence and presets",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** fullState round-trips all 22 parameters, and upstream's six .vstpreset files ship as AUv3 factory presets.\n\n**Files:**\n- Create: scripts/extract_presets.py\n- Create: AU/FactoryPresets.swift (generated)\n- Modify: AU/MonkSynthAU.swift\n- Create: Tests/MonkSynthTests/PresetTests.swift\n\n**Acceptance Criteria:**\n- [ ] fullState set -> get returns identical values for all 22 parameters\n- [ ] factoryPresets has 6 entries: Dorje, Jamyang, Monastary, Ngawang, Rabten, Tinley\n- [ ] Selecting a preset updates the shadow and the parameter tree\n- [ ] State shorter than 22 values leaves the rest at defaults (upstream processor.cpp:112-127)\n\n**Verify:** scripts/test.sh MonkSynthTests/PresetTests -> `Executed 4 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 7.\n\n```json:metadata\n{\"files\": [\"scripts/extract_presets.py\", \"AU/FactoryPresets.swift\", \"AU/MonkSynthAU.swift\", \"Tests/MonkSynthTests/PresetTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/PresetTests\", \"acceptanceCriteria\": [\"fullState set -> get returns identical values for all 22 parameters\", \"factoryPresets has 6 entries: Dorje, Jamyang, Monastary, Ngawang, Rabten, Tinley\", \"Selecting a preset updates the shadow and the parameter tree\", \"State shorter than 22 values leaves the rest at defaults (upstream processor.cpp:112-127)\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         15
@@ -150,5 +150,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-31T03:44:25.309219+02:00"
+  "lastUpdated": "2026-07-31T04:43:38.789568+02:00"
 }
