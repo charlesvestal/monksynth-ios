@@ -4,3 +4,4 @@ build-device/
 DerivedData/
 *.xcodeproj
 .DS_Store
+scripts/.deploy.local
