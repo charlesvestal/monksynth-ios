@@ -25,8 +25,6 @@ final class RootViewController: UIViewController {
 
     private var pluginView: PluginView { view as! PluginView }
 
-    private let bluetoothButton = UIButton(type: .system)
-
     /// Set by `startAudio()` if `LocalEngine.start()` throws. Presenting the
     /// alert is deferred to `viewDidAppear` rather than done immediately in
     /// `viewDidLoad` (where `startAudio()` itself runs, so audio setup
@@ -45,7 +43,7 @@ final class RootViewController: UIViewController {
         super.viewDidLoad()
         bind()
         wireMIDI()
-        addBluetoothButton()
+        wireAboutScreen()
         startAudio()
     }
 
@@ -186,30 +184,25 @@ final class RootViewController: UIViewController {
         pluginView.stage.noteActive = audio.uiNoteActive
     }
 
-    // MARK: - Bluetooth MIDI
+    // MARK: - About screen / Bluetooth MIDI
 
-    /// Small, unobtrusive corner button so the Bluetooth MIDI picker is
-    /// actually reachable. A fuller settings/about surface is Task 14's
-    /// job, not this one.
-    private func addBluetoothButton() {
-        var config = UIButton.Configuration.plain()
-        config.image = UIImage(systemName: "antenna.radiowaves.left.and.right")
-        bluetoothButton.configuration = config
-        bluetoothButton.tintColor = Theme.textDim
-        bluetoothButton.accessibilityLabel = NSLocalizedString(
-            "bluetooth.midi.button", comment: "Open Bluetooth MIDI device picker")
-        bluetoothButton.addTarget(self, action: #selector(presentBluetoothMIDI), for: .touchUpInside)
-        bluetoothButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(bluetoothButton)
-        NSLayoutConstraint.activate([
-            bluetoothButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
-            bluetoothButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -4),
-            bluetoothButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            bluetoothButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-        ])
+    /// The standalone app is the real entry point for the about screen's
+    /// "Source code" link and its Bluetooth MIDI shortcut — unlike the AUv3
+    /// extension (`AudioUnitViewController.bind()`), this app has an actual
+    /// `UIApplication` to hand a URL to, and it owns the Bluetooth MIDI
+    /// picker outright rather than borrowing a host's. `showsBluetoothOption`
+    /// is what makes `PluginView`'s about screen show that button at all —
+    /// it defaults to false so the AUv3 editor never offers it when embedded
+    /// in someone else's host. This replaces the small temporary corner
+    /// button that used to be the only way to reach Bluetooth MIDI; the
+    /// about screen's ⓘ button is the real, permanent entry point now.
+    private func wireAboutScreen() {
+        pluginView.showsBluetoothOption = true
+        pluginView.onOpenURL = { url in UIApplication.shared.open(url) }
+        pluginView.onBluetoothMIDI = { [weak self] in self?.presentBluetoothMIDI() }
     }
 
-    @objc func presentBluetoothMIDI() {
+    func presentBluetoothMIDI() {
         let central = CABTMIDICentralViewController()
         central.navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done, target: self, action: #selector(dismissBluetoothMIDI))

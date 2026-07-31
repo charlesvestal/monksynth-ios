@@ -28,6 +28,34 @@ final class PluginView: UIView {
     let pad = XYPadView()
     let controls = ControlPages()
 
+    /// Fired when the about screen's "Source code" link is tapped. Left to
+    /// the owning view controller to handle because the two containers this
+    /// view runs in need two different APIs: the standalone app can call
+    /// `UIApplication.shared.open`, but an AUv3 extension cannot — it must
+    /// route through `extensionContext?.open(_:completionHandler:)` instead
+    /// (see `AudioUnitViewController.bind()`).
+    var onOpenURL: ((URL) -> Void)?
+
+    /// Fired when the about screen's "Connect Bluetooth MIDI" button is
+    /// tapped. Only reachable when `showsBluetoothOption` is true.
+    var onBluetoothMIDI: (() -> Void)?
+
+    /// Bluetooth MIDI pairing is a host-app concern, not something an AUv3
+    /// editor embedded in someone else's host should offer — off by
+    /// default; `RootViewController` (the standalone app) turns it on.
+    var showsBluetoothOption = false
+
+    /// Header ⓘ button that opens `AboutView`. Visually a small glyph, but
+    /// sized to the full 44pt HIG minimum in both dimensions (see
+    /// `layoutSubviews`) — same "small glyph, big hit target" shape as
+    /// `drawerHandle`/`drawerHandleBar` below, collapsed into a single
+    /// `UIButton` since a button's own frame already IS its hit area.
+    private let infoButton = UIButton(type: .system)
+    private var aboutView: AboutView?
+
+    /// Minimum tap target per Apple's HIG, mirroring `drawerHitSize`.
+    static let infoButtonSize: CGFloat = 44
+
     /// The actual tap target for opening/closing the drawer. Deliberately
     /// much larger than the visible pill (`drawerHandleBar`) it contains: a
     /// 4pt-tall hit region is well under Apple's 44pt HIG minimum and is
@@ -71,6 +99,8 @@ final class PluginView: UIView {
         pad.backgroundColor = Theme.panel
         pad.layer.borderWidth = 1
         pad.layer.borderColor = Theme.panelBorder.cgColor
+
+        installInfoButton()
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -78,6 +108,39 @@ final class PluginView: UIView {
     @objc private func toggleDrawer() {
         drawerOpen.toggle()
         UIView.animate(withDuration: 0.25) { self.setNeedsLayout(); self.layoutIfNeeded() }
+    }
+
+    // MARK: - About screen
+
+    private func installInfoButton() {
+        // An SF Symbol rather than the Unicode "ⓘ" (U+24D8 CIRCLED LATIN
+        // SMALL LETTER I) character: verified on-device that glyph simply
+        // does not render in the system font at any weight — the button
+        // came up completely blank, title and all. `info.circle` is exactly
+        // the mark this button represents anyway, and (unlike a Unicode
+        // character) is guaranteed to render.
+        infoButton.setImage(UIImage(systemName: "info.circle"), for: .normal)
+        infoButton.tintColor = Theme.textDim
+        infoButton.accessibilityLabel = NSLocalizedString("about.info", comment: "Open the about screen")
+        infoButton.addTarget(self, action: #selector(showAbout), for: .touchUpInside)
+        addSubview(infoButton)
+    }
+
+    @objc private func showAbout() {
+        guard aboutView == nil else { return }
+        let a = AboutView(frame: bounds)
+        a.showsBluetoothButton = showsBluetoothOption
+        a.onClose = { [weak self] in self?.hideAbout() }
+        a.onOpenURL = { [weak self] url in self?.onOpenURL?(url) }
+        a.onBluetoothMIDI = { [weak self] in self?.onBluetoothMIDI?() }
+        addSubview(a)
+        aboutView = a
+        setNeedsLayout()
+    }
+
+    private func hideAbout() {
+        aboutView?.removeFromSuperview()
+        aboutView = nil
     }
 
     /// Portrait stacks (monk / pad / drawer); landscape splits (monk | pad)
@@ -209,6 +272,33 @@ final class PluginView: UIView {
         } else {
             drawerHandle.isHidden = true
             controls.contentInsetTop = 0
+        }
+
+        // Top-right corner, flush with the header, but pulled in by
+        // `safeAreaInsets` so it clears the status bar / Dynamic Island in
+        // the standalone app (and whatever chrome a host reserves in the
+        // AUv3 case) rather than fighting the system clock/battery icons
+        // for the same few points. This necessarily overlaps the top-right
+        // corner of `pad` in layouts where the pad reaches the very top of
+        // the view (landscape's side-by-side split, or a portrait height
+        // short enough to collapse the stage) — but the overlap is confined
+        // to exactly this button's 44x44 frame. `bringSubviewToFront` below
+        // means UIKit's hit-testing hands any touch that starts inside that
+        // small square to `infoButton` instead of `pad` (hit-testing walks
+        // subviews front-to-back and returns the first view whose bounds
+        // contain the point), so the button "steals" only its own square
+        // corner and nothing more — the rest of the pad's drag surface is
+        // completely unaffected.
+        let topInset = max(4, safeAreaInsets.top + 4)
+        let rightInset = safeAreaInsets.right + 4
+        infoButton.frame = CGRect(
+            x: bounds.maxX - Self.infoButtonSize - rightInset, y: topInset,
+            width: Self.infoButtonSize, height: Self.infoButtonSize)
+        bringSubviewToFront(infoButton)
+
+        if let aboutView {
+            aboutView.frame = bounds
+            bringSubviewToFront(aboutView)
         }
     }
 }

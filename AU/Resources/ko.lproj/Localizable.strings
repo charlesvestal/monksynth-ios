@@ -1,0 +1,44 @@
+/* MonkSynth — 한국어 문자열. 키 구성은 en.lproj / ja.lproj와 완전히 동일해야 합니다. */
+
+/* XY 연주 패드의 접근성 레이블. */
+"pad.label" = "연주 패드. 좌우로 드래그하면 음정, 상하로 드래그하면 모음이 바뀝니다.";
+
+/* 스님 캐릭터의 접근성 레이블. */
+"monk.label" = "스님. 입 모양이 모음 컨트롤을 따라갑니다.";
+
+/* About 화면: 제목. */
+"about.title" = "MonkSynth";
+
+/* About 화면: 악기에 대한 한 줄 설명. */
+"about.tagline" = "포먼트 파형 함수 합성을 사용하는 모노포닉 보컬 신시사이저입니다.";
+
+/* About 화면: 앱 전체에서 유일하게 허용된 "Delay Lama" 언급 (사실에 근거한 유래 설명 한 줄).
+   앱 제목, 부제, 키워드에는 절대 사용하지 않습니다. */
+"about.heritage" = "AudioNerdz의 명작 VST 플러그인 Delay Lama(2002)에서 영감을 받았습니다.";
+
+/* About 화면: 원작자에 대한 명시적 크레딧. */
+"about.credit" = "Jonathan Taylor의 MonkSynth를 기반으로 합니다.";
+
+/* About 화면: 필수 MIT 라이선스 고지. */
+"about.license" = "MIT 라이선스. Copyright (c) 2026 Jonathan Taylor.";
+
+/* About 화면: 업스트림 소스 코드 저장소 링크. */
+"about.source" = "소스 코드";
+
+/* About 화면: 블루투스 MIDI 기기 선택 화면을 여는 버튼 (호스트 앱 전용). */
+"about.bluetooth" = "블루투스 MIDI 연결";
+
+/* About 화면: 닫기 버튼. */
+"about.close" = "닫기";
+
+/* 헤더의 ⓘ 버튼(About 화면 열기)에 대한 접근성 레이블. */
+"about.info" = "MonkSynth 정보";
+
+/* 독립 실행형 엔진 시작에 실패했을 때의 알림 제목. */
+"audio.start.failed.title" = "오디오를 시작할 수 없습니다";
+
+/* 독립 실행형 엔진이 오디오 포맷을 생성하지 못했을 때의 오류 설명. */
+"audio.error.format" = "독립 실행형 엔진용 오디오 포맷을 만들 수 없습니다.";
+
+/* 오디오 시작 실패 알림의 일반 닫기 버튼. */
+"ok" = "확인";

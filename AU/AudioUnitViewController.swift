@@ -135,6 +135,17 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
                 pluginView.controls.setValue(v, for: p)
             }
         }
+
+        // The about screen's "Source code" link. An app extension cannot
+        // call `UIApplication.shared.open` (there is no `UIApplication`
+        // instance to call it on) — `extensionContext?.open` is the host-
+        // mediated equivalent extensions use instead.
+        // `showsBluetoothOption` stays at `PluginView`'s default `false`:
+        // Bluetooth MIDI pairing belongs to the standalone host app, not to
+        // an editor embedded inside someone else's host.
+        pluginView.onOpenURL = { [weak self] url in
+            self?.extensionContext?.open(url, completionHandler: nil)
+        }
     }
 
     private func startUILink() {

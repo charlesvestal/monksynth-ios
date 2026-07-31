@@ -1,0 +1,47 @@
+/* MonkSynth — English strings. Source of truth; ja/ko must carry the exact
+   same key set (LocalizationTests.testEveryLanguageHasTheSameKeys). */
+
+/* Accessibility label for the XY performance pad. */
+"pad.label" = "Performance pad. Drag horizontally for pitch, vertically for vowel.";
+
+/* Accessibility label for the vector monk character. */
+"monk.label" = "The monk. His mouth follows the vowel control.";
+
+/* About screen: title. */
+"about.title" = "MonkSynth";
+
+/* About screen: one-line description of what the instrument is. */
+"about.tagline" = "A monophonic vocal synthesizer using formant-wave-function synthesis.";
+
+/* About screen: the ONE permitted "Delay Lama" mention in the whole app —
+   a factual lineage line, never used in the app title, subtitle, or
+   keywords. LocalizationTests.testDelayLamaAppearsExactlyOnceInEnglish
+   enforces this. */
+"about.heritage" = "Inspired by the classic Delay Lama VST plug-in by AudioNerdz (2002).";
+
+/* About screen: visible credit to the original author. */
+"about.credit" = "Based on MonkSynth by Jonathan Taylor.";
+
+/* About screen: required MIT attribution notice. */
+"about.license" = "MIT Licence. Copyright (c) 2026 Jonathan Taylor.";
+
+/* About screen: button/link to the upstream source repository. */
+"about.source" = "Source code";
+
+/* About screen: button that opens the Bluetooth MIDI device picker (host app only). */
+"about.bluetooth" = "Connect Bluetooth MIDI";
+
+/* About screen: dismiss button. */
+"about.close" = "Close";
+
+/* Accessibility label for the header ⓘ button that opens the about screen. */
+"about.info" = "About MonkSynth";
+
+/* Alert title shown if the standalone engine fails to start. */
+"audio.start.failed.title" = "Audio could not start";
+
+/* Error description used when the standalone engine cannot build an audio format. */
+"audio.error.format" = "Could not create an audio format for the standalone engine.";
+
+/* Generic dismiss button for the audio-start-failed alert. */
+"ok" = "OK";
