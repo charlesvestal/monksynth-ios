@@ -7,6 +7,10 @@
    (例: "Monk"、"Fish" — CharacterRegistry 参照。ローカライズはしていません)。 */
 "character.accessibility" = "キャラクター: %@。ダブルタップで変更。";
 
+/* キャラクタービューのアクセシビリティヒント。タップ（ダブルタップ）でキャラクターと音の両方を変更し、
+   長押しでキャラクターのみ変更して現在の音はそのまま残ることを説明する。 */
+"character.accessibilityHint" = "タップでキャラクターと音を変更します。長押しでキャラクターのみ変更します。";
+
 /* About 画面：タイトル。 */
 "about.title" = "MonkSynth";
 

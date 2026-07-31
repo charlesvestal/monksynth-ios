@@ -7,6 +7,10 @@
    (예: "Monk", "Fish" — CharacterRegistry 참조, 지역화되지 않음). */
 "character.accessibility" = "캐릭터: %@. 두 번 탭하여 변경.";
 
+/* 캐릭터 뷰의 접근성 힌트. 탭(두 번 탭)하면 캐릭터와 소리가 함께 바뀌고,
+   길게 누르면 캐릭터만 바뀌고 현재 소리는 그대로 유지됨을 설명한다. */
+"character.accessibilityHint" = "탭하면 캐릭터와 소리가 함께 바뀝니다. 길게 누르면 캐릭터만 바뀝니다.";
+
 /* About 화면: 제목. */
 "about.title" = "MonkSynth";
 
