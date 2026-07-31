@@ -8,6 +8,12 @@
    display name (e.g. "Monk", "Fish" — not localized, see CharacterRegistry). */
 "character.accessibility" = "Character: %@. Double-tap to change.";
 
+/* Accessibility hint for the character view, explaining both gestures: a
+   tap/double-tap changes the character AND loads its matching sound; a
+   long-press changes only the character and leaves the current sound
+   alone. */
+"character.accessibilityHint" = "Tap to change character and sound. Long-press to change character only.";
+
 /* About screen: title. */
 "about.title" = "MonkSynth";
 

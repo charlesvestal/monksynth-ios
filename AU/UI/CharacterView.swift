@@ -48,12 +48,25 @@ final class CharacterView: UIView {
         }
     }
 
-    /// Fired when the user taps the view to cycle to the next character —
-    /// never fired for a programmatic `character =` assignment, so an owner
+    /// Fired whenever the user's gesture (a tap OR a long-press — see
+    /// `handleTap`/`handleLongPress`) cycles to the next character — never
+    /// fired for a programmatic `character =` assignment, so an owner
     /// applying a restored/loaded value can't bounce right back into
     /// whatever wrote it. The owner uses this to persist the new selection
     /// (AU `fullState`, or `UserDefaults` in the standalone host).
     var onCharacterChange: ((Character) -> Void)?
+
+    /// Fired immediately after `onCharacterChange`, but ONLY by a tap — never
+    /// by a long-press. This is the "and load its voice" half of the tap
+    /// gesture: tap changes character AND sound, long-press changes the
+    /// character only and leaves whatever sound is currently dialled in
+    /// alone. `CharacterView` itself has no notion of parameters or voices —
+    /// it only tells its owner "the user asked for this character's voice
+    /// too", exactly as `onCharacterChange` already tells it "the user asked
+    /// for this character". The owner (`AudioUnitViewController`/
+    /// `RootViewController`) is what actually knows how to look up and apply
+    /// a voice.
+    var onVoiceLoad: ((Character) -> Void)?
 
     // MARK: - Idle animation
 
@@ -95,7 +108,22 @@ final class CharacterView: UIView {
         updateAccessibility()
 
         addSubview(nameOverlay)
-        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap)))
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        // Without this, a held-and-released touch would fire BOTH: the long
+        // press recognizes at `minimumPressDuration` while the finger is
+        // still down (UILongPressGestureRecognizer has no upper bound on
+        // hold time), and a plain UITapGestureRecognizer still recognizes on
+        // release regardless of how long the touch was held. Making the tap
+        // wait for the long press to actually FAIL (i.e. the touch lifted
+        // before the long-press threshold) is what makes the two gestures
+        // mutually exclusive: hold past the threshold and only the long
+        // press fires; release quickly and only the tap fires. See
+        // `handleTap`/`handleLongPress` for what "only" means here — tap
+        // loads the voice, long-press deliberately does not.
+        tap.require(toFail: longPress)
+        addGestureRecognizer(tap)
+        addGestureRecognizer(longPress)
 
         // Reduce Motion can be toggled while the view is on screen; react so
         // an idle shuffle in progress freezes immediately rather than
@@ -124,13 +152,30 @@ final class CharacterView: UIView {
         updateDisplayLink()
     }
 
-    // MARK: - Tap-to-cycle
+    // MARK: - Tap-to-cycle (and load its voice) / long-press-to-cycle (character only)
 
-    @objc private func handleTap() { cycleCharacter() }
+    /// A tap changes character AND loads its voice — `cycleCharacter()` for
+    /// the picture, `onVoiceLoad` for the sound. This is the gesture users
+    /// reach for by default; the user was warned it can overwrite a patch
+    /// they've dialled in, and chose it anyway (see the task). Long-press
+    /// (`handleLongPress`) is the escape hatch that leaves the sound alone.
+    @objc private func handleTap() {
+        cycleCharacter()
+        onVoiceLoad?(character)
+    }
+
+    /// Character only — deliberately does NOT fire `onVoiceLoad`. Gated to
+    /// `.began` so a held touch fires this exactly once, not once per
+    /// re-recognition tick.
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        cycleCharacter()
+    }
 
     /// Advances to the next character in `CharacterRegistry.all`, wrapping
     /// from the last entry back to the first, and briefly overlays its
-    /// name. Also reachable from VoiceOver via `accessibilityActivate()`.
+    /// name. Shared by both gestures above; never loads a voice itself —
+    /// see `handleTap` for the one caller that also wants that.
     func cycleCharacter() {
         let next = CharacterRegistry.character(after: character)
         character = next
@@ -138,8 +183,16 @@ final class CharacterView: UIView {
         showNameOverlay(next.displayName)
     }
 
+    /// VoiceOver's double-tap is the direct equivalent of a sighted user's
+    /// single tap (it's how a non-`UIControl` accessibility element exposes
+    /// its primary action) — so this mirrors `handleTap`, not
+    /// `handleLongPress`: character AND voice. The character-only path stays
+    /// reachable to VoiceOver users too, just via a different route (a
+    /// physical long-press still works under VoiceOver on most iOS
+    /// versions, and the hint below calls it out explicitly either way).
     override func accessibilityActivate() -> Bool {
         cycleCharacter()
+        onVoiceLoad?(character)
         return true
     }
 
@@ -148,6 +201,9 @@ final class CharacterView: UIView {
             "character.accessibility",
             comment: "Accessibility label for the character view; %@ is the current character's display name.")
         accessibilityLabel = String(format: format, character.displayName)
+        accessibilityHint = NSLocalizedString(
+            "character.accessibilityHint",
+            comment: "Accessibility hint for the character view, explaining both gestures.")
     }
 
     // MARK: - Name overlay

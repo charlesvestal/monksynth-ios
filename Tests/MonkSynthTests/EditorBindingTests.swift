@@ -119,6 +119,83 @@ final class EditorBindingTests: XCTestCase {
         XCTAssertEqual(pluginView.stage.character.id, "fish")
     }
 
+    /// UI -> AU: a tap changes the character AND loads its voice. Simulated
+    /// here via `accessibilityActivate()` — VoiceOver's double-tap, and
+    /// `CharacterView`'s own doc comment on why it mirrors a sighted tap
+    /// rather than a long-press — rather than synthesizing a real touch
+    /// through the gesture recognizers, which `handleTap` (private) isn't
+    /// reachable from outside the view anyway.
+    func testTappingCharacterAlsoLoadsItsVoiceIntoTheParameterTree() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+
+        let pluginView = vc.view as! PluginView
+        XCTAssertEqual(pluginView.stage.character.id, "monk")
+
+        // Dial headSize somewhere fish's own voice does NOT use, so the
+        // assertion below can only pass if the tap actually rewrote it.
+        unit.parameterTree?.parameter(withAddress: Param.headSize.rawValue)?
+            .setValue(0.5, originator: nil)
+
+        _ = pluginView.stage.accessibilityActivate()   // monk -> fish, tap-equivalent
+
+        XCTAssertEqual(pluginView.stage.character.id, "fish")
+        for (param, value) in CharacterVoiceTable.fish {
+            let treeValue = unit.parameterTree?.parameter(withAddress: param.rawValue)?.value
+            XCTAssertEqual(treeValue ?? -1, value, accuracy: 1e-6,
+                            "\(param.identifier) did not load fish's voice")
+        }
+        // Live performance/routing parameters must be left exactly alone.
+        let routing = unit.parameterTree?.parameter(withAddress: Param.pitchBendRouting.rawValue)?.value
+        XCTAssertEqual(routing ?? -1, Param.pitchBendRouting.defaultValue, accuracy: 1e-6)
+    }
+
+    /// UI -> AU: `cycleCharacter()` alone is exactly what the long-press
+    /// path calls (see `CharacterView.handleLongPress`) — character only,
+    /// deliberately leaving whatever sound is dialled in untouched.
+    func testCyclingCharacterAloneNeverTouchesAnyParameter() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+
+        let pluginView = vc.view as! PluginView
+        unit.parameterTree?.parameter(withAddress: Param.headSize.rawValue)?
+            .setValue(0.5, originator: nil)
+
+        pluginView.stage.cycleCharacter()   // monk -> fish, character only
+
+        XCTAssertEqual(pluginView.stage.character.id, "fish")
+        let stillDialledIn = unit.parameterTree?.parameter(withAddress: Param.headSize.rawValue)?.value
+        XCTAssertEqual(stillDialledIn ?? -1, 0.5, accuracy: 1e-6,
+                        "cycleCharacter() alone (the long-press path) must not touch any parameter")
+    }
+
+    /// The task requires voice-load writes to go through the parameter tree
+    /// — never straight into the shadow — specifically so a real host sees
+    /// and can record/undo them. Proven the same way
+    /// `testWriteWithMatchingOriginatorDoesNotBounceBackToThatObserver`
+    /// proves the originator mechanism: an independent second observer
+    /// registration, standing in for a real host's automation recorder,
+    /// must see the change.
+    func testTappingCharacterVoiceChangeIsVisibleToAnIndependentHostObserver() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+        let pluginView = vc.view as! PluginView
+        let tree = try XCTUnwrap(unit.parameterTree)
+
+        var hostObservedCount = 0
+        let hostToken = tree.token(byAddingParameterObserver: { _, _ in hostObservedCount += 1 })
+        defer { tree.removeParameterObserver(hostToken) }
+
+        _ = pluginView.stage.accessibilityActivate()   // monk -> fish, tap-equivalent
+
+        pollUntil { hostObservedCount > 0 }
+        XCTAssertGreaterThan(hostObservedCount, 0,
+            "an independent host observer must see the parameter writes a tap's voice load produces")
+    }
+
     /// AU -> UI: a `fullState` load reaching in *after* the editor is
     /// already bound and showing (e.g. a host applying a saved session to
     /// an already-open editor) must still update the visible character.
