@@ -1,12 +1,14 @@
 import UIKit
 
-/// The monk character: a hooded chanting figure built from layered
-/// `UIBezierPath`s in a centred square "stage" so the rig never distorts
-/// under odd aspect ratios (iPhone SE portrait strip up to iPad Pro).
+/// The monk character: a bald, warm-faced chanting figure in a saffron/maroon
+/// robe draped over one shoulder, built from layered `UIBezierPath`s in a
+/// centred square "stage" so the rig never distorts under odd aspect ratios
+/// (iPhone SE portrait strip up to iPad Pro).
 ///
-/// Layers, back to front: robe, sash, head, hood, eyes, mouth. The mouth is
-/// the only continuously-morphing element — it interpolates across five
-/// anchor shapes with `vowel`, unlike upstream's 24 discrete sprite frames.
+/// Layers, back to front: robe (torso silhouette + clipped bare-shoulder
+/// skin), neck, ears, head, eyes, mouth. The mouth is the only
+/// continuously-morphing element — it interpolates across five anchor
+/// shapes with `vowel`, unlike upstream's 24 discrete sprite frames.
 /// Everything else is a fixed pose except the eyes' blink state, which
 /// upstream's idle state machine (`IdleAnimator`, ported from
 /// `cpp/src/monk_view.h`) drives while no note is sounding.
@@ -43,6 +45,19 @@ final class MonkView: UIView {
     private var lastTimestamp: CFTimeInterval?
     private var accumulatedMs: Double = 0
     private var reduceMotionObserver: NSObjectProtocol?
+
+    // MARK: - Derived robe tones
+    //
+    // Rather than hand-picking two more raw colour constants that could
+    // drift out of sync with `Theme.robe`, the saffron trim and the fold
+    // shadow are both derived from it in HSB space: lighter + desaturated
+    // toward yellow for the saffron piping, darker for the fold shadow.
+    // `Theme.robe`'s own hue is ~9° (red-orange); the shift must be
+    // *positive* to move toward yellow/saffron (~35°) — a negative shift
+    // wraps the other way round the hue circle into pink/magenta, which is
+    // what an earlier version of this constant actually rendered as.
+    private static let robeSaffron = Theme.robe.adjusted(hueShift: 0.07, saturationScale: 0.60, brightnessScale: 1.7)
+    private static let robeFold = Theme.robe.adjusted(saturationScale: 1.05, brightnessScale: 0.62)
 
     // MARK: - Mouth anchors: (width, height) of the aperture in unit-square
     // space, roughly OO / OH / AH / EH / EE.
@@ -167,9 +182,8 @@ final class MonkView: UIView {
         let stage = CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)
 
         drawRobe(in: stage)
-        drawSash(in: stage)
+        drawNeck(in: stage)
         drawHead(in: stage)
-        drawHood(in: stage)
 
         let pose = currentPose
         drawEyes(in: stage, blinking: pose.blinking)
@@ -180,126 +194,153 @@ final class MonkView: UIView {
         CGPoint(x: stage.minX + fx * stage.width, y: stage.minY + fy * stage.height)
     }
 
+    /// The torso's true silhouette: symmetric, rounded shoulders on both
+    /// sides — the same shape a robe covering the *whole* body would have.
+    /// `drawRobe` reuses this exact path as a clip mask for the bare
+    /// shoulder, so that patch's outer edge is always pixel-identical to
+    /// the body's real silhouette no matter how the drape-line curve below
+    /// is tuned. (Four earlier attempts hand-matched a separate curve to
+    /// the robe's own edge and either left a gap or bulged past it; this
+    /// is structurally immune to that class of bug.)
+    private static let neckBottomLeft = (fx: CGFloat(0.43), fy: CGFloat(0.50))
+    private static let neckBottomRight = (fx: CGFloat(0.57), fy: CGFloat(0.50))
+    private static let leftShoulderTop = (fx: CGFloat(0.20), fy: CGFloat(0.58))
+    private static let rightShoulderTop = (fx: CGFloat(0.80), fy: CGFloat(0.58))
+
+    private func torsoPath(in stage: CGRect) -> UIBezierPath {
+        func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
+        let torso = UIBezierPath()
+        torso.move(to: p(Self.leftShoulderTop.fx, Self.leftShoulderTop.fy))
+        torso.addQuadCurve(to: p(Self.neckBottomLeft.fx, Self.neckBottomLeft.fy), controlPoint: p(0.27, 0.50))
+        torso.addLine(to: p(Self.neckBottomRight.fx, Self.neckBottomRight.fy))
+        torso.addQuadCurve(to: p(Self.rightShoulderTop.fx, Self.rightShoulderTop.fy), controlPoint: p(0.73, 0.50))
+        torso.addQuadCurve(to: p(0.92, 0.78), controlPoint: p(0.90, 0.66))
+        torso.addCurve(to: p(0.90, 0.99), controlPoint1: p(0.95, 0.86), controlPoint2: p(0.95, 0.95))
+        torso.addQuadCurve(to: p(0.10, 0.99), controlPoint: p(0.5, 1.06))
+        torso.addCurve(to: p(0.08, 0.78), controlPoint1: p(0.05, 0.95), controlPoint2: p(0.05, 0.86))
+        torso.addQuadCurve(to: p(Self.leftShoulderTop.fx, Self.leftShoulderTop.fy), controlPoint: p(0.10, 0.66))
+        torso.close()
+        return torso
+    }
+
     private func drawRobe(in stage: CGRect) {
         func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        let torso = torsoPath(in: stage)
 
-        let robe = UIBezierPath()
-        robe.move(to: p(0.34, 0.56))
-        robe.addQuadCurve(to: p(0.18, 0.64), controlPoint: p(0.22, 0.56))
-        robe.addCurve(to: p(0.08, 0.97), controlPoint1: p(0.06, 0.72), controlPoint2: p(0.04, 0.86))
-        robe.addQuadCurve(to: p(0.92, 0.97), controlPoint: p(0.5, 1.05))
-        robe.addCurve(to: p(0.82, 0.64), controlPoint1: p(0.96, 0.86), controlPoint2: p(0.94, 0.72))
-        robe.addQuadCurve(to: p(0.66, 0.56), controlPoint: p(0.78, 0.56))
-        robe.addQuadCurve(to: p(0.34, 0.56), controlPoint: p(0.5, 0.615))
-        robe.close()
         Theme.robe.setFill()
-        robe.fill()
+        torso.fill()
 
-        // A soft fold down the centre so the robe reads as fabric rather
-        // than a flat wash.
+        // A soft, narrow fold low on the (always-robed) left/centre so the
+        // robe reads as fabric rather than a flat wash.
         let fold = UIBezierPath()
-        fold.move(to: p(0.5, 0.60))
-        fold.addQuadCurve(to: p(0.46, 0.95), controlPoint: p(0.40, 0.78))
-        fold.addQuadCurve(to: p(0.54, 0.95), controlPoint: p(0.5, 0.92))
-        fold.addQuadCurve(to: p(0.5, 0.60), controlPoint: p(0.58, 0.78))
+        fold.move(to: p(0.5, 0.72))
+        fold.addQuadCurve(to: p(0.475, 0.97), controlPoint: p(0.455, 0.86))
+        fold.addQuadCurve(to: p(0.525, 0.97), controlPoint: p(0.5, 0.95))
+        fold.addQuadCurve(to: p(0.5, 0.72), controlPoint: p(0.545, 0.86))
         fold.close()
-        Theme.robeShadow.withAlphaComponent(0.35).setFill()
+        Self.robeFold.withAlphaComponent(0.22).setFill()
         fold.fill()
+
+        // The drape line: from the base of the neck, sweeping *well down*
+        // across the chest before exiting off the right edge of the stage.
+        // Everything in the torso silhouette above/right of this line
+        // becomes bare skin — clip to `torso` first so the fill can never
+        // leak past the body's real outline, then clip to "above the line"
+        // and flood-fill. This needs to sag substantially below the
+        // torso's own shoulder curve (which only drops from fy 0.50 to
+        // 0.58) or the exposed region is squeezed to a hairline sliver
+        // between the two curves — an earlier version of this line hugged
+        // the torso's edge too closely and the bare shoulder was nearly
+        // invisible as a result.
+        let drapeLine = UIBezierPath()
+        drapeLine.move(to: p(Self.neckBottomRight.fx, Self.neckBottomRight.fy))
+        drapeLine.addQuadCurve(to: p(1.05, 0.82), controlPoint: p(0.74, 0.64))
+
+        guard let cut = drapeLine.copy() as? UIBezierPath else { return }
+        cut.addLine(to: p(1.05, -0.05))
+        cut.addLine(to: p(Self.neckBottomRight.fx, -0.05))
+        cut.close()
+
+        context.saveGState()
+        torso.addClip()
+        cut.addClip()
+        Theme.skin.setFill()
+        context.fill(stage)
+        context.restoreGState()
+
+        // Saffron trim along the visible drape line — clipped to the torso
+        // too, so it can never extend past the body's own silhouette the
+        // way the very first version's floating sash did.
+        context.saveGState()
+        torso.addClip()
+        drapeLine.lineWidth = stage.width * 0.014
+        drapeLine.lineCapStyle = .round
+        Self.robeSaffron.withAlphaComponent(0.85).setStroke()
+        drapeLine.stroke()
+        context.restoreGState()
     }
 
-    private func drawSash(in stage: CGRect) {
+    /// The neck, always fully skin-coloured regardless of which shoulder is
+    /// bare — it is the strip directly beneath the head that connects it
+    /// to `torsoPath`'s own neckline, so the head never appears to float.
+    private func drawNeck(in stage: CGRect) {
         func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
-
-        let sash = UIBezierPath()
-        sash.move(to: p(0.30, 0.60))
-        sash.addLine(to: p(0.64, 0.97))
-        sash.lineWidth = stage.width * 0.10
-        sash.lineCapStyle = .round
-        Theme.robeShadow.withAlphaComponent(0.75).setStroke()
-        sash.stroke()
-
-        // A thin warm trim down the centre of the sash.
-        let trim = UIBezierPath()
-        trim.move(to: p(0.30, 0.60))
-        trim.addLine(to: p(0.64, 0.97))
-        trim.lineWidth = stage.width * 0.018
-        trim.lineCapStyle = .round
-        Theme.accent.withAlphaComponent(0.9).setStroke()
-        trim.stroke()
+        let neck = UIBezierPath()
+        neck.move(to: p(0.44, 0.43))
+        neck.addLine(to: p(0.56, 0.43))
+        neck.addLine(to: p(Self.neckBottomRight.fx, Self.neckBottomRight.fy))
+        neck.addLine(to: p(Self.neckBottomLeft.fx, Self.neckBottomLeft.fy))
+        neck.close()
+        Theme.skin.setFill()
+        neck.fill()
     }
 
-    /// Head and hood share a centre; the head circle is drawn larger than
-    /// the hood's face opening so the opening is always backed by skin —
-    /// no aspect ratio or proportion tweak can reveal a transparent gap.
-    private static let faceCenter = (fx: CGFloat(0.5), fy: CGFloat(0.40))
-    private static let headRadius: CGFloat = 0.22
-    private static let holeRadius: CGFloat = 0.19
+    private static let faceCenter = (fx: CGFloat(0.5), fy: CGFloat(0.30))
+    private static let headRadius: CGFloat = 0.17
 
     private func drawHead(in stage: CGRect) {
         let center = point(Self.faceCenter.fx, Self.faceCenter.fy, in: stage)
+
+        // Ears: drawn before the head circle so it overlaps their inner
+        // half, leaving only an outer crescent visible on a bald head.
+        for cx: CGFloat in [Self.faceCenter.fx - Self.headRadius * 0.96,
+                             Self.faceCenter.fx + Self.headRadius * 0.96] {
+            let c = point(cx, Self.faceCenter.fy + 0.018, in: stage)
+            let w = stage.width * 0.045
+            let h = stage.width * 0.076
+            let ear = UIBezierPath(ovalIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h))
+            Theme.skin.setFill()
+            ear.fill()
+        }
+
         let head = UIBezierPath(arcCenter: center, radius: stage.width * Self.headRadius,
                                  startAngle: 0, endAngle: .pi * 2, clockwise: true)
         Theme.skin.setFill()
         head.fill()
     }
 
-    private func drawHood(in stage: CGRect) {
-        func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
-
-        // Outer silhouette: a rounded arch over the head that drapes down
-        // onto the shoulders.
-        let hood = UIBezierPath()
-        hood.move(to: p(0.16, 0.66))
-        hood.addQuadCurve(to: p(0.5, 0.10), controlPoint: p(0.18, 0.20))
-        hood.addQuadCurve(to: p(0.84, 0.66), controlPoint: p(0.82, 0.20))
-        hood.addQuadCurve(to: p(0.74, 0.74), controlPoint: p(0.80, 0.70))
-        hood.addLine(to: p(0.26, 0.74))
-        hood.addQuadCurve(to: p(0.16, 0.66), controlPoint: p(0.20, 0.70))
-        hood.close()
-
-        // Face opening: a hole cut from the hood (even-odd fill) that
-        // reveals the head painted underneath, framed by a rim of fabric.
-        let center = point(Self.faceCenter.fx, Self.faceCenter.fy, in: stage)
-        let holeR = stage.width * Self.holeRadius
-        let faceHole = UIBezierPath(arcCenter: center, radius: holeR,
-                                     startAngle: 0, endAngle: .pi * 2, clockwise: true)
-        hood.append(faceHole)
-        hood.usesEvenOddFillRule = true
-
-        Theme.robe.setFill()
-        hood.fill()
-
-        // Inner rim shadow so the opening reads as a hood, not a hole.
-        Theme.robeShadow.withAlphaComponent(0.6).setStroke()
-        faceHole.lineWidth = stage.width * 0.012
-        faceHole.stroke()
-    }
-
     private func drawEyes(in stage: CGRect, blinking: Bool) {
-        let w = stage.width * 0.07
-        let h = stage.width * 0.045
+        let halfWidth = stage.width * 0.05
+        let curveDepth = stage.width * (blinking ? 0.011 : 0.027)
+        let lineWidth = stage.width * 0.015
         for cx: CGFloat in [0.415, 0.585] {
-            let c = point(cx, 0.385, in: stage)
-            if blinking {
-                let line = UIBezierPath()
-                line.move(to: CGPoint(x: c.x - w / 2, y: c.y))
-                line.addLine(to: CGPoint(x: c.x + w / 2, y: c.y))
-                line.lineWidth = stage.width * 0.01
-                line.lineCapStyle = .round
-                Theme.robeShadow.setStroke()
-                line.stroke()
-            } else {
-                let eye = UIBezierPath(ovalIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h))
-                Theme.robeShadow.setFill()
-                eye.fill()
-            }
+            let c = point(cx, 0.296, in: stage)
+            let eye = UIBezierPath()
+            eye.move(to: CGPoint(x: c.x - halfWidth, y: c.y))
+            eye.addQuadCurve(to: CGPoint(x: c.x + halfWidth, y: c.y),
+                              controlPoint: CGPoint(x: c.x, y: c.y + curveDepth))
+            eye.lineWidth = lineWidth
+            eye.lineCapStyle = .round
+            Theme.robeShadow.setStroke()
+            eye.stroke()
         }
     }
 
-    /// The mouth's own local reference frame — smaller than the face
-    /// opening so it can never poke past the hood at the widest anchor.
-    private static let mouthBoxFraction: CGFloat = 0.36
-    private static let mouthCenter = (fx: CGFloat(0.5), fy: CGFloat(0.515))
+    /// The mouth's own local reference frame, scaled to the head so it can
+    /// never poke past the jawline at the widest anchor.
+    private static let mouthBoxFraction: CGFloat = 0.27
+    private static let mouthCenter = (fx: CGFloat(0.5), fy: CGFloat(0.394))
 
     private func drawMouth(in stage: CGRect, vowel: Float) {
         let shape = Self.mouthShape(vowel: vowel)
@@ -315,5 +356,23 @@ final class MonkView: UIView {
         Theme.robeShadow.withAlphaComponent(0.5).setStroke()
         mouth.lineWidth = stage.width * 0.008
         mouth.stroke()
+    }
+}
+
+private extension UIColor {
+    /// Returns a copy of this colour with hue shifted and saturation /
+    /// brightness scaled in HSB space. Used to derive the robe's saffron
+    /// trim and fold-shadow tones from `Theme.robe` so there is a single
+    /// source of truth for the robe's base colour instead of separate
+    /// hand-picked constants that could drift out of sync with it.
+    func adjusted(hueShift: CGFloat = 0, saturationScale: CGFloat = 1, brightnessScale: CGFloat = 1) -> UIColor {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        var shiftedHue = (h + hueShift).truncatingRemainder(dividingBy: 1)
+        if shiftedHue < 0 { shiftedHue += 1 }
+        return UIColor(hue: shiftedHue,
+                        saturation: min(max(s * saturationScale, 0), 1),
+                        brightness: min(max(b * brightnessScale, 0), 1),
+                        alpha: a)
     }
 }
