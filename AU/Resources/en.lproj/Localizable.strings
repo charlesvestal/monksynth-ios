@@ -27,6 +27,12 @@
    title. */
 "characterPicker.title" = "Choose a Character";
 
+/* Character dropdown overlay: section header above upstream's six factory
+   presets (built-in characters are listed above this, unlabelled; the
+   user's own saved characters are listed below, under their own "Saved"
+   header). */
+"characterPicker.factory" = "Factory";
+
 /* Character dropdown overlay: section header above the user's own saved
    characters (built-in characters are listed above this, unlabelled). */
 "characterPicker.saved" = "Saved";
