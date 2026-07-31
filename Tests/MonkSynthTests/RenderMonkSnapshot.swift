@@ -6,7 +6,7 @@
 //
 // Writes /tmp/monk_sheet.png (vowel sweep), /tmp/monk_aspect.png (extreme
 // aspect ratios, to confirm the rig letterboxes rather than distorting), and
-// /tmp/characters.png (all five characters across the vowel sweep).
+// /tmp/characters.png (every registered character across the vowel sweep).
 import UIKit
 import XCTest
 @testable import MonkSynth
@@ -53,8 +53,8 @@ final class RenderMonkSnapshot: XCTestCase {
         print("SNAPSHOT_WRITTEN \(path) bytes=\(data.count)")
     }
 
-    /// All five characters across the vowel sweep, at the small-ish sizes
-    /// they actually render at (per the design brief, "as small as ~120pt
+    /// Every registered character across the vowel sweep, at the small-ish
+    /// sizes they actually render at (per the design brief, "as small as ~120pt
     /// tall") — the honesty check for "instantly distinguishable in
     /// silhouette". Required by the characters task; look at the output
     /// with the Read tool, don't just check it wrote bytes.
@@ -109,8 +109,10 @@ final class RenderMonkSnapshot: XCTestCase {
     /// requirement: render the same mid-vowel pose into a very wide/short
     /// frame and a very tall/narrow frame side by side against a square
     /// frame, so a human can confirm the character stays centred and
-    /// undistorted (only letterboxed) in each.
-    func testWriteAspectRatioSheet() throws {
+    /// undistorted (only letterboxed) in each. Shared by every
+    /// per-character aspect-ratio check below so adding one for a new
+    /// character is a one-line call, not a copy-pasted test.
+    private func writeAspectRatioSheet(character: Character, to path: String) throws {
         let frames: [(String, CGSize)] = [
             ("square-260", CGSize(width: 260, height: 260)),
             ("wide-480x120", CGSize(width: 480, height: 120)),
@@ -128,6 +130,7 @@ final class RenderMonkSnapshot: XCTestCase {
             for (name, size) in frames {
                 let view = CharacterView(frame: CGRect(origin: .zero, size: size))
                 view.backgroundColor = .clear
+                view.character = character
                 view.vowel = 0.5
                 view.amplitude = 0.8
                 view.noteActive = true
@@ -142,8 +145,19 @@ final class RenderMonkSnapshot: XCTestCase {
             }
         }
         let data = try XCTUnwrap(image.pngData())
-        let path = "/tmp/monk_aspect.png"
         try data.write(to: URL(fileURLWithPath: path))
         print("SNAPSHOT_WRITTEN \(path) bytes=\(data.count)")
+    }
+
+    func testWriteAspectRatioSheet() throws {
+        try writeAspectRatioSheet(character: MonkCharacter(), to: "/tmp/monk_aspect.png")
+    }
+
+    /// Same check as above, for the cow — its muzzle/ears/horns are the
+    /// widest-reaching geometry of any character added so far, so this is
+    /// the one most likely to reveal a fraction that was mistakenly written
+    /// in absolute rather than stage-relative terms.
+    func testWriteCowAspectRatioSheet() throws {
+        try writeAspectRatioSheet(character: CowCharacter(), to: "/tmp/cow_aspect.png")
     }
 }
