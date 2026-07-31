@@ -136,11 +136,39 @@ final class PresetTests: XCTestCase {
     // detection, characterID/param packing and fallback) is still fully and
     // deterministically covered.
 
+    /// Wires `au` up with two isolated test doubles so these tests never
+    /// touch real shared/App-Group or per-container disk state:
+    ///
+    /// - `userPresetBackend` <- `FakeUserPresetBackend`, an in-memory stand-in
+    ///   for `AUAudioUnit`'s native user-preset machinery (see that class's
+    ///   own doc comment) — this is the host-visible MIRROR now, not the
+    ///   canonical store.
+    /// - `presetStore` <- a real `SharedPresetStore` pointed at a fresh
+    ///   temp-directory file unique to this call, standing in for the
+    ///   canonical shared-App-Group store. Using the real type (rather than
+    ///   a hand-rolled fake) exercises its actual save/list/delete/migrate
+    ///   logic through every test in this file, exactly like production —
+    ///   just isolated to a throwaway file instead of the real container.
     private func makeAUWithFakeBackend() throws -> (au: MonkSynthAU, backend: FakeUserPresetBackend) {
         let au = try makeAU()
         let backend = FakeUserPresetBackend(au)
         au.userPresetBackend = backend
+        au.presetStore = SharedPresetStore(fileURL: Self.uniqueTempPresetsFile(), isUsingSharedContainer: false,
+                                            currentSnapshot: { [weak au] in Self.currentSnapshot(of: au) })
         return (au, backend)
+    }
+
+    private static func uniqueTempPresetsFile() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("PresetTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("userPresets.json")
+    }
+
+    private static func currentSnapshot(of au: MonkSynthAU?) -> PresetSnapshot {
+        guard let au else {
+            return PresetSnapshot(params: Param.allCases.map(\.defaultValue), characterID: CharacterRegistry.defaultCharacter.id)
+        }
+        return PresetSnapshot(params: Param.allCases.map { param_shadow_get(au.shadow, $0.address) }, characterID: au.characterID)
     }
 
     func testSupportsUserPresetsIsTrue() throws {
@@ -292,6 +320,57 @@ final class PresetTests: XCTestCase {
         }
         XCTAssertEqual(au.savedUserPresets.map(\.name).sorted(), ["One", "Two"])
     }
+
+    // MARK: - Host-visible mirroring
+    //
+    // `presetStore` (the shared App Group store, faked above to an isolated
+    // temp file) is canonical; `userPresetBackend` is a best-effort MIRROR
+    // so a host's own `AUAudioUnit.userPresets` UI keeps listing saves too.
+    // These tests check the mirror actually happens, and that a mirror
+    // failure never blocks or un-succeeds the canonical save/delete.
+
+    /// A save lands in BOTH the canonical store and the native mirror.
+    func testSaveMirrorsIntoNativeUserPresets() throws {
+        let (au, backend) = try makeAUWithFakeBackend()
+        au.setCharacterID(FishCharacter().id)
+
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Mirrored"), .success)
+
+        XCTAssertEqual(backend.all.map(\.name), ["Mirrored"])
+        let mirroredState = try backend.state(for: XCTUnwrap(backend.all.first))
+        XCTAssertEqual(mirroredState["characterID"] as? String, "fish")
+    }
+
+    /// A delete removes it from BOTH the canonical store and the native
+    /// mirror — not just the canonical one.
+    func testDeleteMirrorsIntoNativeUserPresets() throws {
+        let (au, backend) = try makeAUWithFakeBackend()
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Temp"), .success)
+        XCTAssertEqual(backend.all.map(\.name), ["Temp"])
+
+        au.deleteUserPreset(named: "Temp")
+
+        XCTAssertTrue(au.savedUserPresets.isEmpty)
+        XCTAssertTrue(backend.all.isEmpty)
+    }
+
+    /// If the native mirror throws (a host that declines, a sandbox
+    /// hiccup), the canonical save still reports `.success` — the shared
+    /// store is what actually makes the preset visible across containers,
+    /// and it already has it; a host-UI mirroring failure is logged, not
+    /// surfaced as a save failure.
+    func testMirrorFailureDoesNotFailTheCanonicalSave() throws {
+        let au = try makeAU()
+        au.userPresetBackend = AlwaysFailingUserPresetBackend()
+        au.presetStore = SharedPresetStore(fileURL: Self.uniqueTempPresetsFile(), isUsingSharedContainer: false,
+                                            currentSnapshot: { [weak au] in Self.currentSnapshot(of: au) })
+
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "StillSaved"), .success)
+        XCTAssertEqual(au.savedUserPresets.map(\.name), ["StillSaved"])
+
+        au.deleteUserPreset(named: "StillSaved")   // must not crash even though the mirror has nothing to delete
+        XCTAssertTrue(au.savedUserPresets.isEmpty)
+    }
 }
 
 /// In-memory stand-in for `NativeUserPresetBackend` — see `MonkSynthAU`'s
@@ -322,4 +401,15 @@ final class FakeUserPresetBackend: UserPresetBackend {
     func delete(_ preset: AUAudioUnitPreset) throws {
         entries.removeAll { $0.preset.name == preset.name }
     }
+}
+
+/// A `UserPresetBackend` that always throws on save/delete and always lists
+/// nothing — standing in for a host that declines native user-preset
+/// mirroring (or a sandbox hiccup), for `testMirrorFailureDoesNotFailTheCanonicalSave`.
+private final class AlwaysFailingUserPresetBackend: UserPresetBackend {
+    private struct Failure: Error {}
+    var all: [AUAudioUnitPreset] { [] }
+    func state(for preset: AUAudioUnitPreset) throws -> [String: Any] { throw Failure() }
+    func save(_ preset: AUAudioUnitPreset) throws { throw Failure() }
+    func delete(_ preset: AUAudioUnitPreset) throws { throw Failure() }
 }

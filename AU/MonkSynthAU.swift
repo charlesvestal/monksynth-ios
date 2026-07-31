@@ -266,18 +266,22 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
 
     // MARK: - User presets
     //
-    // Uses `AUAudioUnit`'s own save/delete/list/read machinery
-    // (`saveUserPreset`, `deleteUserPreset`, `userPresets`,
-    // `presetState(for:)`) rather than hand-rolling a JSON file: a host can
-    // already see, list, and manage these presets itself through the same
-    // API, and they persist across launches for free — see the task's "use
-    // AUAudioUnit's native user-preset API" instruction. Every preset's
-    // state is exactly `fullState` (above), which already carries
-    // `characterID` alongside `monkParams`, so the character rides along
-    // with zero extra plumbing.
+    // Canonical storage is the shared App Group store (`presetStore`, a
+    // `SharedPresetStore` — see that type's doc comment): the standalone app
+    // and this extension are separate sandboxes, and a preset saved from
+    // one must be visible from the other. Every save/delete is ALSO
+    // mirrored into `AUAudioUnit`'s own native user-preset machinery
+    // (`userPresetBackend`, below) on a best-effort basis, so a host's own
+    // preset UI (`AUAudioUnit.userPresets`) keeps listing them too —
+    // `AUAudioUnit.userPresets` is host-visible and worth preserving
+    // alongside cross-container sharing, not instead of it. If the native
+    // mirror call fails (host declined, sandbox hiccup) that failure is
+    // logged and swallowed: the canonical shared store already has the
+    // preset, which is what makes it visible to the OTHER container, and
+    // that is the save this method's caller actually needs to succeed.
     //
-    // The actual disk-backed storage those native calls hit only works from
-    // inside a real, installed AU extension process — confirmed empirically:
+    // The native calls' actual disk-backed storage only works from inside a
+    // real, installed AU extension process — confirmed empirically:
     // instantiated directly (the same way the real extension's own
     // `AudioUnitViewController.createAudioUnit(with:)` does) inside a plain
     // XCTest, `saveUserPreset` neither throws nor persists anything, with or
@@ -288,11 +292,12 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
     // themselves are routed through `userPresetBackend` — production always
     // uses `NativeUserPresetBackend` (this section, genuinely calling
     // `saveUserPreset`/`userPresets`/`presetState(for:)`/`deleteUserPreset`),
-    // while `PresetTests` substitutes `FakeUserPresetBackend` so the LOGIC
-    // this class adds on top of those calls — name trimming/validation,
-    // duplicate detection, characterID/param packing and fallback — stays
-    // fully and deterministically covered without depending on OS mechanics
-    // a unit test can't reach.
+    // while `PresetTests` substitutes `FakeUserPresetBackend` (and, for the
+    // canonical store, an isolated `presetStore`) so the LOGIC this class
+    // adds on top of those calls — name trimming/validation, duplicate
+    // detection, characterID/param packing and fallback, native mirroring —
+    // stays fully and deterministically covered without depending on OS
+    // mechanics a unit test can't reach or writing to real shared storage.
 
     /// `AUAudioUnit.supportsUserPresets` defaults to `false`; a host uses it
     /// to decide whether to offer save/delete UI of its own (see that
@@ -303,46 +308,104 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
     /// substitutes an in-memory fake. See the section doc comment above.
     lazy var userPresetBackend: UserPresetBackend = NativeUserPresetBackend(self)
 
-    // MARK: PresetStoring
+    /// Test seam mirroring `userPresetBackend`: production always uses a
+    /// real `SharedPresetStore` (backed by the App Group container, falling
+    /// back to this extension's own sandboxed storage if the container is
+    /// unavailable — see that type's doc comment); `PresetTests` substitutes
+    /// an isolated in-memory-backed store so tests never touch real shared
+    /// or per-container disk state. Building the real store here (rather
+    /// than at `init` time) also runs the one-time native-preset migration
+    /// (below) lazily, on first actual use, instead of on every AU
+    /// instantiation.
+    lazy var presetStore: PresetStoring = {
+        let store = SharedPresetStore(currentSnapshot: { [weak self] in
+            self?.currentSnapshotForPresetStore() ?? PresetSnapshot(
+                params: Param.allCases.map(\.defaultValue), characterID: CharacterRegistry.defaultCharacter.id)
+        })
+        migrateNativeUserPresetsIfNeeded(into: store)
+        return store
+    }()
 
-    var savedUserPresets: [SavedPreset] {
-        userPresetBackend.all.map { preset in
-            let characterID = (try? userPresetBackend.state(for: preset))?["characterID"] as? String
-            return SavedPreset(name: preset.name, characterID: CharacterRegistry.character(withID: characterID).id)
-        }
+    /// What `saveCurrentAsUserPreset` captures right now — exactly the same
+    /// params+characterID `fullState` packs, just not yet wrapped into the
+    /// `Data`/`[String: Any]` shape `AUAudioUnit.fullState` needs.
+    private func currentSnapshotForPresetStore() -> PresetSnapshot {
+        PresetSnapshot(params: Param.allCases.map { param_shadow_get(shadow, $0.address) }, characterID: characterID)
     }
 
+    private static let migratedNativeUserPresetsDefaultsKey = "monksynth.migratedNativeUserPresetsToSharedStore"
+
+    /// "Existing presets must survive": anyone already running a build has
+    /// presets sitting in native `AUAudioUnit.userPresets`. Reads every one
+    /// out via `userPresetBackend` (so tests can substitute a fake and see
+    /// zero — nothing to migrate — rather than touching real OS state) and
+    /// folds them into `store` once; `SharedPresetStore` itself tracks the
+    /// "once" via `markerKey` so repeated launches — or repeated AU
+    /// instantiations within one host session — are cheap no-ops after the
+    /// first successful run.
+    private func migrateNativeUserPresetsIfNeeded(into store: SharedPresetStore) {
+        let legacy: [SharedPresetStore.StoredPreset] = userPresetBackend.all.compactMap { preset in
+            guard let state = try? userPresetBackend.state(for: preset) else { return nil }
+            let snapshot = Self.snapshot(fromPresetState: state)
+            return SharedPresetStore.StoredPreset(name: preset.name, characterID: snapshot.characterID, params: snapshot.params)
+        }
+        store.migrateLegacyPresetsIfNeeded(legacy, markerKey: Self.migratedNativeUserPresetsDefaultsKey)
+    }
+
+    // MARK: PresetStoring
+
+    var savedUserPresets: [SavedPreset] { presetStore.savedUserPresets }
+
     func snapshot(forUserPresetNamed name: String) -> PresetSnapshot? {
-        guard let preset = userPresetBackend.all.first(where: { $0.name == name }),
-              let state = try? userPresetBackend.state(for: preset)
-        else { return nil }
-        return Self.snapshot(fromPresetState: state)
+        presetStore.snapshot(forUserPresetNamed: name)
     }
 
     @discardableResult
     func saveCurrentAsUserPreset(named name: String) -> PresetSaveResult {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return .emptyName }
-        guard !userPresetBackend.all.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame })
-        else { return .duplicateName }
-
-        let preset = AUAudioUnitPreset()
-        preset.name = trimmed
-        do {
-            // Saves `self.fullState` exactly as it stands right now —
-            // `monkParams` AND `characterID` together, with no separate
-            // "gather the current state" step of our own to keep in sync
-            // with `fullState`'s own shape.
-            try userPresetBackend.save(preset)
-            return .success
-        } catch {
-            return .failed
+        let result = presetStore.saveCurrentAsUserPreset(named: name)
+        if result == .success {
+            mirrorSaveToNativeUserPresets(named: name.trimmingCharacters(in: .whitespacesAndNewlines))
         }
+        return result
     }
 
     func deleteUserPreset(named name: String) {
+        presetStore.deleteUserPreset(named: name)
+        mirrorDeleteToNativeUserPresets(named: name)
+    }
+
+    /// Best-effort mirror of a successful canonical save into `AUAudioUnit`'s
+    /// own native user-preset storage, so a host's own preset UI
+    /// (`userPresets`) lists it too. `userPresetBackend.save` captures
+    /// `self.fullState` exactly as it stands right now (see
+    /// `NativeUserPresetBackend`/`FakeUserPresetBackend`'s own doc comments)
+    /// — the same live state `presetStore.saveCurrentAsUserPreset` (called
+    /// moments earlier, same thread, nothing in between could have changed
+    /// it) already captured into the canonical store, so the two stay in
+    /// sync. A failure here is logged, not propagated: the caller already
+    /// has `.success` from the store that actually makes the preset visible
+    /// across containers, which is the save that matters most.
+    private func mirrorSaveToNativeUserPresets(named name: String) {
+        let preset = AUAudioUnitPreset()
+        preset.name = name
+        do {
+            try userPresetBackend.save(preset)
+        } catch {
+            NSLog("MonkSynth: failed to mirror user preset '\(name)' into host-visible userPresets: \(error)")
+        }
+    }
+
+    /// Best-effort mirror of a delete. A no-op if the native side never had
+    /// this name (e.g. an earlier mirror-save failed) — matching
+    /// `deleteUserPreset`'s own "deleting an unknown name is a no-op, not a
+    /// crash" contract.
+    private func mirrorDeleteToNativeUserPresets(named name: String) {
         guard let preset = userPresetBackend.all.first(where: { $0.name == name }) else { return }
-        try? userPresetBackend.delete(preset)
+        do {
+            try userPresetBackend.delete(preset)
+        } catch {
+            NSLog("MonkSynth: failed to mirror delete of user preset '\(name)' from host-visible userPresets: \(error)")
+        }
     }
 
     /// Unpacks a preset-state dictionary — whatever `presetState(for:)`
