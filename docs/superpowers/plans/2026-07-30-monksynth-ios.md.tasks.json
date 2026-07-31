@@ -83,7 +83,7 @@
     {
       "id": 19,
       "subject": "Task 8: Theme and responsive container",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** PluginView lays out the three zones - Stage, Pad, Controls - stacking in portrait and splitting in landscape, driven by aspect ratio rather than device class. Depends on Tasks 9 and 11; do not stub them.\n\n**Files:**\n- Create: AU/UI/PluginView.swift\n- Create: Tests/MonkSynthTests/LayoutTests.swift\n\n**Acceptance Criteria:**\n- [ ] Aspect ratio < 1.0 stacks vertically; >= 1.0 splits horizontally\n- [ ] Landscape lays out the control strip; portrait shows only the drawer handle\n- [ ] Below 260pt of height the Stage collapses to zero and the Pad keeps at least 120pt\n- [ ] No zone ever has a negative or NaN frame at any tested size\n\n**Verify:** scripts/test.sh MonkSynthTests/LayoutTests -> `Executed 4 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 8.\n\n```json:metadata\n{\"files\": [\"AU/UI/PluginView.swift\", \"Tests/MonkSynthTests/LayoutTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/LayoutTests\", \"acceptanceCriteria\": [\"Aspect ratio < 1.0 stacks vertically; >= 1.0 splits horizontally\", \"Landscape lays out the control strip; portrait shows only the drawer handle\", \"Below 260pt of height the Stage collapses to zero and the Pad keeps at least 120pt\", \"No zone ever has a negative or NaN frame at any tested size\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         17,
@@ -102,7 +102,7 @@
     {
       "id": 21,
       "subject": "Task 12: Wire the editor to the audio unit",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** AudioUnitViewController binds the UI to the AU in both directions - touches write parameters, host automation moves the knobs, and the monk animates from render-thread publications.\n\n**Files:**\n- Modify: AU/AudioUnitViewController.swift\n- Modify: AU/UI/PluginView.swift (stage becomes MonkView)\n- Create: Tests/MonkSynthTests/EditorBindingTests.swift\n\n**Acceptance Criteria:**\n- [ ] Pad and knob changes call AUParameter.setValue(_:originator:) so the host records them\n- [ ] Host-side parameter changes update the matching knob without feeding back into the AU\n- [ ] The monk's vowel/amplitude/active come from MonkSynthAU.uiVowel/uiAmplitude/uiNoteActive, never the engine\n- [ ] The parameter observer token is removed on deinit\n- [ ] preferredContentSize is 480x320 and the view survives any host-supplied rect\n\n**Verify:** scripts/test.sh MonkSynthTests/EditorBindingTests -> `Executed 3 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 12.\n\n```json:metadata\n{\"files\": [\"AU/AudioUnitViewController.swift\", \"AU/UI/PluginView.swift\", \"Tests/MonkSynthTests/EditorBindingTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/EditorBindingTests\", \"acceptanceCriteria\": [\"Pad and knob changes call AUParameter.setValue(_:originator:) so the host records them\", \"Host-side parameter changes update the matching knob without feeding back into the AU\", \"The monk's vowel/amplitude/active come from MonkSynthAU.uiVowel/uiAmplitude/uiNoteActive, never the engine\", \"The parameter observer token is removed on deinit\", \"preferredContentSize is 480x320 and the view survives any host-supplied rect\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         15,
@@ -113,7 +113,7 @@
     {
       "id": 22,
       "subject": "Task 13: Standalone host app",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** The container app runs the same UI over an AVAudioEngine source node, accepts CoreMIDI and Bluetooth MIDI input, and keeps playing in the background.\n\n**Files:**\n- Modify: Host/MonkSynthApp.swift\n- Create: Host/LocalEngine.swift\n- Create: Host/MIDIInput.swift\n- Create: Host/RootViewController.swift\n\n**Acceptance Criteria:**\n- [ ] Audio session category .playback with .mixWithOthers so it coexists with AUM\n- [ ] AVAudioSourceNode renders from the same RenderContext used by the AUv3\n- [ ] CoreMIDI input from any connected source drives notes and CCs\n- [ ] Bluetooth MIDI devices connect via CABTMIDICentralViewController\n- [ ] No microphone permission is requested - this is a synth with no audio input\n\n**Verify:** scripts/build_sim.sh -> `** BUILD SUCCEEDED **`, then launch in the simulator and confirm the pad sounds and the mouth moves\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 13.\n\n```json:metadata\n{\"files\": [\"Host/LocalEngine.swift\", \"Host/MIDIInput.swift\", \"Host/RootViewController.swift\", \"Host/MonkSynthApp.swift\"], \"verifyCommand\": \"scripts/build_sim.sh\", \"acceptanceCriteria\": [\"Audio session category .playback with .mixWithOthers so it coexists with AUM\", \"AVAudioSourceNode renders from the same RenderContext used by the AUv3\", \"CoreMIDI input from any connected source drives notes and CCs\", \"Bluetooth MIDI devices connect via CABTMIDICentralViewController\", \"No microphone permission is requested - this is a synth with no audio input\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         21
@@ -122,7 +122,7 @@
     {
       "id": 23,
       "subject": "Task 14: Localization and about screen",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** English, Japanese and Korean strings, plus an about screen carrying the MIT notice and credit to Jonathan Taylor.\n\n**Files:**\n- Create: AU/Resources/{en,ja,ko}.lproj/Localizable.strings\n- Create: AU/UI/AboutView.swift\n- Modify: AU/UI/PluginView.swift, AU/AudioUnitViewController.swift, Host/RootViewController.swift, project.yml\n- Create: Tests/MonkSynthTests/LocalizationTests.swift\n\n**Acceptance Criteria:**\n- [ ] All three .lproj bundles carry the same key set\n- [ ] The about screen shows the MIT notice, 'Copyright (c) 2026 Jonathan Taylor', and a link to the upstream repository\n- [ ] The Delay Lama reference appears exactly once, as a factual 'inspired by' line\n- [ ] An info button opens the about screen; tapping outside dismisses it\n\n**Verify:** scripts/test.sh MonkSynthTests/LocalizationTests -> `Executed 2 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 14.\n\n```json:metadata\n{\"files\": [\"AU/Resources/en.lproj/Localizable.strings\", \"AU/Resources/ja.lproj/Localizable.strings\", \"AU/Resources/ko.lproj/Localizable.strings\", \"AU/UI/AboutView.swift\", \"Tests/MonkSynthTests/LocalizationTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/LocalizationTests\", \"acceptanceCriteria\": [\"All three .lproj bundles carry the same key set\", \"The about screen shows the MIT notice, 'Copyright (c) 2026 Jonathan Taylor', and a link to the upstream repository\", \"The Delay Lama reference appears exactly once, as a factual 'inspired by' line\", \"An info button opens the about screen; tapping outside dismisses it\"], \"modelTier\": \"mechanical\"}\n```",
       "blockedBy": [
         21,
@@ -143,12 +143,12 @@
     {
       "id": 25,
       "subject": "Task 16: TestFlight deployment",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** A one-command archive-and-upload path, and the App Store Connect records that make the first upload possible.\n\n**Files:**\n- Create: scripts/deploy_testflight.sh\n- Create: scripts/.deploy.local.example\n- Modify: .gitignore\n- Create: docs/RELEASE.md\n\n**Acceptance Criteria:**\n- [ ] App IDs com.vestal.monksynth and com.vestal.monksynth.AU registered\n- [ ] An App Store Connect app record exists for com.vestal.monksynth\n- [ ] deploy_testflight.sh archives, exports and uploads with a unique build number\n- [ ] scripts/.deploy.local is gitignored\n- [ ] The build appears in TestFlight without asking the encryption question\n\n**Verify:** scripts/deploy_testflight.sh -> ends with `uploaded build <n> to TestFlight`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 16.\n\n```json:metadata\n{\"files\": [\"scripts/deploy_testflight.sh\", \"scripts/.deploy.local.example\", \".gitignore\", \"docs/RELEASE.md\"], \"verifyCommand\": \"scripts/deploy_testflight.sh\", \"acceptanceCriteria\": [\"App IDs com.vestal.monksynth and com.vestal.monksynth.AU registered\", \"An App Store Connect app record exists for com.vestal.monksynth\", \"deploy_testflight.sh archives, exports and uploads with a unique build number\", \"scripts/.deploy.local is gitignored\", \"The build appears in TestFlight without asking the encryption question\"], \"modelTier\": \"mechanical\"}\n```",
       "blockedBy": [
         24
       ]
     }
   ],
-  "lastUpdated": "2026-07-31T05:52:09.731720+02:00"
+  "lastUpdated": "2026-07-31T08:45:12.322235+02:00"
 }
