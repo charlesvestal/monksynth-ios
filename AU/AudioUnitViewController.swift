@@ -149,12 +149,19 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
                 self?.pluginView.stage.character = CharacterRegistry.character(withID: id)
             }
         }
-        // UI -> AU: the user changed the character — an arrow step or a
-        // picker selection (see `CharacterView.onCharacterSelected`'s doc
-        // comment for why there is only one callback now, not a
-        // persist-the-id one and a separate load-the-voice one gated on
-        // which gesture fired). Every change persists the id AND loads the
-        // voice; writes go through the parameter tree with
+        // UI -> AU: the user changed the character — an arrow step, or a
+        // dropdown selection of either a built-in or a saved user entry
+        // (see `CharacterView.onCharacterSelected`'s doc comment for why
+        // there is only one callback now, not a persist-the-id one and a
+        // separate load-the-voice one gated on which gesture fired). Every
+        // change persists the FACE id (`character.faceID`, never
+        // `character.id` — see `MonkSynthAU.setCharacterID`'s doc comment
+        // for why a saved entry's own unique id must never reach there) AND
+        // loads the matching sound: a saved entry's own `savedParameters`
+        // when it has one (a `UserCharacter` — its saved patch is the whole
+        // point, never the face's built-in voice), otherwise
+        // `CharacterVoiceTable.voice(for:)` exactly as before this task.
+        // Writes go through the parameter tree with
         // `setValue(_:originator:)` — never straight into the shadow — so
         // the host sees and can undo each of the 15 parameter changes,
         // exactly like a knob edit or a preset load. `originator: nil` (not
@@ -168,9 +175,10 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
         // resync the UI" situation.
         pluginView.stage.onCharacterSelected = { [weak self] character in
             guard let self else { return }
-            self.au?.setCharacterID(character.id)
+            self.au?.setCharacterID(character.faceID)
             guard let tree = self.au?.parameterTree else { return }
-            for (param, value) in CharacterVoiceTable.voice(for: character) {
+            let values = character.savedParameters ?? CharacterVoiceTable.voice(for: character)
+            for (param, value) in values {
                 tree.parameter(withAddress: param.rawValue)?.setValue(value, originator: nil)
             }
         }
@@ -186,33 +194,17 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
             self?.extensionContext?.open(url, completionHandler: nil)
         }
 
-        // Presets: `MonkSynthAU` itself is the `PresetStoring` conformer —
-        // it already carries `saveCurrentAsUserPreset`/`snapshot(forUserPresetNamed:)`/
-        // `deleteUserPreset`/`savedUserPresets` (backed by `AUAudioUnit`'s
-        // native user-preset API).
+        // User presets: `MonkSynthAU` itself is the `PresetStoring`
+        // conformer — it already carries `saveCurrentAsUserPreset`/
+        // `snapshot(forUserPresetNamed:)`/`deleteUserPreset`/
+        // `savedUserPresets` (backed by the shared App Group store, mirrored
+        // into `AUAudioUnit`'s native user-preset API). `CharacterDropdownView`
+        // is the only place that lists, saves, and deletes them now — there
+        // is no separate presets overlay to wire up. Upstream's six factory
+        // presets stay reachable through `MonkSynthAU.factoryPresets`/
+        // `currentPreset` for a HOST's own preset UI (see that AU's own doc
+        // comment); this app's UI simply doesn't surface them any more.
         pluginView.presetStore = au
-        // Factory presets: reuse the EXISTING, already-tested mechanism
-        // (`MonkSynthAU.currentPreset`) rather than re-deriving anything —
-        // sound only, no character (factory presets predate the character
-        // feature and carry none).
-        pluginView.onApplyFactoryPreset = { [weak self] index in
-            guard let self, let presets = self.au?.factoryPresets, index >= 0, index < presets.count else { return }
-            self.au?.currentPreset = presets[index]
-        }
-        // User presets: apply through `fullState`, exactly like a session
-        // restore — that setter already pushes every parameter through the
-        // tree (refreshing the knobs via `bind()`'s own observer, since the
-        // write's `originator` is nil) AND resolves `characterID` through
-        // `CharacterRegistry` (falling back to monk for an id the roster no
-        // longer recognises) before firing `onCharacterIDChange`, which
-        // updates `pluginView.stage.character` above. Nothing else needs to
-        // be touched by hand.
-        pluginView.onApplyUserPreset = { [weak self] snapshot in
-            self?.au?.fullState = [
-                "monkParams": snapshot.params.withUnsafeBufferPointer { Data(buffer: $0) },
-                "characterID": snapshot.characterID,
-            ]
-        }
     }
 
     private func startUILink() {

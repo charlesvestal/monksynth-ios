@@ -51,8 +51,16 @@ final class RootViewController: UIViewController {
                 return PresetSnapshot(params: Param.allCases.map(\.defaultValue),
                                        characterID: CharacterRegistry.defaultCharacter.id)
             }
+            // `.faceID`, not `.id`: when the currently-showing character is
+            // itself a saved user entry (`UserCharacter`), its own `id` is
+            // a namespaced, non-built-in string ("user:My Patch") that
+            // `CharacterRegistry` could never resolve back — `.faceID` is
+            // always the real built-in face it should be saved under,
+            // exactly `PresetSnapshot.characterID`'s contract. For a
+            // built-in character `.faceID` is just its own `.id`, so this
+            // is unchanged from before this task for that case.
             return PresetSnapshot(params: Param.allCases.map { self.audio.value(of: $0) },
-                                   characterID: self.pluginView.stage.character.id)
+                                   characterID: self.pluginView.stage.character.faceID)
         })
         Self.migrateLegacyStandalonePresetsIfNeeded(into: store)
         return store
@@ -148,21 +156,33 @@ final class RootViewController: UIViewController {
         // or if a character was ever renamed/removed.
         let storedID = UserDefaults.standard.string(forKey: Self.characterIDDefaultsKey)
         pluginView.stage.character = CharacterRegistry.character(withID: storedID)
-        // The user changed the character — an arrow step or a picker
-        // selection — so it both persists AND loads its voice, always; see
-        // `CharacterView.onCharacterSelected`'s doc comment for why there is
-        // only one callback now. There's no `AUParameterTree`/host to record
-        // the change here — same as every other UI write in the standalone
-        // app (see `pad`/`controls`' `onParameterChange` just above), this
-        // goes straight into `LocalEngine`'s shadow. It also has to
-        // explicitly push each value into `pluginView.controls` afterward,
-        // mirroring `MIDIInput`'s CC and pitch-bend handlers just below:
-        // unlike the AUv3 path, nothing here observes the shadow and
-        // refreshes the knobs automatically.
+        // The user changed the character — an arrow step, or a dropdown
+        // selection of either a built-in or a saved user entry — so it both
+        // persists AND loads its sound, always; see `CharacterView.
+        // onCharacterSelected`'s doc comment for why there is only one
+        // callback now. `character.faceID` (never `.id`) is what gets
+        // persisted: a saved user entry's own `.id` is a namespaced,
+        // non-built-in string `CharacterRegistry.character(withID:)` could
+        // never resolve back on the next launch's seed below, so this keeps
+        // the persisted value a real built-in face id in every case — the
+        // same "always a real built-in id" invariant `MonkSynthAU.
+        // setCharacterID` now documents on the AUv3 side. `character.
+        // savedParameters` (non-nil only for a `UserCharacter`) is what
+        // actually loads: the saved patch itself, never the face's built-in
+        // voice — falling back to `CharacterVoiceTable.voice(for:)` for
+        // every built-in exactly as before this task. There's no
+        // `AUParameterTree`/host to record the change here — same as every
+        // other UI write in the standalone app (see `pad`/`controls`'
+        // `onParameterChange` just above), this goes straight into
+        // `LocalEngine`'s shadow. It also has to explicitly push each value
+        // into `pluginView.controls` afterward, mirroring `MIDIInput`'s CC
+        // and pitch-bend handlers just below: unlike the AUv3 path, nothing
+        // here observes the shadow and refreshes the knobs automatically.
         pluginView.stage.onCharacterSelected = { [weak self] character in
             guard let self else { return }
-            UserDefaults.standard.set(character.id, forKey: Self.characterIDDefaultsKey)
-            for (param, value) in CharacterVoiceTable.voice(for: character) {
+            UserDefaults.standard.set(character.faceID, forKey: Self.characterIDDefaultsKey)
+            let values = character.savedParameters ?? CharacterVoiceTable.voice(for: character)
+            for (param, value) in values {
                 self.audio.setParameter(param, value)
                 self.pluginView.controls.setValue(value, for: param)
             }
@@ -284,50 +304,15 @@ final class RootViewController: UIViewController {
         pluginView.showsBluetoothOption = true
         pluginView.onOpenURL = { url in UIApplication.shared.open(url) }
         pluginView.onBluetoothMIDI = { [weak self] in self?.presentBluetoothMIDI() }
-        wirePresets()
-    }
-
-    // MARK: - Presets
-
-    /// Equivalent behaviour to `AudioUnitViewController.bind()`'s own
-    /// presets wiring, backed by `presetStore` (this app's own storage)
-    /// instead of `MonkSynthAU`'s native `AUAudioUnit` machinery — see that
-    /// property's doc comment. There is no `AUParameterTree`/host to record
-    /// automation to here, same as every other UI write in this file (the
-    /// pad/knobs above, the character selector's voice load): writes go
-    /// straight into `LocalEngine`'s shadow, and each on-screen knob is
-    /// pushed explicitly since nothing observes the shadow and refreshes
-    /// them automatically the way the AUv3's parameter-tree observer does.
-    private func wirePresets() {
+        // User presets: `presetStore` (this app's own App-Group-backed
+        // storage — see that property's doc comment) is handed straight to
+        // `pluginView`, exactly like `AudioUnitViewController.bind()` hands
+        // over its `MonkSynthAU`. `CharacterDropdownView` is the only place
+        // that lists, saves, and deletes saved entries now — selecting one
+        // is handled uniformly with a built-in character by `bind()`'s own
+        // `onCharacterSelected` closure above (via `Character.
+        // savedParameters`), so there is nothing else to wire here.
         pluginView.presetStore = presetStore
-
-        pluginView.onApplyFactoryPreset = { [weak self] index in
-            guard let self, index >= 0, index < kFactoryPresets.count else { return }
-            for (i, v) in kFactoryPresets[index].values.enumerated() {
-                guard let param = Param(rawValue: UInt64(i)) else { continue }
-                self.audio.setParameter(param, v)
-                self.pluginView.controls.setValue(v, for: param)
-            }
-        }
-
-        pluginView.onApplyUserPreset = { [weak self] snapshot in
-            guard let self else { return }
-            for (i, v) in snapshot.params.enumerated() {
-                guard let param = Param(rawValue: UInt64(i)) else { continue }
-                self.audio.setParameter(param, v)
-                self.pluginView.controls.setValue(v, for: param)
-            }
-            // Direct assignment, not `pluginView.stage.select(_:)`: this
-            // updates the picture/name only, without also replaying
-            // `CharacterVoiceTable`'s voice for it — the preset's own saved
-            // params (just applied above) are what should actually sound,
-            // exactly the same reasoning `AudioUnitViewController`'s
-            // `au.onCharacterIDChange` handler already relies on for a
-            // restored session.
-            let character = CharacterRegistry.character(withID: snapshot.characterID)
-            self.pluginView.stage.character = character
-            UserDefaults.standard.set(character.id, forKey: Self.characterIDDefaultsKey)
-        }
     }
 
     func presentBluetoothMIDI() {
