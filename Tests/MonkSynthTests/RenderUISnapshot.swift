@@ -315,9 +315,11 @@ final class RenderUISnapshot: XCTestCase {
     /// failed at (they vanished entirely once the stage collapsed there).
     /// Rendered at full-UI scale the header is too small in a screenshot to
     /// judge legibility/collision, so this crops in. Required visual check:
-    /// confirm the name is legible, the ‹/⌄/› glyphs are unambiguous, and
-    /// nothing collides with the info button — at every size, not just the
-    /// roomy ones.
+    /// confirm the selector reads as a quiet, centred label — no pill, no
+    /// border, subtle/dim text, thin small arrows — and that nothing
+    /// collides with the info button, at every size, not just the roomy
+    /// ones. See `testWriteCharacterSelectorLongNameCloseup` for the same
+    /// check with a name well beyond today's roster.
     func testWriteCharacterSelectorCloseup() throws {
         let sizes: [(String, CGSize)] = [
             ("AUM strip 375x180", CGSize(width: 375, height: 180)),
@@ -365,7 +367,58 @@ final class RenderUISnapshot: XCTestCase {
         print("SNAPSHOT_WRITTEN /tmp/ui_characterselector.png bytes=\(data.count)")
     }
 
-    /// The character dropdown overlay (opened from the selector's `⌄`): a
+    /// Same close-up, but with `characterSelector.characterName` overridden
+    /// to "Opera Singer" — well beyond any of today's six roster names
+    /// ("Monk", "Fish", "Cow", ...) — standing in for a future roster entry.
+    /// Required visual check, called out by name in the task: proves the
+    /// collision handling actually holds for a long name, not just that the
+    /// pure layout math (`LayoutTests`) says it should. At 375×180 the name
+    /// is expected to visibly truncate rather than grow the selector into
+    /// `infoButton`.
+    func testWriteCharacterSelectorLongNameCloseup() throws {
+        let sizes: [(String, CGSize)] = [
+            ("AUM strip 375x180", CGSize(width: 375, height: 180)),
+            ("portrait 390x844", CGSize(width: 390, height: 844)),
+            ("landscape 844x390", CGSize(width: 844, height: 390)),
+        ]
+        let gap: CGFloat = 16
+        let label: CGFloat = 18
+        let margin: CGFloat = 12
+
+        var crops: [(String, UIImage)] = []
+        for (name, size) in sizes {
+            let view = PluginView(frame: CGRect(origin: .zero, size: size))
+            view.characterSelector.characterName = "Opera Singer"
+            view.setNeedsLayout(); view.layoutIfNeeded()
+            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
+            let bandHeight = max(l.characterSelector.maxY, l.infoButton.maxY) + margin
+            let cropRect = CGRect(x: 0, y: 0, width: size.width, height: min(size.height, bandHeight))
+            crops.append((name, crop(view, to: cropRect)))
+        }
+
+        let sheetW = (crops.map(\.1.size.width).max() ?? 0) + gap * 2
+        let sheetH = crops.reduce(0) { $0 + $1.1.size.height + gap + label } + gap
+        let sheet = CGSize(width: sheetW, height: sheetH)
+        let renderer = UIGraphicsImageRenderer(size: sheet)
+        let image = renderer.image { ctx in
+            UIColor(white: 0.06, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: sheet))
+            var y = gap
+            for (name, img) in crops {
+                img.draw(at: CGPoint(x: gap, y: y + label))
+                (name as NSString).draw(
+                    at: CGPoint(x: gap, y: y),
+                    withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                                     .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+                y += img.size.height + gap + label
+            }
+        }
+        let data = try XCTUnwrap(image.pngData())
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_characterselector_longname.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_characterselector_longname.png bytes=\(data.count)")
+    }
+
+    /// The character dropdown overlay (opened by tapping the selector's name): a
     /// normal-height standalone render, the same overlay embedded in a full
     /// `PluginView` (so the scrim/panel read correctly against the rest of
     /// the UI), and — the specific failure mode the old character-art grid

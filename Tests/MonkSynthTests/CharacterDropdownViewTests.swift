@@ -2,8 +2,8 @@ import XCTest
 import UIKit
 @testable import MonkSynth
 
-/// Covers `CharacterDropdownView` — the plain-text-list overlay
-/// `CharacterSelector`'s `⌄` opens, replacing the old character-art grid
+/// Covers `CharacterDropdownView` — the plain-text-list overlay tapping
+/// `CharacterSelector`'s name opens, replacing the old character-art grid
 /// (`CharacterPickerView`) — plus `PluginView`'s wiring of it (opening from
 /// the selector, applying and dismissing on a row tap). `CharacterDropdownRow`
 /// is private to `CharacterDropdownView.swift`, so these tests reach it the
@@ -142,8 +142,8 @@ final class CharacterDropdownViewTests: XCTestCase {
 
     // MARK: - PluginView wiring
 
-    /// Opening the dropdown via the character selector's `⌄` (the same
-    /// route `CharacterSelector.onOpenDropdown` fires from a tap or a
+    /// Opening the dropdown by tapping the character selector's name (the
+    /// same route `CharacterSelector.onOpenDropdown` fires from a tap or a
     /// VoiceOver double-tap) presents it as a subview of `PluginView`.
     func testOpeningTheSelectorsDropdownPresentsCharacterDropdownViewAsPluginViewSubview() {
         let view = PluginView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
