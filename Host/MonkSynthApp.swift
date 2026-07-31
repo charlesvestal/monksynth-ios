@@ -1,19 +1,14 @@
 import UIKit
 
+/// Reduced to the scene-configuration hook now that window/root-view-controller
+/// setup lives in `SceneDelegate`, per the `UIScene` lifecycle adopted via
+/// `Host/Info.plist`'s `UIApplicationSceneManifest`.
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
-    var window: UIWindow?
 
     func application(_ application: UIApplication,
-                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Proves the vendored C is reachable from Swift in the app target.
-        let engine = monk_synth_new(44100)
-        monk_synth_free(engine)
-
-        let w = UIWindow(frame: UIScreen.main.bounds)
-        w.rootViewController = UIViewController()
-        w.makeKeyAndVisible()
-        window = w
-        return true
+                      configurationForConnecting connectingSceneSession: UISceneSession,
+                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
     }
 }
