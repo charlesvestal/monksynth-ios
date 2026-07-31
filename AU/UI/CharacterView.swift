@@ -263,35 +263,21 @@ final class CharacterView: UIView {
         drawMouth(in: stage, vowel: Self.quantisedVowel(pose.vowel))
     }
 
-    private func point(_ fx: CGFloat, _ fy: CGFloat, in stage: CGRect) -> CGPoint {
-        CGPoint(x: stage.minX + fx * stage.width, y: stage.minY + fy * stage.height)
-    }
-
-    /// Draws the mouth aperture on every character's behalf, from its
-    /// `mouthShape`/`mouthCentre`/`mouthBoxFraction`. Shared, not
-    /// per-character: the aperture is always a plain dark oval — a "hole"
-    /// reading as an open mouth against any character's face — so a
-    /// character wanting a distinctive fixed mouth *frame* (the fish's
-    /// prominent lips, the old man's beard) draws that fixed part itself in
-    /// `drawBody`, and this composites the moving aperture on top of it.
+    /// Computes the stepped amplitude swell and hands off to
+    /// `character.drawMouth` — the character's own behalf, not this view's:
+    /// a drawn character (`Character`'s default `drawMouth` implementation)
+    /// paints a plain dark oval sized from `mouthShape`/`mouthCentre`/
+    /// `mouthBoxFraction`, while an image-backed one (`SpriteCharacter`)
+    /// composites a mouth frame instead. `CharacterView` deliberately knows
+    /// nothing about which kind of character it's holding — see
+    /// `Character.drawMouth`'s doc comment.
     private func drawMouth(in stage: CGRect, vowel: Float) {
-        let shape = character.mouthShape(vowel: vowel)
         // Step the amplitude swell too. A continuously-scaling mouth would
         // reintroduce exactly the glide that quantising the vowel removes —
         // the whole point is that the character moves in frames.
         let ampSteps: Float = 4
         let amp = (min(max(amplitude, 0), 1) * ampSteps).rounded() / ampSteps
         let ampBoost = 1 + CGFloat(amp) * 0.35
-        let box = stage.width * character.mouthBoxFraction
-        let w = box * shape.w
-        let h = box * shape.h * ampBoost
-        let c = point(character.mouthCentre.fx, character.mouthCentre.fy, in: stage)
-
-        let mouth = UIBezierPath(ovalIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h))
-        Theme.background.setFill()
-        mouth.fill()
-        Theme.robeShadow.withAlphaComponent(0.5).setStroke()
-        mouth.lineWidth = stage.width * 0.008
-        mouth.stroke()
+        character.drawMouth(in: stage, vowel: vowel, amplitudeBoost: ampBoost)
     }
 }
