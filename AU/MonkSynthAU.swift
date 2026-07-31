@@ -29,7 +29,11 @@ public final class MonkSynthAU: AUAudioUnit {
     let shadow = param_shadow_new()!
     private var _parameterTree: AUParameterTree!
     private var outputBusArray: AUAudioUnitBusArray!
-    private var renderContext: RenderContext!
+    // Constructed eagerly, not lazily in allocateRenderResources: the render
+    // block force-unwraps this, and a host that touches internalRenderBlock
+    // before allocating would otherwise trap the whole process. Costs nothing —
+    // `engine` starts nil and every method already guards on it.
+    private lazy var renderContext = RenderContext(shadow: shadow)
 
     public override init(componentDescription: AudioComponentDescription,
                          options: AudioComponentInstantiationOptions = []) throws {
@@ -95,12 +99,11 @@ public final class MonkSynthAU: AUAudioUnit {
 
     public override func allocateRenderResources() throws {
         try super.allocateRenderResources()
-        if renderContext == nil { renderContext = RenderContext(shadow: shadow) }
         renderContext.createEngine(sampleRate: outputBusses[0].format.sampleRate)
     }
 
     public override func deallocateRenderResources() {
-        renderContext?.destroyEngine()
+        renderContext.destroyEngine()
         super.deallocateRenderResources()
     }
 
@@ -108,7 +111,7 @@ public final class MonkSynthAU: AUAudioUnit {
 
     public override var internalRenderBlock: AUInternalRenderBlock {
         // Captured once — no ARC traffic or optional unwrapping per block.
-        let ctx = renderContext!
+        let ctx = renderContext
         let shadowPtr = shadow
         var wheelTargets = [(ParameterAddress, Float)]()
         wheelTargets.reserveCapacity(2)
@@ -158,7 +161,7 @@ public final class MonkSynthAU: AUAudioUnit {
     }
 
     /// Live animation data for the editor. Main-thread reads of render-thread writes.
-    var uiVowel: Float     { renderContext?.uiVowel.pointee ?? 0.5 }
-    var uiAmplitude: Float { renderContext?.uiAmplitude.pointee ?? 0 }
-    var uiNoteActive: Bool { (renderContext?.uiActive.pointee ?? 0) != 0 }
+    var uiVowel: Float     { renderContext.uiVowel.pointee }
+    var uiAmplitude: Float { renderContext.uiAmplitude.pointee }
+    var uiNoteActive: Bool { renderContext.uiActive.pointee != 0 }
 }
