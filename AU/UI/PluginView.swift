@@ -5,24 +5,42 @@ struct ZoneLayout: Equatable {
     var stage: CGRect
     var pad: CGRect
     var controls: CGRect
+
+    /// The drawer handle's tap target. Always derived from `controls.minY`
+    /// — see `PluginView.handleFrame(for:)` — never from `controls.maxY`,
+    /// which is pinned to the bottom of the view and identical whether the
+    /// drawer is open or closed.
+    var handle: CGRect
 }
 
 /// The responsive three-zone container: Stage (the selected character), Pad
 /// (the XY performance surface), and Controls (the five-page knob strip).
 ///
-/// The control strip is always laid out, in both orientations — no drawer,
-/// no tap-to-reveal. Portrait stacks the three zones vertically (stage / pad
-/// / strip); landscape splits Stage and Pad side by side above the strip.
+/// The control strip is a collapsible drawer, in both orientations,
+/// defaulting to OPEN — the user asked for controls to be visible by
+/// default; collapsing is something they reach for, not the starting state.
+/// Portrait stacks the three zones vertically (stage / pad / strip);
+/// landscape splits Stage and Pad side by side above the strip. Either way
+/// the strip is pinned to the bottom of the view, so closing it grows the
+/// Pad (and, at short heights, the Stage) into the reclaimed space.
 ///
-/// The strip gets `Theme.stripHeight` when there's room. When there isn't,
-/// it shrinks, but never below `Theme.minUsableStripHeight` — the height
-/// below which `ControlPages` can no longer draw an actual knob — as long as
-/// there is at least that much room to give it; only a truly degenerate host
-/// rect (smaller than the floor itself) forces it any shorter. The Stage
-/// yields space first (see `portraitLayout`/`landscapeLayout`), then the Pad
-/// takes whatever is left; the Pad can end up below `Theme.minPadHeight` at
-/// extreme sizes, which is an acceptable trade against ever hiding the
-/// controls.
+/// A drawer shipped here once before and was reported as unreachable/dead:
+/// the handle's hit region was anchored to `controls.maxY`, which — because
+/// the strip is bottom-pinned — never changes between open and closed, so
+/// the handle never visibly moved and nothing signalled it could be
+/// dragged. This version anchors the handle to `controls.minY`, the edge
+/// that actually travels; see `handleFrame(for:)`.
+///
+/// The strip gets `Theme.stripHeight` when open and there's room. When
+/// there isn't, it shrinks, but never below `Theme.minUsableStripHeight` —
+/// the height below which `ControlPages` can no longer draw an actual
+/// knob — as long as there is at least that much room to give it; only a
+/// truly degenerate host rect (smaller than the floor itself) forces it any
+/// shorter. Closed, the strip is zero-height; only the handle draws. The
+/// Stage yields space first (see `portraitLayout`/`landscapeLayout`), then
+/// the Pad takes whatever is left; the Pad can end up below
+/// `Theme.minPadHeight` at extreme sizes, which is an acceptable trade
+/// against ever hiding the controls entirely when the drawer is open.
 ///
 /// The split is chosen by aspect ratio (`inner.width >= inner.height`), not
 /// device idiom, because an AUv3 host can hand this view any rect at all —
@@ -64,6 +82,43 @@ final class PluginView: UIView {
     /// Minimum tap target per Apple's HIG.
     static let infoButtonSize: CGFloat = 44
 
+    /// Whether the control drawer is expanded. Defaults to `true`: the user
+    /// asked for controls visible by default, with collapsing as something
+    /// they opt into, not the starting state.
+    private(set) var drawerOpen = true
+
+    /// The actual tap target for opening/closing the drawer. Deliberately
+    /// much larger than the visible pill (`drawerHandleBar`) it contains: a
+    /// tap target has to clear Apple's 44pt HIG minimum in both dimensions,
+    /// which a thin bar alone cannot. This view stays transparent; only
+    /// `drawerHandleBar` (and the chevron inside it) draws anything.
+    private let drawerHandle = UIView()
+
+    /// The small visible pill inside `drawerHandle`. Non-interactive — the
+    /// tap gesture lives on `drawerHandle` itself — this view exists only
+    /// so there's something to look at where the much-larger invisible hit
+    /// region actually is.
+    private let drawerHandleBar = UIView()
+
+    /// A chevron, not a featureless dash: the fact that a control can
+    /// move only shows up once you've already found it and dragged it, but
+    /// a glyph that flips direction with state (▾ open / ▴ closed) reads as
+    /// "tap here to move this" before the first tap. That was the actual
+    /// gap in the original report — the handle merely not moving was a
+    /// symptom, the deeper problem was nothing signalled it *could* move.
+    /// Purely decorative (`isUserInteractionEnabled = false`); no text
+    /// label per the design constraint — space at AUM strip sizes doesn't
+    /// have room for one anyway.
+    private let drawerHandleChevron = UIImageView()
+
+    /// Minimum tap target per Apple's HIG (both dimensions >= 44pt). The
+    /// visible pill stays small; only the invisible hit region around it
+    /// grows to this size.
+    static let drawerHitSize = CGSize(width: 60, height: 44)
+
+    /// The visible pill's own size, centred inside `drawerHitSize`.
+    private static let handlePillSize = CGSize(width: 44, height: 20)
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = Theme.background
@@ -77,14 +132,54 @@ final class PluginView: UIView {
         // Belt-and-suspenders: `controls`'s frame is always sized so
         // `ControlPages`'s own layout fits inside it (see
         // `controlStripHeight`), but clipping guards against it bleeding
-        // into the pad above at the smallest degenerate host rects a test
-        // might throw at it.
+        // into the pad above when the drawer is closed (zero height) or at
+        // the smallest degenerate host rects a test might throw at it.
         controls.clipsToBounds = true
 
+        installDrawerHandle()
         installInfoButton()
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    // MARK: - Drawer
+
+    private func installDrawerHandle() {
+        drawerHandle.backgroundColor = .clear
+        drawerHandle.isUserInteractionEnabled = true
+        drawerHandle.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(toggleDrawer)))
+        addSubview(drawerHandle)
+
+        drawerHandleBar.backgroundColor = Theme.panel
+        drawerHandleBar.layer.cornerRadius = Self.handlePillSize.height / 2
+        drawerHandleBar.layer.borderWidth = 1
+        drawerHandleBar.layer.borderColor = Theme.panelBorder.cgColor
+        drawerHandleBar.isUserInteractionEnabled = false
+        drawerHandle.addSubview(drawerHandleBar)
+
+        drawerHandleChevron.tintColor = Theme.textDim
+        drawerHandleChevron.contentMode = .center
+        drawerHandleChevron.isUserInteractionEnabled = false
+        drawerHandleBar.addSubview(drawerHandleChevron)
+        updateDrawerChevron()
+    }
+
+    @objc private func toggleDrawer() {
+        drawerOpen.toggle()
+        updateDrawerChevron()
+        UIView.animate(withDuration: 0.25) { self.setNeedsLayout(); self.layoutIfNeeded() }
+    }
+
+    /// Points down (▾, "tap to collapse") while open, up (▴, "tap to
+    /// expand") while closed — the chevron always points the direction the
+    /// handle itself is about to travel, mirroring how the system's own
+    /// pull-down/pull-up sheets signal direction.
+    private func updateDrawerChevron() {
+        let symbolName = drawerOpen ? "chevron.down" : "chevron.up"
+        let config = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
+        drawerHandleChevron.image = UIImage(systemName: symbolName, withConfiguration: config)
+    }
 
     // MARK: - About screen
 
@@ -139,36 +234,42 @@ final class PluginView: UIView {
     }
 
     /// Portrait stacks (stage / pad / strip); landscape splits (stage | pad)
-    /// above the strip. The strip is always laid out in both orientations —
-    /// see the class doc comment for the shrink-but-never-hide contract.
+    /// above the strip. The strip is a drawer in both orientations — see
+    /// the class doc comment for the open/closed contract.
     ///
     /// Pure and static so `LayoutTests` can exercise every corner of the
     /// arithmetic without instantiating any UIKit views.
+    /// - Parameter drawerOpen: whether the control strip is expanded.
+    ///   Defaults to `true` — controls are visible unless the caller
+    ///   explicitly asks for the collapsed layout.
     /// - Parameter safeArea: the view's `safeAreaInsets`. Critically this
     ///   includes the BOTTOM inset: on a device with a home indicator, the
-    ///   bottom ~34pt is a system gesture region, and controls placed there
-    ///   are unreachable — the system claims the touch before the app sees
-    ///   it. Reported from a device, back when the strip lived in a pull-up
-    ///   drawer: "control drawer can't be reached in portrait because of the
-    ///   home indicator". Defaults to `.zero` so pure layout tests can
-    ///   exercise the geometry without a real view.
-    static func layout(in bounds: CGRect, safeArea: UIEdgeInsets = .zero) -> ZoneLayout {
+    ///   bottom ~34pt is a system gesture region, and controls (or a handle)
+    ///   placed there are unreachable — the system claims the touch before
+    ///   the app sees it. Reported from a device, back when the strip lived
+    ///   in a pull-up drawer: "control drawer can't be reached in portrait
+    ///   because of the home indicator". Defaults to `.zero` so pure layout
+    ///   tests can exercise the geometry without a real view.
+    static func layout(in bounds: CGRect,
+                        drawerOpen: Bool = true,
+                        safeArea: UIEdgeInsets = .zero) -> ZoneLayout {
         let g = Theme.gutter
         let safe = bounds.inset(by: safeArea)
         let inner = safe.insetBy(dx: g, dy: g)
         guard inner.width > 0, inner.height > 0 else {
-            return ZoneLayout(stage: .zero, pad: .zero, controls: .zero)
+            return ZoneLayout(stage: .zero, pad: .zero, controls: .zero, handle: .zero)
         }
 
         let isWide = inner.width >= inner.height
         return isWide
-            ? landscapeLayout(inner: inner, gutter: g)
-            : portraitLayout(inner: inner, gutter: g)
+            ? landscapeLayout(inner: inner, gutter: g, drawerOpen: drawerOpen)
+            : portraitLayout(inner: inner, gutter: g, drawerOpen: drawerOpen)
     }
 
     /// The control strip's height for `available` total vertical space (the
     /// zone the strip shares with whatever sits above it, so `available - g`
-    /// is what's left over once the strip's own top gutter is reserved).
+    /// is what's left over once the strip's own top gutter is reserved),
+    /// while the drawer is OPEN.
     ///
     /// Prefers `Theme.stripHeight`. When the available space doesn't stretch
     /// that far, the strip still won't drop below `Theme.minUsableStripHeight`
@@ -186,6 +287,43 @@ final class PluginView: UIView {
         return max(0, min(floored, available))
     }
 
+    /// The strip's height for this layout pass: `controlStripHeight` while
+    /// the drawer is open, zero while it's closed. Zero rather than some
+    /// small "collapsed" height so closing the drawer actually gives the
+    /// reclaimed space back to the Pad (and, at short heights, the Stage)
+    /// — the whole point of being able to collapse it — and so `controls`,
+    /// which stays `clipsToBounds`, draws nothing at all when closed. Only
+    /// the handle (a sibling view, not a subview of `controls`) remains
+    /// visible.
+    private static func stripHeight(available: CGFloat, gutter g: CGFloat, drawerOpen: Bool) -> CGFloat {
+        drawerOpen ? controlStripHeight(available: available, gutter: g) : 0
+    }
+
+    /// The drawer handle's hit region, derived from the just-computed
+    /// `controls` frame.
+    ///
+    /// Anchored to `controls.minY` — the drawer panel's MOVING edge — and
+    /// grown UPWARD from there, rather than anchored to `controls.maxY` and
+    /// grown upward from THAT. The panel is pinned to the bottom of the
+    /// view in both orientations, so `controls.maxY` is the same in the
+    /// open and closed layouts; only `controls.minY` moves as the strip's
+    /// height changes. A handle built from `maxY` therefore never visibly
+    /// moves between states — that was the original bug, and the report
+    /// that a "control drawer... seemed like it wasn't possible to
+    /// collapse" because "it didn't move". Building it from `minY` instead
+    /// makes the handle travel the full distance the strip does (see
+    /// `testHandleFrameDiffersMeaningfullyBetweenOpenAndClosed`), while
+    /// still never dropping below `controls.minY` — which, since `controls`
+    /// itself never extends past `inner.maxY` (itself already inset by the
+    /// bottom safe area, see `layout`), keeps the handle clear of the home
+    /// indicator's gesture strip in both states.
+    private static func handleFrame(for controls: CGRect) -> CGRect {
+        CGRect(x: controls.midX - drawerHitSize.width / 2,
+               y: controls.minY - drawerHitSize.height,
+               width: drawerHitSize.width,
+               height: drawerHitSize.height)
+    }
+
     /// Landscape: stage | pad side by side above the strip.
     ///
     /// Below `Theme.stageCollapseBelowHeight` the stage yields entirely.
@@ -193,17 +331,19 @@ final class PluginView: UIView {
     /// columns already share `topH` regardless of whether the stage draws
     /// anything into its column — so this is a flat "the character isn't
     /// worth showing this short" cutoff, not a space reallocation.
-    private static func landscapeLayout(inner: CGRect, gutter g: CGFloat) -> ZoneLayout {
-        let stripH = controlStripHeight(available: inner.height, gutter: g)
+    private static func landscapeLayout(inner: CGRect, gutter g: CGFloat, drawerOpen: Bool) -> ZoneLayout {
+        let stripH = stripHeight(available: inner.height, gutter: g, drawerOpen: drawerOpen)
         let topH = max(0, inner.height - stripH - g)
         let controlsFrame = CGRect(x: inner.minX, y: inner.maxY - stripH,
                                     width: inner.width, height: stripH)
+        let handle = handleFrame(for: controlsFrame)
 
         if inner.height < Theme.stageCollapseBelowHeight || topH < Theme.minPadHeight {
             return ZoneLayout(
                 stage: .zero,
                 pad: CGRect(x: inner.minX, y: inner.minY, width: inner.width, height: topH),
-                controls: controlsFrame)
+                controls: controlsFrame,
+                handle: handle)
         }
 
         let stageW = max(0, (inner.width - g) * 0.40)
@@ -211,15 +351,16 @@ final class PluginView: UIView {
         return ZoneLayout(
             stage: CGRect(x: inner.minX, y: inner.minY, width: stageW, height: topH),
             pad: CGRect(x: inner.minX + stageW + g, y: inner.minY, width: padW, height: topH),
-            controls: controlsFrame)
+            controls: controlsFrame,
+            handle: handle)
     }
 
     /// Portrait: stage over pad over the strip. Short heights make the stage
     /// yield its space to the pad gradually — the pad is topped up toward
     /// `minPadHeight` first and the stage gets whatever remains, down to
     /// zero.
-    private static func portraitLayout(inner: CGRect, gutter g: CGFloat) -> ZoneLayout {
-        let stripH = controlStripHeight(available: inner.height, gutter: g)
+    private static func portraitLayout(inner: CGRect, gutter g: CGFloat, drawerOpen: Bool) -> ZoneLayout {
+        let stripH = stripHeight(available: inner.height, gutter: g, drawerOpen: drawerOpen)
         let remaining = max(0, inner.height - stripH - g)
         var stageH = remaining * 0.48
         var padH = remaining - stageH - g
@@ -238,25 +379,36 @@ final class PluginView: UIView {
         // sizes `padH` itself can land below `minPadHeight` (the min/max
         // pair above doesn't force it up past what `remaining` can actually
         // supply) — acceptable, since the alternative would be hiding the
-        // strip, which is exactly what this contract rules out.
+        // strip while it's meant to be open, which is exactly what this
+        // contract rules out.
         if inner.height < Theme.stageCollapseBelowHeight || padH < Theme.minPadHeight {
             padH = min(max(Theme.minPadHeight, padH), max(0, remaining - g))
             stageH = max(0, remaining - padH - g)
         }
 
+        let controlsFrame = CGRect(x: inner.minX, y: inner.maxY - stripH,
+                                    width: inner.width, height: stripH)
         return ZoneLayout(
             stage: CGRect(x: inner.minX, y: inner.minY, width: inner.width, height: stageH),
             pad: CGRect(x: inner.minX, y: inner.minY + stageH + (stageH > 0 ? g : 0),
                         width: inner.width, height: padH),
-            controls: CGRect(x: inner.minX, y: inner.maxY - stripH,
-                             width: inner.width, height: stripH))
+            controls: controlsFrame,
+            handle: handleFrame(for: controlsFrame))
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let l = Self.layout(in: bounds, safeArea: safeAreaInsets)
+        let l = Self.layout(in: bounds, drawerOpen: drawerOpen, safeArea: safeAreaInsets)
         pad.frame = l.pad
         controls.frame = l.controls
+
+        drawerHandle.frame = l.handle
+        drawerHandleBar.frame = CGRect(
+            x: (l.handle.width - Self.handlePillSize.width) / 2,
+            y: (l.handle.height - Self.handlePillSize.height) / 2,
+            width: Self.handlePillSize.width, height: Self.handlePillSize.height)
+        drawerHandleChevron.frame = drawerHandleBar.bounds
+        bringSubviewToFront(drawerHandle)
 
         // CharacterView's own display link only stops once its `window`
         // goes nil (see `CharacterView.updateDisplayLink`) — `isHidden`
