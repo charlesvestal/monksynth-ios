@@ -30,6 +30,37 @@
    before submitting for review — especially #14 (verify every responsive
    layout) and #17 (version trains).
 
+## Privacy usage strings — check this whenever a new API is added
+
+**No test can catch a missing one.** iOS terminates the process at the OS level
+(SIGABRT, uncatchable, no error to handle) the instant an app touches
+privacy-sensitive data without the matching `Info.plist` usage string. A unit
+test cannot exercise it because the crash kills the test runner, and the app
+builds, installs and launches perfectly — it only dies when a user taps the
+feature.
+
+This has now bitten this codebase and its sibling:
+
+| API | Required key | How it failed |
+|---|---|---|
+| `CABTMIDICentralViewController` (Bluetooth MIDI) | `NSBluetoothAlwaysUsageDescription` | Shipped in builds 45–56; "Connect Bluetooth MIDI" crashed instantly. Fixed in `1ebcee1`. |
+| Audio input (JUCE standalone) | `NSMicrophoneUsageDescription` | `ambiotica-plugin` — standalone aborted on launch with signal 6. |
+
+**So: when you add any API that touches the microphone, Bluetooth, camera,
+location, contacts, photos, local network or motion — add its usage string in
+the same commit**, add the localized value to every `*.lproj/InfoPlist.strings`,
+and verify it reached the built product rather than trusting the source edit:
+
+```bash
+plutil -p "$(xcodebuild -project MonkSynth.xcodeproj -scheme MonkSynth \
+  -sdk iphonesimulator -configuration Debug -showBuildSettings \
+  | grep -m1 ' BUILT_PRODUCTS_DIR' | sed 's/.*= //')/MonkSynth.app/Info.plist" \
+  | grep -iE 'UsageDescription'
+```
+
+Then **actually tap the feature on a device**. This is the class of bug the
+250-test suite and the bit-exact parity gate say nothing whatsoever about.
+
 ## One-time setup
 
 - **App IDs** `com.vestal.monksynth` and `com.vestal.monksynth.AU` — created
