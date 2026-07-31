@@ -37,7 +37,7 @@
     {
       "id": 14,
       "subject": "Task 5: Parameter shadow array",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** A lock-free C array of atomics the render block reads without touching AUParameter, plus the AUParameterTree that writes into it.\n\n**Files:**\n- Modify: AU/ParameterShadow.h\n- Create: AU/ParameterShadow.c\n- Modify: AU/MonkSynthAU.swift\n- Create: Tests/MonkSynthTests/ShadowTests.swift\n\n**Acceptance Criteria:**\n- [ ] param_shadow_set/get are _Atomic float accesses with no locks\n- [ ] Setting an AUParameter value updates the shadow\n- [ ] Host reads of AUParameter.value return the shadow value\n- [ ] parameterTree.allParameters.count == 22\n\n**Verify:** scripts/test.sh MonkSynthTests/ShadowTests -> `Executed 3 tests, with 0 failures`\n\nFull code in docs/superpowers/plans/2026-07-30-monksynth-ios.md § Task 5.\n\n```json:metadata\n{\"files\": [\"AU/ParameterShadow.h\", \"AU/ParameterShadow.c\", \"AU/MonkSynthAU.swift\", \"Tests/MonkSynthTests/ShadowTests.swift\"], \"verifyCommand\": \"scripts/test.sh MonkSynthTests/ShadowTests\", \"acceptanceCriteria\": [\"param_shadow_set/get are _Atomic float accesses with no locks\", \"Setting an AUParameter value updates the shadow\", \"Host reads of AUParameter.value return the shadow value\", \"parameterTree.allParameters.count == 22\"], \"modelTier\": \"standard\"}\n```",
       "blockedBy": [
         13
@@ -150,5 +150,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-30T23:14:09.715093+02:00"
+  "lastUpdated": "2026-07-31T03:44:25.309219+02:00"
 }
