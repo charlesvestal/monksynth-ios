@@ -29,22 +29,57 @@ final class RootViewController: UIViewController {
     /// counterpart to `MonkSynthAU.fullState["characterID"]`.
     private static let characterIDDefaultsKey = "characterID"
 
-    /// The standalone's own equivalent of `MonkSynthAU`'s `PresetStoring`
-    /// conformance — see `StandalonePresetStore`'s own doc comment.
-    /// `currentSnapshot` mirrors what `MonkSynthAU.saveCurrentAsUserPreset`
-    /// reads from its own live `fullState`: whatever `audio` currently holds
-    /// plus whatever character `pluginView.stage` is currently showing.
-    /// `lazy`, not built in `init`, because it captures `self` and both
-    /// `audio`/`pluginView` need to already exist — by the time anything
-    /// actually calls into this (from `bind()`, in `viewDidLoad`), they do.
-    private lazy var presetStore = StandalonePresetStore(currentSnapshot: { [weak self] in
-        guard let self else {
-            return PresetSnapshot(params: Param.allCases.map(\.defaultValue),
-                                   characterID: CharacterRegistry.defaultCharacter.id)
+    /// The standalone side of the canonical, App-Group-shared preset store
+    /// — see `SharedPresetStore`'s own doc comment for why this now backs
+    /// both the standalone app and the AUv3 extension's presets instead of
+    /// each keeping its own. `currentSnapshot` mirrors what
+    /// `MonkSynthAU.saveCurrentAsUserPreset` reads from its own live
+    /// `fullState`: whatever `audio` currently holds plus whatever character
+    /// `pluginView.stage` is currently showing. `lazy`, not built in `init`,
+    /// because it captures `self` and both `audio`/`pluginView` need to
+    /// already exist — by the time anything actually calls into this (from
+    /// `bind()`, in `viewDidLoad`), they do.
+    ///
+    /// On first access this also migrates whatever this app already had
+    /// saved in `StandalonePresetStore`'s old `UserDefaults`-backed storage
+    /// (pre-App-Group builds) into the shared store — see
+    /// `migrateLegacyStandalonePresetsIfNeeded` below — so nobody's existing
+    /// presets vanish when this ships.
+    private lazy var presetStore: SharedPresetStore = {
+        let store = SharedPresetStore(currentSnapshot: { [weak self] in
+            guard let self else {
+                return PresetSnapshot(params: Param.allCases.map(\.defaultValue),
+                                       characterID: CharacterRegistry.defaultCharacter.id)
+            }
+            return PresetSnapshot(params: Param.allCases.map { self.audio.value(of: $0) },
+                                   characterID: self.pluginView.stage.character.id)
+        })
+        Self.migrateLegacyStandalonePresetsIfNeeded(into: store)
+        return store
+    }()
+
+    private static let migratedLegacyStandalonePresetsDefaultsKey = "monksynth.migratedStandaloneUserPresetsToSharedStore"
+
+    /// "Existing presets must survive": anyone already running a build has
+    /// presets in `StandalonePresetStore`'s `UserDefaults` key
+    /// (`"userPresets"`, the same key that type's own `defaultsKey` uses).
+    /// Reads that raw JSON directly rather than instantiating a
+    /// `StandalonePresetStore` (whose stored-preset shape is private, and
+    /// identical to `SharedPresetStore.StoredPreset`'s own — same field
+    /// names, so `JSONDecoder` reads one straight into the other) and folds
+    /// it into `store` once; `SharedPresetStore` itself tracks the "once"
+    /// via `markerKey`, so this is a cheap no-op on every launch after the
+    /// first successful migration.
+    private static func migrateLegacyStandalonePresetsIfNeeded(into store: SharedPresetStore) {
+        let legacy: [SharedPresetStore.StoredPreset]
+        if let data = UserDefaults.standard.data(forKey: "userPresets"),
+           let decoded = try? JSONDecoder().decode([SharedPresetStore.StoredPreset].self, from: data) {
+            legacy = decoded
+        } else {
+            legacy = []
         }
-        return PresetSnapshot(params: Param.allCases.map { self.audio.value(of: $0) },
-                               characterID: self.pluginView.stage.character.id)
-    })
+        store.migrateLegacyPresetsIfNeeded(legacy, markerKey: migratedLegacyStandalonePresetsDefaultsKey)
+    }
 
     private var pluginView: PluginView { view as! PluginView }
 
