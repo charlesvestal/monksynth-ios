@@ -76,6 +76,10 @@ final class RenderContext {
         for i in 0..<paramCount {
             let addr = ParameterAddress(UInt32(i))
             let v = param_shadow_get(shadow, addr)
+            // Drop non-finite values rather than feeding them to the DSP. A NaN
+            // would also defeat the diff below (NaN != NaN), so it would be
+            // re-applied every block while poisoning voice and delay state.
+            if !v.isFinite { continue }
             if v == lastValues[i] { continue }
             lastValues[i] = v
             apply(s, addr, v)
