@@ -14,14 +14,20 @@ final class RootViewController: UIViewController {
 
     private var uiLink: CADisplayLink?
 
-    /// Last vowel/amplitude actually pushed into the monk. `RenderContext`
-    /// publishes these on every render callback — including silent ones —
-    /// so most display-link ticks see no real change; skipping the write
-    /// when nothing moved avoids re-triggering `MonkView`'s unconditional
-    /// `setNeedsDisplay()` for no reason, up to 120 times a second on
-    /// ProMotion. Mirrors `AudioUnitViewController.lastPulledVowel/Amplitude`.
+    /// Last vowel/amplitude actually pushed into the character view.
+    /// `RenderContext` publishes these on every render callback — including
+    /// silent ones — so most display-link ticks see no real change;
+    /// skipping the write when nothing moved avoids re-triggering
+    /// `CharacterView`'s unconditional `setNeedsDisplay()` for no reason, up
+    /// to 120 times a second on ProMotion. Mirrors
+    /// `AudioUnitViewController.lastPulledVowel/Amplitude`.
     private var lastPulledVowel: Float?
     private var lastPulledAmplitude: Float?
+
+    /// The standalone app has no AU/host `fullState` to ride along with, so
+    /// the character selection persists here instead — the AUv3 editor's
+    /// counterpart to `MonkSynthAU.fullState["characterID"]`.
+    private static let characterIDDefaultsKey = "characterID"
 
     private var pluginView: PluginView { view as! PluginView }
 
@@ -82,6 +88,16 @@ final class RootViewController: UIViewController {
         // the engine's current values into them explicitly, once.
         for p in Param.allCases where !p.isHiddenFromUI {
             pluginView.controls.setValue(audio.value(of: p), for: p)
+        }
+
+        // Character selection: no AU/host `fullState` here, so restore from
+        // `UserDefaults` instead — `CharacterRegistry.character(withID:)`
+        // falls back to the default (monk) on first launch (no stored key)
+        // or if a character was ever renamed/removed.
+        let storedID = UserDefaults.standard.string(forKey: Self.characterIDDefaultsKey)
+        pluginView.stage.character = CharacterRegistry.character(withID: storedID)
+        pluginView.stage.onCharacterChange = { character in
+            UserDefaults.standard.set(character.id, forKey: Self.characterIDDefaultsKey)
         }
     }
 
@@ -179,8 +195,8 @@ final class RootViewController: UIViewController {
             pluginView.stage.amplitude = amplitude
             lastPulledAmplitude = amplitude
         }
-        // MonkView's own `noteActive` didSet already guards on change, so
-        // no need to duplicate that check here.
+        // CharacterView's own `noteActive` didSet already guards on change,
+        // so no need to duplicate that check here.
         pluginView.stage.noteActive = audio.uiNoteActive
     }
 

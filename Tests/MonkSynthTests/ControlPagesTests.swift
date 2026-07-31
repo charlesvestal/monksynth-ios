@@ -113,8 +113,8 @@ final class ControlPagesTests: XCTestCase {
     /// AUv3. Cause was UIView's default `.scaleToFill` contentMode — on a
     /// bounds change UIKit scales the previously drawn layer instead of calling
     /// `draw(_:)`, so a host resizing its view turns these circles into
-    /// ellipses. `MonkView` already set `.redraw`, which is exactly why the
-    /// character never distorted while the knobs did.
+    /// ellipses. `CharacterView` already set `.redraw`, which is exactly why
+    /// the character never distorted while the knobs did.
     func testCustomDrawnViewsRedrawOnResizeRatherThanStretching() {
         let knob = KnobView(param: .vowel, value: 0.5)
         XCTAssertEqual(knob.contentMode, .redraw,
@@ -124,8 +124,8 @@ final class ControlPagesTests: XCTestCase {
         XCTAssertEqual(pad.contentMode, .redraw,
                        "XYPadView must redraw on resize or the crosshair skews")
 
-        let monk = MonkView(frame: .zero)
-        XCTAssertEqual(monk.contentMode, .redraw)
+        let character = CharacterView(frame: .zero)
+        XCTAssertEqual(character.contentMode, .redraw)
     }
 
     /// Reported from a device: "the knobs move too slowly, they're hard to

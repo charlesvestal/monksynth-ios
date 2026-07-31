@@ -8,8 +8,8 @@ struct ZoneLayout: Equatable {
     var isDrawer: Bool
 }
 
-/// The responsive three-zone container: Stage (the monk), Pad (the XY
-/// performance surface), and Controls (the five-page knob strip).
+/// The responsive three-zone container: Stage (the selected character), Pad
+/// (the XY performance surface), and Controls (the five-page knob strip).
 ///
 /// Portrait stacks the three zones vertically, with Controls tucked into a
 /// pull-up drawer so the pad gets most of the screen. Landscape splits Stage
@@ -24,7 +24,7 @@ struct ZoneLayout: Equatable {
 /// each orientation implements that.
 final class PluginView: UIView {
 
-    let stage = MonkView()
+    let stage = CharacterView()
     let pad = XYPadView()
     let controls = ControlPages()
 
@@ -149,7 +149,7 @@ final class PluginView: UIView {
         aboutView = nil
     }
 
-    /// Portrait stacks (monk / pad / drawer); landscape splits (monk | pad)
+    /// Portrait stacks (stage / pad / drawer); landscape splits (stage | pad)
     /// with the control strip always visible.
     ///
     /// Pure and static so `LayoutTests` can exercise every corner of the
@@ -182,8 +182,8 @@ final class PluginView: UIView {
     /// Below `Theme.stageCollapseBelowHeight` the stage yields entirely.
     /// Unlike portrait, hiding it here buys the pad no extra *height* — both
     /// columns already share `topH` regardless of whether the stage draws
-    /// anything into its column — so this is a flat "the monk isn't worth
-    /// showing this short" cutoff, not a space reallocation.
+    /// anything into its column — so this is a flat "the character isn't
+    /// worth showing this short" cutoff, not a space reallocation.
     private static func landscapeLayout(inner: CGRect, gutter g: CGFloat) -> ZoneLayout {
         // Reserve at least minPadHeight *and* the gutter between the strip
         // and the row above it before letting the strip claim its full
@@ -269,12 +269,13 @@ final class PluginView: UIView {
         pad.frame = l.pad
         controls.frame = l.controls
 
-        // MonkView's own display link only stops once its `window` goes
-        // nil (see `MonkView.updateDisplayLink`) — `isHidden` alone leaves
-        // it attached to the hierarchy and ticking (idle animation advance
-        // + setNeedsDisplay) every frame for a view nobody can see. Fully
-        // detaching the stage when it collapses is the fix that's reachable
-        // from here without touching MonkView.swift: removal triggers
+        // CharacterView's own display link only stops once its `window`
+        // goes nil (see `CharacterView.updateDisplayLink`) — `isHidden`
+        // alone leaves it attached to the hierarchy and ticking (idle
+        // animation advance + setNeedsDisplay) every frame for a view
+        // nobody can see. Fully detaching the stage when it collapses is
+        // the fix that's reachable from here without touching
+        // CharacterView.swift: removal triggers
         // `didMoveToWindow()`, which re-evaluates `updateDisplayLink()` and
         // tears the link down.
         let collapsed = l.stage.width < 1 || l.stage.height < 1

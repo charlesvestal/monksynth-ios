@@ -29,10 +29,13 @@ final class RenderAppIcon: XCTestCase {
             // Draw the monk oversized and shifted up, so the icon crops to the
             // head and shoulders — the face is what reads at 40pt on a home
             // screen; a full-body figure would be an unrecognisable smudge.
+            // Always the monk, matching the default character — the design
+            // doc explicitly keeps changing the app icon out of scope.
             let scale: CGFloat = 1.62
             let box = CGSize(width: side * scale, height: side * scale)
-            let view = MonkView(frame: CGRect(origin: .zero, size: box))
+            let view = CharacterView(frame: CGRect(origin: .zero, size: box))
             view.backgroundColor = .clear
+            view.character = MonkCharacter()
             view.vowel = 0.42          // mouth open mid-chant, clearly singing
             view.amplitude = 0.7
             view.noteActive = true

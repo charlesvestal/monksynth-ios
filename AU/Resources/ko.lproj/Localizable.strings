@@ -3,8 +3,9 @@
 /* XY 연주 패드의 접근성 레이블. */
 "pad.label" = "연주 패드. 좌우로 드래그하면 음정, 상하로 드래그하면 모음이 바뀝니다.";
 
-/* 스님 캐릭터의 접근성 레이블. */
-"monk.label" = "스님. 입 모양이 모음 컨트롤을 따라갑니다.";
+/* 캐릭터 뷰의 접근성 레이블. %@는 현재 캐릭터의 표시 이름입니다
+   (예: "Monk", "Fish" — CharacterRegistry 참조, 지역화되지 않음). */
+"character.accessibility" = "캐릭터: %@. 두 번 탭하여 변경.";
 
 /* About 화면: 제목. */
 "about.title" = "MonkSynth";

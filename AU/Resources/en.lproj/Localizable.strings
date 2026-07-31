@@ -4,8 +4,9 @@
 /* Accessibility label for the XY performance pad. */
 "pad.label" = "Performance pad. Drag horizontally for pitch, vertically for vowel.";
 
-/* Accessibility label for the vector monk character. */
-"monk.label" = "The monk. His mouth follows the vowel control.";
+/* Accessibility label for the character view; %@ is the current character's
+   display name (e.g. "Monk", "Fish" — not localized, see CharacterRegistry). */
+"character.accessibility" = "Character: %@. Double-tap to change.";
 
 /* About screen: title. */
 "about.title" = "MonkSynth";
