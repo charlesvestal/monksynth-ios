@@ -65,6 +65,8 @@ targets:
         excludes:
           - Info.plist
           - AudioUnitViewController.swift
+      - path: Tests/MonkSynthTests/Resources
+        buildPhase: resources
     dependencies:
       - target: MonkSynth
     settings:
