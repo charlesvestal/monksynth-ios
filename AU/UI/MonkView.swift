@@ -66,8 +66,29 @@ final class MonkView: UIView {
         (0.16, 0.26), (0.26, 0.30), (0.34, 0.22), (0.40, 0.13), (0.44, 0.07),
     ]
 
-    /// Continuous interpolation across the five anchor shapes above — this
-    /// is what replaces upstream's 24 discrete sprite frames.
+    /// How many discrete mouth positions the vowel range is divided into.
+    ///
+    /// Upstream drove the mouth from a sprite sheet — 24 frames across the
+    /// vowel range — and the resulting stepped, puppet-like motion is a real
+    /// part of the original's charm, not an artefact to be smoothed away. An
+    /// early version of this port interpolated continuously; it read as
+    /// slicker and less alive. So the vector rig is quantised back to the same
+    /// frame count: `mouthShape` stays a continuous function (it is the shape
+    /// definition), and `quantisedVowel` steps its INPUT.
+    static let vowelFrameCount = 24
+
+    /// Snaps a vowel position to the nearest of `vowelFrameCount` steps, so
+    /// the mouth advances in visible frames rather than gliding.
+    static func quantisedVowel(_ v: Float) -> Float {
+        let clamped = min(max(v, 0), 1)
+        let steps = Float(vowelFrameCount - 1)
+        return (clamped * steps).rounded() / steps
+    }
+
+    /// Continuous interpolation across the five anchor shapes above. Callers
+    /// pass a `quantisedVowel(_:)` value, which is what produces the stepped
+    /// frame-by-frame motion; this function itself stays smooth so the anchor
+    /// geometry can be reasoned about and tested independently of the stepping.
     static func mouthShape(vowel v: Float) -> (w: CGFloat, h: CGFloat) {
         let clamped = min(max(v, 0), 1)
         let scaled = CGFloat(clamped) * CGFloat(mouthAnchors.count - 1)
@@ -187,7 +208,9 @@ final class MonkView: UIView {
 
         let pose = currentPose
         drawEyes(in: stage, blinking: pose.blinking)
-        drawMouth(in: stage, vowel: pose.vowel)
+        // Quantised, not continuous: the mouth advances in discrete frames the
+        // way the original sprite sheet did. See `quantisedVowel`.
+        drawMouth(in: stage, vowel: Self.quantisedVowel(pose.vowel))
     }
 
     private func point(_ fx: CGFloat, _ fy: CGFloat, in stage: CGRect) -> CGPoint {
@@ -344,7 +367,12 @@ final class MonkView: UIView {
 
     private func drawMouth(in stage: CGRect, vowel: Float) {
         let shape = Self.mouthShape(vowel: vowel)
-        let ampBoost = 1 + CGFloat(min(max(amplitude, 0), 1)) * 0.35
+        // Step the amplitude swell too. A continuously-scaling mouth would
+        // reintroduce exactly the glide that quantising the vowel removes —
+        // the whole point is that the character moves in frames.
+        let ampSteps: Float = 4
+        let amp = (min(max(amplitude, 0), 1) * ampSteps).rounded() / ampSteps
+        let ampBoost = 1 + CGFloat(amp) * 0.35
         let box = stage.width * Self.mouthBoxFraction
         let w = box * shape.w
         let h = box * shape.h * ampBoost

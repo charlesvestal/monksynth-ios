@@ -154,9 +154,19 @@ final class PluginView: UIView {
     ///
     /// Pure and static so `LayoutTests` can exercise every corner of the
     /// arithmetic without instantiating any UIKit views.
-    static func layout(in bounds: CGRect, drawerOpen: Bool) -> ZoneLayout {
+    /// - Parameter safeArea: the view's `safeAreaInsets`. Critically this
+    ///   includes the BOTTOM inset: on a device with a home indicator, the
+    ///   bottom ~34pt is a system gesture region, and a drawer handle placed
+    ///   there is unreachable — the system claims the touch before the app
+    ///   sees it. Reported from a device: "control drawer can't be reached in
+    ///   portrait because of the home indicator". Defaults to `.zero` so pure
+    ///   layout tests can exercise the geometry without a real view.
+    static func layout(in bounds: CGRect,
+                       drawerOpen: Bool,
+                       safeArea: UIEdgeInsets = .zero) -> ZoneLayout {
         let g = Theme.gutter
-        let inner = bounds.insetBy(dx: g, dy: g)
+        let safe = bounds.inset(by: safeArea)
+        let inner = safe.insetBy(dx: g, dy: g)
         guard inner.width > 0, inner.height > 0 else {
             return ZoneLayout(stage: .zero, pad: .zero, controls: .zero, isDrawer: false)
         }
@@ -255,7 +265,7 @@ final class PluginView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let l = Self.layout(in: bounds, drawerOpen: drawerOpen)
+        let l = Self.layout(in: bounds, drawerOpen: drawerOpen, safeArea: safeAreaInsets)
         pad.frame = l.pad
         controls.frame = l.controls
 
@@ -281,10 +291,17 @@ final class PluginView: UIView {
             // visible bar used to occupy (controls.minY + 8, height 4 -> its
             // own centre is controls.minY + 10), so the tap target grows
             // without moving the pill it surrounds.
-            let barCenterY = l.controls.minY + 10
+            // Grow the hit region UPWARD from the bottom of the controls
+            // frame rather than centring it on the visible pill. Centring
+            // pushed the region's lower edge past the safe area and into the
+            // home indicator's gesture strip, where the system claims the
+            // touch first and the drawer simply cannot be opened. Extending
+            // up instead overlaps only the pad's bottom edge — the least-used
+            // part of the play surface — and keeps every pixel of the target
+            // reachable.
             drawerHandle.frame = CGRect(
                 x: l.controls.midX - Self.drawerHitSize.width / 2,
-                y: barCenterY - Self.drawerHitSize.height / 2,
+                y: l.controls.maxY - Self.drawerHitSize.height,
                 width: Self.drawerHitSize.width, height: Self.drawerHitSize.height)
             controls.contentInsetTop = Theme.drawerHandleHeight
         } else {
