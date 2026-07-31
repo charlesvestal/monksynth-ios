@@ -27,7 +27,10 @@ public final class MonkSynthAU: AUAudioUnit {
     // flag. Letting the type be inferred from param_shadow_new()'s return
     // avoids the annotation entirely and sidesteps the bug.
     let shadow = param_shadow_new()!
-    private var _parameterTree: AUParameterTree!
+    // private(set) rather than private: fullState/currentPreset (below) need
+    // to push loaded/preset values into the tree, not just the shadow, so
+    // that host UI bound to AUParameter observers stays in sync.
+    private(set) var _parameterTree: AUParameterTree!
     private var outputBusArray: AUAudioUnitBusArray!
     // Constructed eagerly, not lazily in allocateRenderResources: the render
     // block force-unwraps this, and a host that touches internalRenderBlock
@@ -164,4 +167,57 @@ public final class MonkSynthAU: AUAudioUnit {
     var uiVowel: Float     { renderContext.uiVowel.pointee }
     var uiAmplitude: Float { renderContext.uiAmplitude.pointee }
     var uiNoteActive: Bool { renderContext.uiActive.pointee != 0 }
+
+    // MARK: - State
+
+    public override var fullState: [String: Any]? {
+        get {
+            var state = super.fullState ?? [:]
+            var values = [AUValue](repeating: 0, count: Int(kParamCount.rawValue))
+            for p in Param.allCases {
+                values[Int(p.rawValue)] = param_shadow_get(shadow, p.address)
+            }
+            state["monkParams"] = values.withUnsafeBufferPointer { Data(buffer: $0) }
+            return state
+        }
+        set {
+            super.fullState = newValue
+            guard let data = newValue?["monkParams"] as? Data else { return }
+            // Upstream processor.cpp:112-127 — a short blob means an older save
+            // (or, for the shipped factory presets themselves, one predating a
+            // parameter-count bump); leave the remaining parameters at their
+            // already-seeded defaults rather than guessing at them.
+            let stored = data.withUnsafeBytes { Array($0.bindMemory(to: AUValue.self)) }
+            for (i, v) in stored.enumerated() where i < Int(kParamCount.rawValue) {
+                param_shadow_set(shadow, Param.address(atIndex: i), v)
+                _parameterTree.parameter(withAddress: UInt64(i))?.setValue(v, originator: nil)
+            }
+        }
+    }
+
+    // MARK: - Factory presets
+
+    private lazy var _factoryPresets: [AUAudioUnitPreset] =
+        kFactoryPresets.enumerated().map { i, p in
+            let preset = AUAudioUnitPreset()
+            preset.number = i
+            preset.name = p.name
+            return preset
+        }
+
+    private var _currentPreset: AUAudioUnitPreset?
+
+    public override var factoryPresets: [AUAudioUnitPreset]? { _factoryPresets }
+
+    public override var currentPreset: AUAudioUnitPreset? {
+        get { _currentPreset }
+        set {
+            _currentPreset = newValue
+            guard let n = newValue?.number, n >= 0, n < kFactoryPresets.count else { return }
+            for (i, v) in kFactoryPresets[n].values.enumerated() {
+                param_shadow_set(shadow, Param.address(atIndex: i), v)
+                _parameterTree.parameter(withAddress: UInt64(i))?.setValue(v, originator: nil)
+            }
+        }
+    }
 }
