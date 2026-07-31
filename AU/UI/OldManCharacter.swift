@@ -2,13 +2,15 @@ import UIKit
 
 /// An old man: bushy eyebrows over deep-set eyes, forehead wrinkles, a wide
 /// grey beard the mouth aperture opens inside of, and a simple cardigan.
-/// First pass; the user will iterate on the art with the render harness.
+/// Rebuilt against the 90s pre-rendered-3D style spec: every surface shades
+/// through `Shading`'s primitives, and nothing is stroked — the brow, the
+/// wrinkles, and the cardigan's zip trim were the strokiest things about the
+/// original pass and are all shaded shapes now.
 struct OldManCharacter: Character {
     let id = "oldman"
     let displayName = "Old Man"
 
     private static let cardigan = UIColor(red: 0.30, green: 0.35, blue: 0.42, alpha: 1)
-    private static let cardiganTrim = Self.cardigan.adjusted(brightnessScale: 1.35)
     private static let hair = UIColor(white: 0.82, alpha: 1)
     private static let hairShadow = UIColor(white: 0.68, alpha: 1)
     private static let skin = Theme.skin.adjusted(saturationScale: 0.75, brightnessScale: 0.92)
@@ -36,10 +38,10 @@ struct OldManCharacter: Character {
 
     func drawBody(in stage: CGRect) {
         func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
+        guard let context = UIGraphicsGetCurrentContext() else { return }
 
         // Cardigan: a simple rounded trapezoid, not the monk's robe rig —
-        // a plainly different silhouette, and one small enough to keep this
-        // a first pass rather than a second full costume system.
+        // a plainly different silhouette.
         let body = UIBezierPath()
         body.move(to: p(0.28, 0.52))
         body.addQuadCurve(to: p(0.06, 0.99), controlPoint: p(0.10, 0.75))
@@ -48,16 +50,15 @@ struct OldManCharacter: Character {
         body.addQuadCurve(to: p(0.5, 0.46), controlPoint: p(0.5, 0.52))
         body.addQuadCurve(to: p(0.28, 0.52), controlPoint: p(0.5, 0.52))
         body.close()
-        Self.cardigan.setFill()
-        body.fill()
+        Shading.freeform(body.cgPath, boundingBox: body.bounds, color: Self.cardigan, into: context)
 
-        // Zip trim down the centre.
-        let zip = UIBezierPath()
-        zip.move(to: p(0.5, 0.47))
-        zip.addLine(to: p(0.5, 0.99))
-        zip.lineWidth = stage.width * 0.012
-        Self.cardiganTrim.setStroke()
-        zip.stroke()
+        // Zip trim down the centre — a thin shaded strip, not a stroke.
+        context.saveGState()
+        body.addClip()
+        let zipRect = CGRect(x: p(0.5, 0.47).x - stage.width * 0.008, y: p(0.5, 0.47).y,
+                              width: stage.width * 0.016, height: p(0.5, 0.99).y - p(0.5, 0.47).y)
+        Shading.capsule(in: zipRect, color: Self.cardigan.adjusted(brightnessScale: 1.35), axis: .vertical, into: context)
+        context.restoreGState()
 
         // Side hair tufts (bald on top).
         for cx: CGFloat in [headCenter.fx - headRadius * 0.92, headCenter.fx + headRadius * 0.92] {
@@ -68,27 +69,27 @@ struct OldManCharacter: Character {
             tuft.addQuadCurve(to: point(cx + (cx < headCenter.fx ? -0.05 : 0.05), headCenter.fy - headRadius * 0.1, in: stage),
                                controlPoint: point(cx + (cx < headCenter.fx ? -0.09 : 0.09), headCenter.fy + headRadius * 0.4, in: stage))
             tuft.close()
-            Self.hairShadow.setFill()
-            tuft.fill()
+            Shading.freeform(tuft.cgPath, boundingBox: tuft.bounds, color: Self.hairShadow, into: context)
         }
 
         // Head.
-        let head = UIBezierPath(arcCenter: point(headCenter.fx, headCenter.fy, in: stage),
-                                 radius: stage.width * headRadius,
-                                 startAngle: 0, endAngle: .pi * 2, clockwise: true)
-        Self.skin.setFill()
-        head.fill()
+        let headRect = CGRect(x: point(headCenter.fx, headCenter.fy, in: stage).x - stage.width * headRadius,
+                               y: point(headCenter.fx, headCenter.fy, in: stage).y - stage.width * headRadius,
+                               width: stage.width * headRadius * 2, height: stage.width * headRadius * 2)
+        Shading.sphere(in: headRect, color: Self.skin, into: context)
 
-        // Forehead wrinkle lines.
-        for dy: CGFloat in [-0.62, -0.50, -0.40] {
-            let line = UIBezierPath()
-            line.move(to: point(headCenter.fx - headRadius * 0.55, headCenter.fy + headRadius * dy, in: stage))
-            line.addQuadCurve(to: point(headCenter.fx + headRadius * 0.55, headCenter.fy + headRadius * dy, in: stage),
-                               controlPoint: point(headCenter.fx, headCenter.fy + headRadius * (dy - 0.05), in: stage))
-            line.lineWidth = stage.width * 0.005
-            Self.hairShadow.withAlphaComponent(0.6).setStroke()
-            line.stroke()
+        // Forehead wrinkle lines — thin recessed grooves instead of stroked
+        // curves, so they read as creases in the skin rather than linework.
+        context.saveGState()
+        context.addEllipse(in: headRect)
+        context.clip()
+        for dy: CGFloat in [-0.58, -0.44] {
+            let c = point(headCenter.fx, headCenter.fy + headRadius * dy, in: stage)
+            let w = stage.width * headRadius * 0.85
+            let h = stage.width * 0.005
+            Shading.occlusion(under: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h), into: context)
         }
+        context.restoreGState()
 
         // Beard: covers the lower half of the face and chin. Drawn before
         // the mouth aperture (which `CharacterView` composites on top of
@@ -103,47 +104,34 @@ struct OldManCharacter: Character {
         beard.addQuadCurve(to: point(headCenter.fx - headRadius * 0.98, headCenter.fy + headRadius * 0.05, in: stage),
                             controlPoint: point(headCenter.fx, headCenter.fy + headRadius * 0.55, in: stage))
         beard.close()
-        Self.hair.setFill()
-        beard.fill()
-        Self.hairShadow.withAlphaComponent(0.5).setStroke()
-        beard.lineWidth = stage.width * 0.006
-        beard.stroke()
+        Shading.freeform(beard.cgPath, boundingBox: beard.bounds, color: Self.hair, into: context)
 
         // A little ear crescent on each side, matching the monk's approach.
         for cx: CGFloat in [headCenter.fx - headRadius * 0.98, headCenter.fx + headRadius * 0.98] {
             let c = point(cx, headCenter.fy, in: stage)
             let w = stage.width * 0.042
             let h = stage.width * 0.07
-            let ear = UIBezierPath(ovalIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h))
-            Self.skin.setFill()
-            ear.fill()
+            Shading.sphere(in: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h), color: Self.skin, into: context)
         }
     }
 
     func drawEyes(in stage: CGRect, blinking: Bool) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
         for cx: CGFloat in [headCenter.fx - 0.06, headCenter.fx + 0.06] {
             let c = point(cx, headCenter.fy - 0.02, in: stage)
 
-            // Heavy brow above the eye, always drawn.
-            let brow = UIBezierPath()
-            brow.move(to: CGPoint(x: c.x - stage.width * 0.045, y: c.y - stage.width * 0.03))
-            brow.addQuadCurve(to: CGPoint(x: c.x + stage.width * 0.045, y: c.y - stage.width * 0.035),
-                               controlPoint: CGPoint(x: c.x, y: c.y - stage.width * 0.055))
-            brow.lineWidth = stage.width * 0.022
-            brow.lineCapStyle = .round
-            Self.hairShadow.setStroke()
-            brow.stroke()
+            // Heavy brow above the eye, shaded as a small stubby capsule
+            // (a rounded ridge) rather than a stroked arc.
+            let browRect = CGRect(x: c.x - stage.width * 0.05, y: c.y - stage.width * 0.058,
+                                   width: stage.width * 0.10, height: stage.width * 0.024)
+            Shading.capsule(in: browRect, color: Self.hairShadow, axis: .horizontal, into: context)
 
+            // Deep-set eye: a small recessed socket rather than a stroked
+            // curve, thinner still when blinking.
             let halfWidth = stage.width * 0.032
-            let curveDepth = stage.width * (blinking ? 0.005 : 0.014)
-            let eye = UIBezierPath()
-            eye.move(to: CGPoint(x: c.x - halfWidth, y: c.y))
-            eye.addQuadCurve(to: CGPoint(x: c.x + halfWidth, y: c.y),
-                              controlPoint: CGPoint(x: c.x, y: c.y + curveDepth))
-            eye.lineWidth = stage.width * 0.012
-            eye.lineCapStyle = .round
-            Theme.robeShadow.setStroke()
-            eye.stroke()
+            let halfHeight = stage.width * (blinking ? 0.004 : 0.010)
+            Shading.recess(in: CGRect(x: c.x - halfWidth, y: c.y - halfHeight, width: halfWidth * 2, height: halfHeight * 2),
+                            into: context)
         }
     }
 }
