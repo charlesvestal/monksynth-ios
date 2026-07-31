@@ -168,6 +168,40 @@ public final class MonkSynthAU: AUAudioUnit {
     var uiAmplitude: Float { renderContext.uiAmplitude.pointee }
     var uiNoteActive: Bool { renderContext.uiActive.pointee != 0 }
 
+    // MARK: - Character selection
+    //
+    // Cosmetic only — deliberately NOT an `AUParameter` (see the characters
+    // design doc: a host automating "which character" would be strange).
+    // It still has to travel with sessions and presets, so it rides in
+    // `fullState` under `"characterID"` alongside `"monkParams"` instead.
+
+    /// The selected character's `id`. Read by `AudioUnitViewController` at
+    /// bind time to seed the visible `CharacterView`, and written by it
+    /// when the user taps to cycle (`setCharacterID`). Defaults to
+    /// `CharacterRegistry.defaultCharacter` (monk) until a session restores
+    /// something else.
+    private(set) var characterID: String = CharacterRegistry.defaultCharacter.id {
+        didSet {
+            guard oldValue != characterID else { return }
+            onCharacterIDChange?(characterID)
+        }
+    }
+
+    /// Fired whenever `characterID` changes — including from `setCharacterID`
+    /// itself. Unlike the `AUParameter` originator-token dance
+    /// `AudioUnitViewController.bind()` uses to stop a UI write bouncing
+    /// straight back into the control that made it, no such guard is needed
+    /// here: re-applying the same character id the view just produced is
+    /// idempotent (a redraw, not a fight with an in-progress drag), so a
+    /// plain callback is enough.
+    var onCharacterIDChange: ((String) -> Void)?
+
+    /// UI -> AU write: `AudioUnitViewController` calls this when the user
+    /// taps the character to cycle it.
+    func setCharacterID(_ id: String) {
+        characterID = id
+    }
+
     // MARK: - State
 
     public override var fullState: [String: Any]? {
@@ -178,20 +212,28 @@ public final class MonkSynthAU: AUAudioUnit {
                 values[Int(p.rawValue)] = param_shadow_get(shadow, p.address)
             }
             state["monkParams"] = values.withUnsafeBufferPointer { Data(buffer: $0) }
+            state["characterID"] = characterID
             return state
         }
         set {
             super.fullState = newValue
-            guard let data = newValue?["monkParams"] as? Data else { return }
-            // Upstream processor.cpp:112-127 — a short blob means an older save
-            // (or, for the shipped factory presets themselves, one predating a
-            // parameter-count bump); leave the remaining parameters at their
-            // already-seeded defaults rather than guessing at them.
-            let stored = data.withUnsafeBytes { Array($0.bindMemory(to: AUValue.self)) }
-            for (i, v) in stored.enumerated() where i < Int(kParamCount.rawValue) {
-                param_shadow_set(shadow, Param.address(atIndex: i), v)
-                _parameterTree.parameter(withAddress: UInt64(i))?.setValue(v, originator: nil)
+            if let data = newValue?["monkParams"] as? Data {
+                // Upstream processor.cpp:112-127 — a short blob means an older
+                // save (or, for the shipped factory presets themselves, one
+                // predating a parameter-count bump); leave the remaining
+                // parameters at their already-seeded defaults rather than
+                // guessing at them.
+                let stored = data.withUnsafeBytes { Array($0.bindMemory(to: AUValue.self)) }
+                for (i, v) in stored.enumerated() where i < Int(kParamCount.rawValue) {
+                    param_shadow_set(shadow, Param.address(atIndex: i), v)
+                    _parameterTree.parameter(withAddress: UInt64(i))?.setValue(v, originator: nil)
+                }
             }
+            // `CharacterRegistry.character(withID:)` falls back to the
+            // default (monk) for a missing key (an older save) or an
+            // unrecognised id (a character renamed/removed since), so this
+            // always lands on a real character rather than a blank stage.
+            characterID = CharacterRegistry.character(withID: newValue?["characterID"] as? String).id
         }
     }
 

@@ -32,3 +32,22 @@ enum Theme {
         .systemFont(ofSize: size, weight: weight)
     }
 }
+
+extension UIColor {
+    /// Returns a copy of this colour with hue shifted and saturation /
+    /// brightness scaled in HSB space. Originally `MonkCharacter`-only (to
+    /// derive the robe's saffron trim and fold-shadow tones from
+    /// `Theme.robe` without hand-picking separate constants that could drift
+    /// out of sync with it); promoted here so every `Character` can derive
+    /// its own tonal variants from a single base colour the same way.
+    func adjusted(hueShift: CGFloat = 0, saturationScale: CGFloat = 1, brightnessScale: CGFloat = 1) -> UIColor {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        var shiftedHue = (h + hueShift).truncatingRemainder(dividingBy: 1)
+        if shiftedHue < 0 { shiftedHue += 1 }
+        return UIColor(hue: shiftedHue,
+                        saturation: min(max(s * saturationScale, 0), 1),
+                        brightness: min(max(b * brightnessScale, 0), 1),
+                        alpha: a)
+    }
+}

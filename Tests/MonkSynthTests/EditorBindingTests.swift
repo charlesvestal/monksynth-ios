@@ -87,6 +87,59 @@ final class EditorBindingTests: XCTestCase {
         XCTAssertEqual(noteOn ?? -1, 1.0, accuracy: 1e-6)
     }
 
+    // MARK: - Character selection
+
+    /// `bind()` seeds the visible `CharacterView` from whatever the AU
+    /// already holds — covers a session restored (`fullState` set) before
+    /// the editor was ever bound.
+    func testBindSeedsCharacterViewFromAUsCharacterID() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        unit.setCharacterID("fish")
+
+        vc.loadViewIfNeeded()   // drives viewDidLoad -> bind()
+
+        let pluginView = vc.view as! PluginView
+        XCTAssertEqual(pluginView.stage.character.id, "fish")
+    }
+
+    /// UI -> AU: tapping the character to cycle it must write the new
+    /// selection back into the AU (so it round-trips via `fullState`).
+    func testCyclingCharacterWritesCharacterIDBackToAU() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+
+        let pluginView = vc.view as! PluginView
+        XCTAssertEqual(unit.characterID, "monk")
+
+        pluginView.stage.cycleCharacter()
+
+        XCTAssertEqual(unit.characterID, "fish")
+        XCTAssertEqual(pluginView.stage.character.id, "fish")
+    }
+
+    /// AU -> UI: a `fullState` load reaching in *after* the editor is
+    /// already bound and showing (e.g. a host applying a saved session to
+    /// an already-open editor) must still update the visible character.
+    func testLaterFullStateLoadUpdatesTheVisibleCharacter() throws {
+        let vc = AudioUnitViewController()
+        let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
+        vc.loadViewIfNeeded()
+
+        let pluginView = vc.view as! PluginView
+        XCTAssertEqual(pluginView.stage.character.id, "monk")
+
+        unit.fullState = ["characterID": "unicorn"]
+
+        // `onCharacterIDChange`'s handler hops to main via `DispatchQueue.
+        // main.async` (defensive: `fullState` isn't guaranteed to be set
+        // from the main thread), so — like the AUParameter observer tests
+        // above — poll rather than asserting immediately.
+        pollUntil { pluginView.stage.character.id == "unicorn" }
+        XCTAssertEqual(pluginView.stage.character.id, "unicorn")
+    }
+
     // MARK: - AU -> UI
 
     /// Host automation (an observer-token-less write) must reach the

@@ -10,7 +10,7 @@ import CoreAudioKit
 ///   on-screen knobs through the parameter tree's observer, without feeding
 ///   the value back into the AU — see the originator-token discussion on
 ///   `bind()` below.
-/// - Render thread -> monk: the character's vowel/amplitude/active state
+/// - Render thread -> character: the character's vowel/amplitude/active state
 ///   comes from `MonkSynthAU.uiVowel`/`uiAmplitude`/`uiNoteActive`, plain
 ///   main-thread reads of values the render block already published — never
 ///   by calling back into the DSP engine, which the render thread owns.
@@ -35,12 +35,13 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
 
     private var uiLink: CADisplayLink?
 
-    /// Last vowel/amplitude actually pushed into the monk. The render block
-    /// publishes `uiVowel`/`uiAmplitude` on every buffer — including silent
-    /// ones — so most display-link ticks see no real change; skipping the
-    /// write when nothing moved avoids re-triggering `MonkView`'s
-    /// unconditional `setNeedsDisplay()` (and the full redraw that follows)
-    /// for no reason, up to 120 times a second on ProMotion.
+    /// Last vowel/amplitude actually pushed into the character view. The
+    /// render block publishes `uiVowel`/`uiAmplitude` on every buffer —
+    /// including silent ones — so most display-link ticks see no real
+    /// change; skipping the write when nothing moved avoids re-triggering
+    /// `CharacterView`'s unconditional `setNeedsDisplay()` (and the full
+    /// redraw that follows) for no reason, up to 120 times a second on
+    /// ProMotion.
     private var lastPulledVowel: Float?
     private var lastPulledAmplitude: Float?
 
@@ -136,6 +137,23 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
             }
         }
 
+        // Character selection: seed the view from whatever the AU already
+        // holds (its default, or a session restored before this controller
+        // ever bound — `MonkSynthAU.characterID` starts at the registry
+        // default and `fullState`'s setter can run before `bind()` does).
+        pluginView.stage.character = CharacterRegistry.character(withID: au.characterID)
+        // AU -> UI: a later `fullState` load (a session/preset restore)
+        // reaching in while the editor is already showing.
+        au.onCharacterIDChange = { [weak self] id in
+            DispatchQueue.main.async {
+                self?.pluginView.stage.character = CharacterRegistry.character(withID: id)
+            }
+        }
+        // UI -> AU: the user tapped the character to cycle it.
+        pluginView.stage.onCharacterChange = { [weak self] character in
+            self?.au?.setCharacterID(character.id)
+        }
+
         // The about screen's "Source code" link. An app extension cannot
         // call `UIApplication.shared.open` (there is no `UIApplication`
         // instance to call it on) — `extensionContext?.open` is the host-
@@ -181,8 +199,8 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
             pluginView.stage.amplitude = amplitude
             lastPulledAmplitude = amplitude
         }
-        // MonkView's own `noteActive` didSet already guards on change, so
-        // no need to duplicate that check here.
+        // CharacterView's own `noteActive` didSet already guards on change,
+        // so no need to duplicate that check here.
         pluginView.stage.noteActive = au.uiNoteActive
     }
 }

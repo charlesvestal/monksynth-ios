@@ -60,6 +60,43 @@ final class PresetTests: XCTestCase {
         }
     }
 
+    // MARK: - Character selection round-trip
+
+    /// `characterID` rides in `fullState` alongside `monkParams` (see the
+    /// characters design doc: cosmetic, not an `AUParameter`, but it must
+    /// still travel with sessions and presets).
+    func testFullStateRoundTripsCharacterID() throws {
+        let source = try makeAU()
+        source.setCharacterID(FishCharacter().id)
+
+        let destination = try makeAU()
+        destination.fullState = source.fullState
+
+        XCTAssertEqual(destination.characterID, "fish")
+    }
+
+    /// A state saved before this task existed has no `"characterID"` key at
+    /// all — it must degrade to the default (monk), not crash or leave the
+    /// AU in some indeterminate state.
+    func testFullStateWithoutCharacterIDYieldsMonk() throws {
+        let au = try makeAU()
+        au.setCharacterID(FishCharacter().id)
+
+        au.fullState = ["monkParams": Data()]
+
+        XCTAssertEqual(au.characterID, CharacterRegistry.defaultCharacter.id)
+    }
+
+    /// A state naming a character id `CharacterRegistry` no longer
+    /// recognises (renamed/removed) must also degrade to monk rather than
+    /// leaving the AU pointed at a ghost id nothing can render.
+    func testFullStateWithUnknownCharacterIDYieldsMonk() throws {
+        let au = try makeAU()
+        au.fullState = ["characterID": "some-character-that-was-removed"]
+
+        XCTAssertEqual(au.characterID, CharacterRegistry.defaultCharacter.id)
+    }
+
     func testShortStateLeavesRemainingParametersAtDefaults() throws {
         let au = try makeAU()
         let shortValues: [AUValue] = [0.11, 0.22, 0.33]

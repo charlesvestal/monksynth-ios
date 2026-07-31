@@ -4,8 +4,11 @@ import UIKit
 
 /// Covers `IdleAnimator` (upstream's idle state machine from
 /// cpp/src/monk_view.h, retargeted onto the vector rig) and the continuity
-/// of `MonkView.mouthShape(vowel:)`, the piece that replaces upstream's 24
-/// discrete sprite frames with a smooth interpolation.
+/// of `MonkCharacter.mouthShape(vowel:)`, the piece that replaces upstream's
+/// 24 discrete sprite frames with a smooth interpolation. `IdleAnimator` and
+/// the quantisation (`CharacterView.quantisedVowel`/`vowelFrameCount`) are
+/// shared by every character; only `mouthShape` itself is per-character —
+/// see `CharacterTests` for the other four.
 final class IdleAnimatorTests: XCTestCase {
 
     // MARK: - HOLD duration
@@ -76,13 +79,14 @@ final class IdleAnimatorTests: XCTestCase {
     /// `mouthShape(vowel:)` is what replaces upstream's 24 discrete sprite
     /// frames — it must interpolate smoothly with no snap between anchors.
     func testMouthShapeIsContinuousAcrossVowelRange() {
+        let monk = MonkCharacter()
         let steps = 100
         let epsilon: CGFloat = 0.01 // real per-step delta is ~0.0032 at worst
 
-        var previous = MonkView.mouthShape(vowel: 0)
+        var previous = monk.mouthShape(vowel: 0)
         for i in 1...steps {
             let v = Float(i) / Float(steps)
-            let current = MonkView.mouthShape(vowel: v)
+            let current = monk.mouthShape(vowel: v)
             XCTAssertLessThanOrEqual(abs(current.w - previous.w), epsilon,
                                       "width jump at vowel \(v)")
             XCTAssertLessThanOrEqual(abs(current.h - previous.h), epsilon,
@@ -90,8 +94,8 @@ final class IdleAnimatorTests: XCTestCase {
             previous = current
         }
 
-        let first = MonkView.mouthShape(vowel: 0)
-        let last = MonkView.mouthShape(vowel: 1)
+        let first = monk.mouthShape(vowel: 0)
+        let last = monk.mouthShape(vowel: 1)
         XCTAssertEqual(first.w, 0.16, accuracy: 1e-9)
         XCTAssertEqual(first.h, 0.26, accuracy: 1e-9)
         XCTAssertEqual(last.w, 0.44, accuracy: 1e-9)
@@ -106,22 +110,23 @@ final class IdleAnimatorTests: XCTestCase {
     func testVowelIsQuantisedIntoDiscreteFrames() {
         var distinct = Set<Float>()
         for i in 0...1000 {
-            distinct.insert(MonkView.quantisedVowel(Float(i) / 1000.0))
+            distinct.insert(CharacterView.quantisedVowel(Float(i) / 1000.0))
         }
-        XCTAssertEqual(distinct.count, MonkView.vowelFrameCount,
-                       "vowel should land on exactly \(MonkView.vowelFrameCount) positions")
-        XCTAssertEqual(MonkView.quantisedVowel(0), 0, accuracy: 1e-6)
-        XCTAssertEqual(MonkView.quantisedVowel(1), 1, accuracy: 1e-6)
+        XCTAssertEqual(distinct.count, CharacterView.vowelFrameCount,
+                       "vowel should land on exactly \(CharacterView.vowelFrameCount) positions")
+        XCTAssertEqual(CharacterView.quantisedVowel(0), 0, accuracy: 1e-6)
+        XCTAssertEqual(CharacterView.quantisedVowel(1), 1, accuracy: 1e-6)
     }
 
     /// Stepping must be visible: adjacent frames should differ by a real
     /// amount, otherwise quantising achieves nothing perceptually.
     func testAdjacentFramesProduceVisiblyDifferentMouthShapes() {
-        let steps = Float(MonkView.vowelFrameCount - 1)
+        let monk = MonkCharacter()
+        let steps = Float(CharacterView.vowelFrameCount - 1)
         var maxDelta: CGFloat = 0
         for i in 0..<Int(steps) {
-            let a = MonkView.mouthShape(vowel: MonkView.quantisedVowel(Float(i) / steps))
-            let b = MonkView.mouthShape(vowel: MonkView.quantisedVowel(Float(i + 1) / steps))
+            let a = monk.mouthShape(vowel: CharacterView.quantisedVowel(Float(i) / steps))
+            let b = monk.mouthShape(vowel: CharacterView.quantisedVowel(Float(i + 1) / steps))
             maxDelta = max(maxDelta, max(abs(a.w - b.w), abs(a.h - b.h)))
         }
         XCTAssertGreaterThan(maxDelta, 0.004,
