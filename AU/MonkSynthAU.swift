@@ -29,6 +29,7 @@ public final class MonkSynthAU: AUAudioUnit {
     let shadow = param_shadow_new()!
     private var _parameterTree: AUParameterTree!
     private var outputBusArray: AUAudioUnitBusArray!
+    private var renderContext: RenderContext!
 
     public override init(componentDescription: AudioComponentDescription,
                          options: AudioComponentInstantiationOptions = []) throws {
@@ -89,4 +90,75 @@ public final class MonkSynthAU: AUAudioUnit {
             param_shadow_set(shadow, p.address, p.defaultValue)
         }
     }
+
+    // MARK: - Render resources
+
+    public override func allocateRenderResources() throws {
+        try super.allocateRenderResources()
+        if renderContext == nil { renderContext = RenderContext(shadow: shadow) }
+        renderContext.createEngine(sampleRate: outputBusses[0].format.sampleRate)
+    }
+
+    public override func deallocateRenderResources() {
+        renderContext?.destroyEngine()
+        super.deallocateRenderResources()
+    }
+
+    // MARK: - Render block
+
+    public override var internalRenderBlock: AUInternalRenderBlock {
+        // Captured once — no ARC traffic or optional unwrapping per block.
+        let ctx = renderContext!
+        let shadowPtr = shadow
+        var wheelTargets = [(ParameterAddress, Float)]()
+        wheelTargets.reserveCapacity(2)
+
+        return { _, _, frameCount, _, outputData, eventListHead, _ in
+            var event = eventListHead?.pointee
+            while let e = event {
+                if e.head.eventType == .MIDI {
+                    // e.MIDI.data is a C `uint8_t data[3]`, imported as the
+                    // Swift tuple (UInt8, UInt8, UInt8) — reading .0/.1/.2 is
+                    // plain field access on a value type, no allocation
+                    // (unlike `withUnsafeBytes(of:) { Array($0.prefix(3)) }`,
+                    // which would heap-allocate an Array on every MIDI event).
+                    let data = e.MIDI.data
+                    let status = data.0 & 0xF0
+                    let d1 = data.1
+                    let d2 = data.2
+                    switch status {
+                    case 0x90 where d2 > 0:
+                        ctx.noteOn(d1, velocity: Float(d2) / 127.0)
+                    case 0x80, 0x90:
+                        ctx.noteOff(d1)
+                    case 0xB0:
+                        if let addr = RenderContext.parameter(forCC: d1) {
+                            param_shadow_set(shadowPtr, addr, Float(d2) / 127.0)
+                        }
+                    case 0xE0:
+                        let raw = (Int(d2) << 7) | Int(d1)
+                        let norm = Float(raw) / 16383.0
+                        ctx.pitchWheelTargets(norm, into: &wheelTargets)
+                        for (addr, v) in wheelTargets { param_shadow_set(shadowPtr, addr, v) }
+                    default: break
+                    }
+                }
+                event = e.head.next?.pointee
+            }
+
+            let bufferList = UnsafeMutableAudioBufferListPointer(outputData)
+            guard bufferList.count >= 2,
+                  let l = bufferList[0].mData?.assumingMemoryBound(to: Float.self),
+                  let r = bufferList[1].mData?.assumingMemoryBound(to: Float.self)
+            else { return noErr }
+
+            ctx.render(left: l, right: r, frames: frameCount)
+            return noErr
+        }
+    }
+
+    /// Live animation data for the editor. Main-thread reads of render-thread writes.
+    var uiVowel: Float     { renderContext?.uiVowel.pointee ?? 0.5 }
+    var uiAmplitude: Float { renderContext?.uiAmplitude.pointee ?? 0 }
+    var uiNoteActive: Bool { (renderContext?.uiActive.pointee ?? 0) != 0 }
 }
