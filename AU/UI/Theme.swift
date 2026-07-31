@@ -20,11 +20,11 @@ enum Theme {
 
     /// Below this, a control strip cannot show a usable knob: the tab bar and
     /// the name+value captions consume the whole height and the dial computes
-    /// to nothing, leaving a row of tabs controlling invisible knobs. When the
-    /// strip would be shorter than this, the controls collapse to a drawer
-    /// instead so the user can pull them up over the pad.
+    /// to nothing, leaving a row of tabs controlling invisible knobs.
+    /// `PluginView.controlStripHeight` treats this as a floor the strip
+    /// shouldn't shrink below while there's still room to honour it — see
+    /// that function's doc comment.
     static let minUsableStripHeight: CGFloat = 78
-    static let drawerHandleHeight: CGFloat = 22
     static let minPadHeight: CGFloat = 120
     static let stageCollapseBelowHeight: CGFloat = 260
 

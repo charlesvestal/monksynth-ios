@@ -19,7 +19,6 @@ final class ControlPages: UIView {
     ]
 
     var onParameterChange: ((Param, Float) -> Void)?
-    var contentInsetTop: CGFloat = 0 { didSet { setNeedsLayout() } }
 
     /// Set by the owner so a newly-shown page seeds its knobs from the
     /// AU's current parameter values (e.g. host automation of a parameter
@@ -103,11 +102,10 @@ final class ControlPages: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let top = contentInsetTop
         let tabH: CGFloat = 20
-        tabBar.frame = CGRect(x: 4, y: top, width: bounds.width - 8, height: tabH)
-        knobRow.frame = CGRect(x: 4, y: top + tabH + 4,
+        tabBar.frame = CGRect(x: 4, y: 0, width: bounds.width - 8, height: tabH)
+        knobRow.frame = CGRect(x: 4, y: tabH + 4,
                                width: bounds.width - 8,
-                               height: max(0, bounds.height - top - tabH - 8))
+                               height: max(0, bounds.height - tabH - 8))
     }
 }

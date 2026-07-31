@@ -143,11 +143,9 @@ final class CharacterTests: XCTestCase {
             CGSize(width: 480, height: 320),
         ]
         for size in sizes {
-            for drawerOpen in [false, true] {
-                let l = PluginView.layout(in: CGRect(origin: .zero, size: size), drawerOpen: drawerOpen)
-                XCTAssertFalse(l.stage.intersects(l.pad),
-                               "stage \(l.stage) overlaps pad \(l.pad) at size \(size), drawerOpen=\(drawerOpen)")
-            }
+            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
+            XCTAssertFalse(l.stage.intersects(l.pad),
+                           "stage \(l.stage) overlaps pad \(l.pad) at size \(size)")
         }
     }
 

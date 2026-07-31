@@ -115,7 +115,7 @@ final class RenderUISnapshot: XCTestCase {
         }
     }
 
-    /// Portrait on an iPhone with a home indicator: the drawer handle must sit
+    /// Portrait on an iPhone with a home indicator: the control strip must sit
     /// clear of the bottom gesture strip, drawn here as a red band.
     func testWriteSafeAreaSheet() throws {
         let insets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
@@ -146,5 +146,65 @@ final class RenderUISnapshot: XCTestCase {
         let data = try XCTUnwrap(image.pngData())
         try data.write(to: URL(fileURLWithPath: "/tmp/ui_safearea.png"))
         print("SNAPSHOT_WRITTEN /tmp/ui_safearea.png bytes=\(data.count)")
+    }
+
+    /// The about screen (with its new "More Apps" link) plus the More Apps
+    /// sheet in its three reachable states — loading, populated, and the
+    /// honest failure message — rendered directly rather than through a
+    /// real network fetch (`MoreAppsView.debugSetEntries`) so this stays
+    /// deterministic and safe to run offline/in CI.
+    func testWriteAboutAndMoreAppsSheet() throws {
+        let size = CGSize(width: 390, height: 700)
+        let gap: CGFloat = 20
+        let label: CGFloat = 18
+
+        func snapshot(_ view: UIView) -> UIImage {
+            view.setNeedsLayout(); view.layoutIfNeeded()
+            return UIGraphicsImageRenderer(size: size).image { c in view.layer.render(in: c.cgContext) }
+        }
+
+        let about = AboutView(frame: CGRect(origin: .zero, size: size))
+        about.showsBluetoothButton = true
+
+        let loading = MoreAppsView(frame: CGRect(origin: .zero, size: size))
+
+        let populated = MoreAppsView(frame: CGRect(origin: .zero, size: size))
+        populated.debugSetEntries([
+            MoreAppsCatalog.Entry(name: "Qwertet", blurb: "Free  \u{00B7}  Music",
+                                   url: "https://apps.apple.com/app/id0"),
+            MoreAppsCatalog.Entry(name: "Qwerty Keys", blurb: "$4.99  \u{00B7}  Music",
+                                   url: "https://apps.apple.com/app/id1"),
+        ])
+
+        let empty = MoreAppsView(frame: CGRect(origin: .zero, size: size))
+        empty.debugSetEntries([])
+
+        let columns: [(String, UIView)] = [
+            ("AboutView", about),
+            ("MoreAppsView (loading)", loading),
+            ("MoreAppsView (populated)", populated),
+            ("MoreAppsView (no network, no cache)", empty),
+        ]
+
+        let sheet = CGSize(width: size.width * CGFloat(columns.count) + gap * CGFloat(columns.count + 1),
+                           height: size.height + gap * 2 + label)
+        let renderer = UIGraphicsImageRenderer(size: sheet)
+        let image = renderer.image { ctx in
+            UIColor(white: 0.06, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: sheet))
+
+            var x = gap
+            for (name, view) in columns {
+                snapshot(view).draw(at: CGPoint(x: x, y: gap + label))
+                (name as NSString).draw(
+                    at: CGPoint(x: x, y: gap),
+                    withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                                     .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+                x += size.width + gap
+            }
+        }
+        let data = try XCTUnwrap(image.pngData())
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_moreapps.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_moreapps.png bytes=\(data.count)")
     }
 }

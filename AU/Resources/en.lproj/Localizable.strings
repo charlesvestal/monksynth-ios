@@ -35,8 +35,25 @@
 /* About screen: dismiss button. */
 "about.close" = "Close";
 
+/* About screen: button/link that opens the More Apps screen. */
+"about.moreApps" = "More Apps";
+
 /* Accessibility label for the header ⓘ button that opens the about screen. */
 "about.info" = "About MonkSynth";
+
+/* More Apps screen: title. */
+"moreapps.title" = "More Apps";
+
+/* More Apps screen: shown while the developer's app catalog is loading. */
+"moreapps.loading" = "Loading apps…";
+
+/* More Apps screen: shown when the catalog can't be fetched and there is no
+   cached copy from a previous launch — an honest failure message, not a
+   silent empty panel. */
+"moreapps.empty" = "Couldn't load other apps. Check your connection, or try the App Store link below.";
+
+/* More Apps screen: footer link to the developer's full App Store page. */
+"moreapps.viewAll" = "See all apps on the App Store";
 
 /* Alert title shown if the standalone engine fails to start. */
 "audio.start.failed.title" = "Audio could not start";
