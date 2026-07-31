@@ -1,0 +1,44 @@
+/* MonkSynth — 日本語文字列。キーの構成は en.lproj / ko.lproj と完全に一致させること。 */
+
+/* XY 演奏パッドのアクセシビリティラベル。 */
+"pad.label" = "演奏パッド。左右にドラッグで音程、上下にドラッグで母音を操作します。";
+
+/* 僧侶キャラクターのアクセシビリティラベル。 */
+"monk.label" = "僧侶。口の形が母音コントロールに追従します。";
+
+/* About 画面：タイトル。 */
+"about.title" = "MonkSynth";
+
+/* About 画面：楽器の簡単な説明。 */
+"about.tagline" = "フォルマント波形関数合成を用いたモノフォニック・ボーカルシンセサイザーです。";
+
+/* About 画面：アプリ内で唯一許可された「Delay Lama」への言及（史実としての系譜の一文）。
+   アプリ名・サブタイトル・キーワードには一切使用しない。 */
+"about.heritage" = "AudioNerdz による名作 VST プラグイン Delay Lama (2002) に着想を得ています。";
+
+/* About 画面：原作者への明記されたクレジット。 */
+"about.credit" = "Jonathan Taylor 氏の MonkSynth をベースにしています。";
+
+/* About 画面：MIT ライセンス表記（必須）。 */
+"about.license" = "MIT ライセンス。Copyright (c) 2026 Jonathan Taylor.";
+
+/* About 画面：アップストリームのソースコードへのリンク。 */
+"about.source" = "ソースコード";
+
+/* About 画面：Bluetooth MIDI 機器選択画面を開くボタン（ホストアプリのみ）。 */
+"about.bluetooth" = "Bluetooth MIDI を接続";
+
+/* About 画面：閉じるボタン。 */
+"about.close" = "閉じる";
+
+/* ヘッダーの ⓘ ボタン（About 画面を開く）のアクセシビリティラベル。 */
+"about.info" = "MonkSynth について";
+
+/* スタンドアロンエンジンの起動に失敗した際のアラートタイトル。 */
+"audio.start.failed.title" = "オーディオを開始できませんでした";
+
+/* スタンドアロンエンジンがオーディオフォーマットを作成できなかった場合のエラー説明。 */
+"audio.error.format" = "スタンドアロンエンジン用のオーディオフォーマットを作成できませんでした。";
+
+/* オーディオ開始失敗アラートの汎用的な閉じるボタン。 */
+"ok" = "OK";

@@ -28,6 +28,9 @@ targets:
           - Info.plist
           - AudioUnitViewController.swift
           - MonkSynthAU.swift
+          - Resources
+      - path: AU/Resources
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vestal.monksynth
@@ -45,7 +48,11 @@ targets:
     type: app-extension
     platform: iOS
     sources:
-      - AU
+      - path: AU
+        excludes:
+          - Resources
+      - path: AU/Resources
+        buildPhase: resources
       - dsp
     settings:
       base:
@@ -65,6 +72,15 @@ targets:
       - path: AU
         excludes:
           - Info.plist
+          - Resources
+      # `LocalizationTests` uses `Bundle(for: LocalizationTests.self)` to find
+      # the `.lproj` folders (the same pattern `ParityTests` already uses for
+      # `golden_44k.f32` via `Tests/MonkSynthTests/Resources` below) — that
+      # resolves to THIS test bundle, not the hosting `MonkSynth.app`, so the
+      # strings tables must be copied into MonkSynthTests.xctest too, not
+      # just the app/extension targets.
+      - path: AU/Resources
+        buildPhase: resources
       - path: Tests/MonkSynthTests/Resources
         buildPhase: resources
     dependencies:
