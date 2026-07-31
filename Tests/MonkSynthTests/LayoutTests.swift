@@ -2,18 +2,21 @@ import XCTest
 import UIKit
 @testable import MonkSynth
 
-/// Covers `PluginView.layout(in:safeArea:)`, the pure static layout math
-/// behind the three-zone container (Stage / Pad / Controls). Deliberately
-/// exercises only the static function, never a live `PluginView` instance —
-/// there is no drawer/instance-only geometry left to reach for.
+/// Covers `PluginView.layout(in:drawerOpen:safeArea:)`, the pure static
+/// layout math behind the three-zone container (Stage / Pad / Controls) and
+/// its collapsible drawer handle. Deliberately exercises only the static
+/// function, never a live `PluginView` instance — every geometric fact this
+/// suite cares about, including the handle's, is reachable from `ZoneLayout`
+/// alone.
 ///
-/// The controls strip is always laid out, in both orientations: it gets
-/// `Theme.stripHeight` when there's room, and otherwise shrinks — but not
-/// below `Theme.minUsableStripHeight` while there's still enough available
-/// height to honour that floor. The Stage yields space first (down to zero
-/// below `Theme.stageCollapseBelowHeight`); the Pad takes whatever remains
-/// and may land below `Theme.minPadHeight` at extreme sizes — that's an
-/// accepted trade against ever hiding the controls.
+/// The controls strip is a drawer, in both orientations, defaulting OPEN:
+/// it gets `Theme.stripHeight` when there's room, and otherwise shrinks —
+/// but not below `Theme.minUsableStripHeight` while there's still enough
+/// available height to honour that floor. Closed, it drops to zero height.
+/// The Stage yields space first (down to zero below
+/// `Theme.stageCollapseBelowHeight`); the Pad takes whatever remains and
+/// may land below `Theme.minPadHeight` at extreme sizes — that's an
+/// accepted trade against ever hiding an OPEN strip.
 final class LayoutTests: XCTestCase {
 
     // MARK: - Aspect-ratio breakpoint
@@ -199,6 +202,81 @@ final class LayoutTests: XCTestCase {
                 XCTAssertLessThanOrEqual(r.maxY, b.maxY - insets.bottom + 0.5,
                                          "\(name) bottom at \(size)")
             }
+        }
+    }
+
+    // MARK: - Drawer handle
+
+    /// The regression that caused this task: a drawer shipped once before
+    /// with its handle anchored to `controls.maxY`, which is pinned to the
+    /// bottom of the view and identical whether the drawer is open or
+    /// closed — so the handle never visibly moved and the drawer looked
+    /// broken/unreachable. This is the test that would have caught it: the
+    /// handle's frame in the open layout must differ from the closed layout
+    /// by roughly `Theme.stripHeight`, the actual distance the strip's top
+    /// edge (`controls.minY`) travels.
+    func testHandleFrameDiffersMeaningfullyBetweenOpenAndClosed() {
+        let bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
+        let open = PluginView.layout(in: bounds, drawerOpen: true)
+        let closed = PluginView.layout(in: bounds, drawerOpen: false)
+
+        XCTAssertNotEqual(open.handle, closed.handle,
+                          "the handle must occupy a different frame when the drawer opens/closes")
+
+        let travelled = closed.handle.minY - open.handle.minY
+        XCTAssertEqual(travelled, Theme.stripHeight, accuracy: 0.5,
+            "the handle should travel the full distance the strip's top edge does when it opens/closes, not sit still")
+
+        // Belt-and-suspenders against a future regression that reintroduces
+        // a near-zero, easy-to-miss movement (e.g. an off-by-a-few-points
+        // fix that technically satisfies "not equal" but still looks
+        // static to a person watching the animation).
+        XCTAssertGreaterThan(travelled, 40,
+            "the handle's movement must be large enough to actually read as motion")
+    }
+
+    /// Same assertion as above but at the exact size and inset the task
+    /// report calls out by name — a concrete real-world sanity check
+    /// alongside the generic sweep.
+    func testHandleFrameDiffersMeaningfullyBetweenOpenAndClosedWithSafeArea() {
+        let bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
+        let insets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        let open = PluginView.layout(in: bounds, drawerOpen: true, safeArea: insets)
+        let closed = PluginView.layout(in: bounds, drawerOpen: false, safeArea: insets)
+
+        XCTAssertNotEqual(open.handle, closed.handle)
+        XCTAssertEqual(closed.handle.minY - open.handle.minY, Theme.stripHeight, accuracy: 0.5)
+    }
+
+    /// However far the handle travels, it must never cross into the bottom
+    /// safe-area inset (the home-indicator gesture strip) in either state —
+    /// the same defect that made the very first drawer unreachable, just
+    /// checked against the handle specifically rather than the whole
+    /// controls zone.
+    func testHandleClearsTheSafeAreaBottomInBothStates() {
+        let insets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        for size in [CGSize(width: 390, height: 844), CGSize(width: 844, height: 390)] {
+            let bounds = CGRect(origin: .zero, size: size)
+            for open in [true, false] {
+                let l = PluginView.layout(in: bounds, drawerOpen: open, safeArea: insets)
+                XCTAssertLessThanOrEqual(l.handle.maxY, bounds.maxY - insets.bottom + 0.5,
+                    "handle intrudes into the bottom safe area at \(size), drawerOpen=\(open): \(l.handle)")
+            }
+        }
+    }
+
+    /// Apple's HIG minimum tap target (44pt in both dimensions) must hold
+    /// for the handle's hit region regardless of whether the drawer is open
+    /// or closed — the visible pill inside it stays small, but the
+    /// invisible region a finger actually has to land in must not.
+    func testHandleMeetsMinimumTapTargetInBothStates() {
+        let bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
+        for open in [true, false] {
+            let l = PluginView.layout(in: bounds, drawerOpen: open)
+            XCTAssertGreaterThanOrEqual(l.handle.width, 44,
+                "handle hit region narrower than the 44pt HIG minimum, drawerOpen=\(open)")
+            XCTAssertGreaterThanOrEqual(l.handle.height, 44,
+                "handle hit region shorter than the 44pt HIG minimum, drawerOpen=\(open)")
         }
     }
 }

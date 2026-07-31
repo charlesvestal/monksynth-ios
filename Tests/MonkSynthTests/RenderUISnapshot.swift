@@ -148,6 +148,94 @@ final class RenderUISnapshot: XCTestCase {
         print("SNAPSHOT_WRITTEN /tmp/ui_safearea.png bytes=\(data.count)")
     }
 
+    /// Renders a `PluginView` with the drawer forced open or closed, with a
+    /// device-like safe area applied — same injection trick as
+    /// `renderWithInsets` (`safeAreaInsets` is read-only), plus a tap on the
+    /// handle to actually drive `PluginView`'s own toggle, not a test-only
+    /// backdoor. `UIView.animate` inside `toggleDrawer` runs synchronously
+    /// to its final state when there's no active run loop driving it here,
+    /// so the layout is already settled by the time this returns.
+    private func renderDrawerState(_ size: CGSize, _ insets: UIEdgeInsets, open: Bool) -> UIImage {
+        let vc = UIViewController()
+        let view = PluginView(frame: CGRect(origin: .zero, size: size))
+        vc.view = view
+        vc.additionalSafeAreaInsets = insets
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.rootViewController = vc
+        window.isHidden = false
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+
+        if !open {
+            // PluginView defaults to open; closing it exercises the exact
+            // gesture-driven path a finger would (the private
+            // `drawerHandle`/`toggleDrawer`), not a reach-around. Mirrors
+            // how `ControlPagesTests` exercises `showPage` directly rather
+            // than synthesizing a UIButton tap: the target under test is
+            // internal to this file's module, so a direct call is honest,
+            // not a shortcut.
+            view.perform(Selector(("toggleDrawer")))
+            view.setNeedsLayout()
+            view.layoutIfNeeded()
+        }
+
+        return UIGraphicsImageRenderer(size: size).image { c in
+            view.layer.render(in: c.cgContext)
+        }
+    }
+
+    /// Required visual check for the collapsible control drawer: open and
+    /// closed states side by side, at a portrait and a landscape size, with
+    /// the bottom safe-area (home indicator) strip marked in red so it's
+    /// obvious at a glance whether the handle ever dips into it. The whole
+    /// point is eyeballing whether the handle visibly moves between the two
+    /// columns of each pair — a numeric assertion of that already lives in
+    /// `LayoutTests.testHandleFrameDiffersMeaningfullyBetweenOpenAndClosed`,
+    /// but only a human looking at pixels can confirm it actually *reads*
+    /// as movement, and that the little chevron indeed flips direction.
+    func testWriteDrawerOpenClosedSheet() throws {
+        let insets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        let sizes: [(String, CGSize)] = [
+            ("portrait 390x844", CGSize(width: 390, height: 844)),
+            ("landscape 844x390", CGSize(width: 844, height: 390)),
+        ]
+        let gap: CGFloat = 20
+        let label: CGFloat = 18
+        let colGap: CGFloat = 10
+
+        let rowHeight = (sizes.map(\.1.height).max() ?? 0) + gap + label
+        let sheet = CGSize(
+            width: sizes.reduce(0) { $0 + $1.1.width * 2 + colGap } + gap * CGFloat(sizes.count + 1),
+            height: rowHeight * CGFloat(sizes.count) + gap)
+
+        let image = UIGraphicsImageRenderer(size: sheet).image { ctx in
+            UIColor(white: 0.06, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: sheet))
+
+            var y = gap
+            for (name, size) in sizes {
+                var x = gap
+                for (stateName, open) in [("OPEN", true), ("CLOSED", false)] {
+                    renderDrawerState(size, insets, open: open).draw(at: CGPoint(x: x, y: y + label))
+                    // Mark the home indicator strip the system reserves —
+                    // the handle must never sit inside this band.
+                    UIColor.systemRed.withAlphaComponent(0.28).setFill()
+                    ctx.fill(CGRect(x: x, y: y + label + size.height - insets.bottom,
+                                    width: size.width, height: insets.bottom))
+                    ("\(name) — \(stateName)" as NSString).draw(
+                        at: CGPoint(x: x, y: y),
+                        withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                                         .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+                    x += size.width + colGap
+                }
+                y += rowHeight
+            }
+        }
+        let data = try XCTUnwrap(image.pngData())
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_drawer.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_drawer.png bytes=\(data.count)")
+    }
+
     /// The about screen (with its new "More Apps" link) plus the More Apps
     /// sheet in its three reachable states — loading, populated, and the
     /// honest failure message — rendered directly rather than through a
