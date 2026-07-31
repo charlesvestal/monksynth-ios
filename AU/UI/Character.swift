@@ -49,6 +49,22 @@ protocol Character {
     /// reference frame, sized so an aperture at its widest anchor can't
     /// poke past the character's own jawline/muzzle/beard.
     var mouthBoxFraction: CGFloat { get }
+
+    /// Draws the mouth aperture for `vowel` (already run through
+    /// `CharacterView.quantisedVowel` — see that function's doc comment)
+    /// at `amplitudeBoost` (>=1: the stepped loudness swell `CharacterView`
+    /// computes from `amplitude`, applied uniformly so nothing distorts).
+    ///
+    /// This used to be logic `CharacterView` owned directly — a single
+    /// hardcoded "plain dark oval sized from `mouthShape`/`mouthCentre`/
+    /// `mouthBoxFraction`" — pulled out into the protocol (with that exact
+    /// behaviour preserved as the default implementation below) so an
+    /// image-backed conformer like `SpriteCharacter` can composite a mouth
+    /// *frame* here instead, without `CharacterView` ever needing to know
+    /// which kind of character it's holding. A drawn character never needs
+    /// to implement this itself — the default is everything it used to get
+    /// for free.
+    func drawMouth(in stage: CGRect, vowel: Float, amplitudeBoost: CGFloat)
 }
 
 extension Character {
@@ -58,6 +74,28 @@ extension Character {
     /// itself uses for the mouth it draws on every character's behalf.
     func point(_ fx: CGFloat, _ fy: CGFloat, in stage: CGRect) -> CGPoint {
         CGPoint(x: stage.minX + fx * stage.width, y: stage.minY + fy * stage.height)
+    }
+
+    /// The default `drawMouth`: a plain dark oval, sized from `mouthShape`/
+    /// `mouthCentre`/`mouthBoxFraction` — verbatim what `CharacterView` used
+    /// to draw directly for every character before this method existed.
+    /// Every one of the six drawn characters (`MonkCharacter`,
+    /// `FishCharacter`, `UnicornCharacter`, `GirlCharacter`,
+    /// `OldManCharacter`, `CowCharacter`) relies on exactly this and needs
+    /// no changes to keep working — only `SpriteCharacter` overrides it.
+    func drawMouth(in stage: CGRect, vowel: Float, amplitudeBoost: CGFloat) {
+        let shape = mouthShape(vowel: vowel)
+        let box = stage.width * mouthBoxFraction
+        let w = box * shape.w
+        let h = box * shape.h * amplitudeBoost
+        let c = point(mouthCentre.fx, mouthCentre.fy, in: stage)
+
+        let mouth = UIBezierPath(ovalIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h))
+        Theme.background.setFill()
+        mouth.fill()
+        Theme.robeShadow.withAlphaComponent(0.5).setStroke()
+        mouth.lineWidth = stage.width * 0.008
+        mouth.stroke()
     }
 }
 
