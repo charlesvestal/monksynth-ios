@@ -22,7 +22,6 @@ struct GhostCharacter: Character {
     var savedParameters: [Param: AUValue]? { FactoryVoiceTable.values(for: id) }
 
     private static let sheet = UIColor(red: 0.92, green: 0.94, blue: 0.98, alpha: 1)
-    private static let sheetShadow = Self.sheet.adjusted(brightnessScale: 0.90)
     private static let eye = UIColor(red: 0.14, green: 0.16, blue: 0.22, alpha: 1)
 
     // MARK: - Mouth anchors — a round, breathy "oOoo" moan: stays roughly
@@ -44,59 +43,86 @@ struct GhostCharacter: Character {
     let mouthBoxFraction: CGFloat = 0.22
     let mouthCentre: (fx: CGFloat, fy: CGFloat) = (0.5, 0.56)
 
+    // MARK: - Tunable geometry
+    //
+    // Everything `drawBody`/`drawEyes` position or size, gathered here so
+    // the rig can be tuned by editing one block instead of hunting through
+    // Bezier paths — and so `Tests/MonkSynthTests/RenderSweep.swift` can
+    // mutate a single field on a copy of the character before rendering it,
+    // without touching the drawing code at all (that's why this is a
+    // `struct` held in a `var`, not baked in as `let` constants).
+    struct Geometry {
+        // --- Silhouette ---
+        var crownX: CGFloat = 0.5
+        var crownY: CGFloat = 0.04
+        var crownRightX: CGFloat = 0.92
+        var crownRightY: CGFloat = 0.46
+        var crownC1X: CGFloat = 0.78
+        var crownC1Y: CGFloat = 0.02
+        var crownC2X: CGFloat = 0.92
+        var crownC2Y: CGFloat = 0.20
+        var shoulderY: CGFloat = 0.72
+        /// Five scallops across the hem, right to left: each pair is the
+        /// scallop's own bottom point and the control point that pulls it
+        /// down into a wave. The last one's `x` is also `leftX` below — the
+        /// point where the hem meets the vertical left edge.
+        var scallops: [(x: CGFloat, controlX: CGFloat)] = [
+            (0.76, 0.84), (0.60, 0.68), (0.44, 0.52), (0.28, 0.36), (0.08, 0.20),
+        ]
+        var scallopY: CGFloat = 0.72
+        var scallopControlY: CGFloat = 0.94
+        var leftX: CGFloat = 0.08
+        var leftEdgeTopY: CGFloat = 0.46
+        var crownLeftC1X: CGFloat = 0.08
+        var crownLeftC1Y: CGFloat = 0.20
+        var crownLeftC2X: CGFloat = 0.22
+        var crownLeftC2Y: CGFloat = 0.02
+
+        // --- Eyes ---
+        var eyeLeftX: CGFloat = 0.40
+        var eyeRightX: CGFloat = 0.60
+        var eyeY: CGFloat = 0.34
+        var eyeLashHalfWidthFraction: CGFloat = 0.03
+        var eyeLashLineWidthFraction: CGFloat = 0.014
+        var eyeWidthFraction: CGFloat = 0.052
+        var eyeHeightFraction: CGFloat = 0.068
+    }
+
+    var geometry = Geometry()
+
     /// The ghost's whole silhouette — no separate head/body split, since a
     /// sheet ghost is one continuous shape from crown to hem.
     private func bodyPath(in stage: CGRect) -> UIBezierPath {
         func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
+        let g = geometry
         let body = UIBezierPath()
-        body.move(to: p(0.5, 0.04))
-        body.addCurve(to: p(0.92, 0.46), controlPoint1: p(0.78, 0.02), controlPoint2: p(0.92, 0.20))
-        body.addLine(to: p(0.92, 0.72))
-        // Four scallops across the hem, right to left.
-        body.addQuadCurve(to: p(0.76, 0.72), controlPoint: p(0.84, 0.94))
-        body.addQuadCurve(to: p(0.60, 0.72), controlPoint: p(0.68, 0.94))
-        body.addQuadCurve(to: p(0.44, 0.72), controlPoint: p(0.52, 0.94))
-        body.addQuadCurve(to: p(0.28, 0.72), controlPoint: p(0.36, 0.94))
-        body.addQuadCurve(to: p(0.08, 0.72), controlPoint: p(0.20, 0.94))
-        body.addLine(to: p(0.08, 0.46))
-        body.addCurve(to: p(0.5, 0.04), controlPoint1: p(0.08, 0.20), controlPoint2: p(0.22, 0.02))
+        body.move(to: p(g.crownX, g.crownY))
+        body.addCurve(to: p(g.crownRightX, g.crownRightY), controlPoint1: p(g.crownC1X, g.crownC1Y), controlPoint2: p(g.crownC2X, g.crownC2Y))
+        body.addLine(to: p(g.crownRightX, g.shoulderY))
+        for scallop in g.scallops {
+            body.addQuadCurve(to: p(scallop.x, g.scallopY), controlPoint: p(scallop.controlX, g.scallopControlY))
+        }
+        body.addLine(to: p(g.leftX, g.leftEdgeTopY))
+        body.addCurve(to: p(g.crownX, g.crownY), controlPoint1: p(g.crownLeftC1X, g.crownLeftC1Y), controlPoint2: p(g.crownLeftC2X, g.crownLeftC2Y))
         body.close()
         return body
     }
 
     func drawBody(in stage: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
         let body = bodyPath(in: stage)
         Self.sheet.setFill()
         body.fill()
-
-        // A soft shading fold down one side, clipped to the body's own
-        // silhouette so it can never spill past the outline — the same
-        // technique `MonkCharacter`'s robe fold and `CowCharacter`'s shoulder
-        // patch use.
-        context.saveGState()
-        body.addClip()
-        let fold = UIBezierPath()
-        func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
-        fold.move(to: p(0.68, 0.10))
-        fold.addQuadCurve(to: p(0.80, 0.60), controlPoint: p(0.86, 0.32))
-        fold.addQuadCurve(to: p(0.66, 0.88), controlPoint: p(0.82, 0.78))
-        fold.addQuadCurve(to: p(0.58, 0.50), controlPoint: p(0.60, 0.70))
-        fold.addQuadCurve(to: p(0.68, 0.10), controlPoint: p(0.52, 0.28))
-        fold.close()
-        Self.sheetShadow.withAlphaComponent(0.55).setFill()
-        fold.fill()
-        context.restoreGState()
     }
 
     func drawEyes(in stage: CGRect, blinking: Bool) {
-        for cx: CGFloat in [0.40, 0.60] {
-            let c = point(cx, 0.34, in: stage)
+        let g = geometry
+        for cx: CGFloat in [g.eyeLeftX, g.eyeRightX] {
+            let c = point(cx, g.eyeY, in: stage)
             if blinking {
                 let lash = UIBezierPath()
-                lash.move(to: CGPoint(x: c.x - stage.width * 0.03, y: c.y))
-                lash.addLine(to: CGPoint(x: c.x + stage.width * 0.03, y: c.y))
-                lash.lineWidth = stage.width * 0.014
+                lash.move(to: CGPoint(x: c.x - stage.width * g.eyeLashHalfWidthFraction, y: c.y))
+                lash.addLine(to: CGPoint(x: c.x + stage.width * g.eyeLashHalfWidthFraction, y: c.y))
+                lash.lineWidth = stage.width * g.eyeLashLineWidthFraction
                 lash.lineCapStyle = .round
                 Self.eye.setStroke()
                 lash.stroke()
@@ -105,8 +131,8 @@ struct GhostCharacter: Character {
             // Plain solid dark ovals — deliberately no white sclera, unlike
             // every other character — the simplest "hollow eye socket" cue
             // that reads as ghostly at a glance.
-            let w = stage.width * 0.052
-            let h = stage.width * 0.068
+            let w = stage.width * g.eyeWidthFraction
+            let h = stage.width * g.eyeHeightFraction
             let eye = UIBezierPath(ovalIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h))
             Self.eye.setFill()
             eye.fill()
