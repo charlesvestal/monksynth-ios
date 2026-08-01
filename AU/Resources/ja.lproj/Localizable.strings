@@ -34,15 +34,33 @@
 /* About 画面：楽器の簡単な説明。 */
 "about.tagline" = "フォルマント波形関数合成を用いたモノフォニック・ボーカルシンセサイザーです。";
 
-/* About 画面：アプリ内で唯一許可された「Delay Lama」への言及（史実としての系譜の一文）。
-   アプリ名・サブタイトル・キーワードには一切使用しない。 */
-"about.heritage" = "AudioNerdz による名作 VST プラグイン Delay Lama (2002) に着想を得ています。";
-
 /* About 画面：原作者への明記されたクレジット。 */
 "about.credit" = "Jonathan Taylor 氏の MonkSynth をベースにしています。";
 
+/* About 画面：iOS 移植版のクレジット。上の about.credit（Jonathan Taylor 氏が
+   MonkSynth を作成）とは別の事実であり、Charles Vestal 氏が iOS に移植した
+   ことを示す。一文にまとめず、あえて分けている。 */
+"about.portCredit" = "iOS 版は Charles Vestal 氏によって移植されました。";
+
+/* About 画面：iOS 移植版の作者のサイト（https://charles.pizza）へのボタン／
+   リンク。上の about.portCredit と対になる。 */
+"about.portLink" = "charles.pizza";
+
 /* About 画面：MIT ライセンス表記（必須）。 */
 "about.license" = "MIT ライセンス。Copyright (c) 2026 Jonathan Taylor.";
+
+/* About 画面：オマージュ表明と寄付のお願い。アプリ内で唯一許可された
+   「Delay Lama」への言及（史実としての系譜）もここに含まれる —
+   単独の系譜行としてではなく、この一文に統合することで、寄付のお願いを
+   加えても言及回数を1回に保っている。アプリ名・サブタイトル・キーワードには
+   一切使用しない。
+   LocalizationTests.testDelayLamaAppearsExactlyOnceInEnglish が
+   （英語版のテキストを基準に）これを検証する。 */
+"about.donation" = "MonkSynth は、AudioNerdz による名作 VST プラグイン Delay Lama (2002) へのオマージュとして、完全に無料で提供しています。私たちが制作を楽しんだのと同じくらい MonkSynth を楽しんでいただけたなら、www.savetibet.org への寄付をお願いいたします。";
+
+/* About 画面：寄付先サイト（https://www.savetibet.org）へのボタン／リンク。
+   上の about.donation と対になる。 */
+"about.donationLink" = "www.savetibet.org";
 
 /* About 画面：アップストリームのソースコードへのリンク。 */
 "about.source" = "ソースコード";

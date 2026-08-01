@@ -108,14 +108,41 @@ final class LocalizationTests: XCTestCase {
         }
     }
 
-    /// "Delay Lama" is AudioNerdz's product name, not ours. A single
-    /// factual "inspired by" mention is the agreed boundary — it must never
-    /// multiply into the app title, subtitle, or keywords.
+    /// "Delay Lama" is AudioNerdz's product name, not ours. The agreed rule:
+    /// the literal substring "Delay Lama" may appear exactly ONCE across the
+    /// entire English strings table — not once per key, but one raw
+    /// occurrence, full stop — as a single factual "inspired by" mention. It
+    /// must never multiply into the app title, subtitle, keywords, or a
+    /// second sentence.
+    ///
+    /// That single mention now lives in `about.donation`, which does double
+    /// duty as both the lineage fact ("an homage to the classic Delay Lama
+    /// VST plug-in by AudioNerdz (2002)") and the donation ask that mirrors
+    /// the original Delay Lama's own donation request. There used to be a
+    /// separate `about.heritage` key carrying the lineage sentence alone;
+    /// once the donation text (which the app owner also asked to mention
+    /// "Delay Lama", to explain why the ask exists) was added, keeping both
+    /// would have doubled the count to two. Rather than loosen the rule to
+    /// "twice, in these two specific keys", the two sentences were merged
+    /// into one — the boundary stays "exactly one mention", not "exactly one
+    /// mention per topic".
+    ///
+    /// This counts total occurrences of the substring across ALL values
+    /// concatenated (not `dict.filter { ... }.count`, which would only count
+    /// how many *keys* mention it — a single key whose value said "Delay
+    /// Lama" twice would still pass that weaker check while violating the
+    /// actual rule).
     func testDelayLamaAppearsExactlyOnceInEnglish() throws {
         let dict = try stringsDict(for: "en")
-        let mentions = dict.filter { $0.value.contains("Delay Lama") }
-        XCTAssertEqual(mentions.count, 1,
-            "\"Delay Lama\" must appear exactly once, as the factual heritage line; found in keys: \(mentions.keys.sorted())")
+        let needle = "Delay Lama"
+        var occurrences: [(key: String, count: Int)] = []
+        for (key, value) in dict {
+            let count = value.components(separatedBy: needle).count - 1
+            if count > 0 { occurrences.append((key, count)) }
+        }
+        let total = occurrences.reduce(0) { $0 + $1.count }
+        XCTAssertEqual(total, 1,
+            "\"Delay Lama\" must appear exactly once (one raw occurrence) across the whole English strings table; found: \(occurrences.sorted { $0.key < $1.key })")
     }
 
     /// The test that actually catches a missing key: scans every
@@ -144,6 +171,37 @@ final class LocalizationTests: XCTestCase {
         XCTAssertTrue(license.contains("MIT"), "about.license must mention MIT: \"\(license)\"")
         XCTAssertTrue(license.contains("Jonathan Taylor"),
             "about.license must credit Jonathan Taylor by name: \"\(license)\"")
+    }
+
+    /// The visible credit line (separate from the MIT notice above) must
+    /// also still name Jonathan Taylor as the original author of MonkSynth
+    /// — this is the fact "about.portCredit" below must stay clearly
+    /// distinct from, not blur into.
+    func testCreditMentionsJonathanTaylor() throws {
+        let dict = try stringsDict(for: "en")
+        let credit = try XCTUnwrap(dict["about.credit"], "about.credit key is missing from en.lproj")
+        XCTAssertTrue(credit.contains("Jonathan Taylor"),
+            "about.credit must credit Jonathan Taylor by name: \"\(credit)\"")
+    }
+
+    /// The iOS port credit is a separate fact from `about.credit` above
+    /// (Jonathan Taylor wrote MonkSynth; Charles Vestal ported it to iOS) —
+    /// must actually name Charles Vestal, not just gesture at "the port".
+    func testPortCreditMentionsCharlesVestal() throws {
+        let dict = try stringsDict(for: "en")
+        let credit = try XCTUnwrap(dict["about.portCredit"], "about.portCredit key is missing from en.lproj")
+        XCTAssertTrue(credit.contains("Charles Vestal"),
+            "about.portCredit must credit Charles Vestal by name: \"\(credit)\"")
+    }
+
+    /// The donation ask must actually name the destination site — the part
+    /// of `about.donation` that `AboutView.donationURL` / the
+    /// `about.donationLink` button make tappable (see `AboutViewTests`).
+    func testDonationMentionsSaveTibet() throws {
+        let dict = try stringsDict(for: "en")
+        let donation = try XCTUnwrap(dict["about.donation"], "about.donation key is missing from en.lproj")
+        XCTAssertTrue(donation.contains("savetibet.org"),
+            "about.donation must mention savetibet.org: \"\(donation)\"")
     }
 
     /// The failure mode every test above can miss: a `Localizable.strings`

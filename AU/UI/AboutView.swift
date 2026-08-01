@@ -8,10 +8,22 @@ import UIKit
 /// exact wording in every supported language — every string on this screen
 /// is localized, none hard-coded here.
 ///
-/// The "Delay Lama" lineage line is the one place in the whole app that
-/// name is allowed to appear (`about.heritage`,
-/// `LocalizationTests.testDelayLamaAppearsExactlyOnceInEnglish` enforces
-/// it) — a single factual "inspired by" sentence, not a lookalike pitch.
+/// Three separate facts live here, deliberately kept distinct rather than
+/// blurred into one paragraph: Jonathan Taylor wrote the original MonkSynth
+/// (`about.credit`), Charles Vestal made this iOS port (`about.portCredit` /
+/// `about.portLink`), and the whole thing is an homage to AudioNerdz's
+/// Delay Lama (`about.donation`).
+///
+/// The "Delay Lama" name is AudioNerdz's, not ours, so it gets exactly one
+/// literal appearance across the entire English strings table — folded into
+/// `about.donation`, which does double duty as the lineage fact AND the
+/// donation ask (that ask mirrors the original Delay Lama's own donation
+/// request, which is why it lives in the same sentence rather than getting
+/// a second, separate mention). There used to be a standalone
+/// `about.heritage` key for the lineage sentence alone; it was merged into
+/// `about.donation` specifically to keep the count at one instead of two.
+/// `LocalizationTests.testDelayLamaAppearsExactlyOnceInEnglish` enforces the
+/// count (see that test's comment for the precise rule).
 final class AboutView: UIView {
 
     var onClose: (() -> Void)?
@@ -37,6 +49,11 @@ final class AboutView: UIView {
     private let closeButton = UIButton(type: .system)
 
     static let sourceURL = URL(string: "https://github.com/JonET/monksynth")!
+    /// The homage/donation ask (`about.donation`) mirrors the original Delay
+    /// Lama's own donation request — see this file's top doc comment.
+    static let donationURL = URL(string: "https://www.savetibet.org")!
+    /// Where the iOS port credit (`about.portCredit`) links to.
+    static let portURL = URL(string: "https://charles.pizza")!
 
     private static let panelPadding: CGFloat = 16
     private static let closeButtonHeight: CGFloat = 40
@@ -83,12 +100,18 @@ final class AboutView: UIView {
                  font: Theme.label(18, weight: .bold), color: Theme.textPrimary)
         addLabel(NSLocalizedString("about.tagline", comment: "About screen one-line description"),
                  font: Theme.label(12), color: Theme.textPrimary)
-        addLabel(NSLocalizedString("about.heritage", comment: "Factual Delay Lama lineage line"),
-                 font: Theme.label(11), color: Theme.textDim)
         addLabel(NSLocalizedString("about.credit", comment: "Credit to Jonathan Taylor"),
                  font: Theme.label(11), color: Theme.textDim)
+        addLabel(NSLocalizedString("about.portCredit", comment: "Credit for the iOS port, distinct from the original author credit"),
+                 font: Theme.label(11), color: Theme.textDim)
+        addLinkButton(NSLocalizedString("about.portLink", comment: "Link to the iOS port author's site"),
+                      action: #selector(openPortLink))
         addLabel(NSLocalizedString("about.license", comment: "Required MIT licence notice"),
                  font: Theme.label(10), color: Theme.textDim)
+        addLabel(NSLocalizedString("about.donation", comment: "Delay Lama homage + donation request; the one permitted Delay Lama mention"),
+                 font: Theme.label(11), color: Theme.textDim)
+        addLinkButton(NSLocalizedString("about.donationLink", comment: "Tappable donation URL"),
+                      action: #selector(openDonation))
 
         let source = UIButton(type: .system)
         source.setTitle(NSLocalizedString("about.source", comment: "Link to upstream source repository"),
@@ -139,9 +162,24 @@ final class AboutView: UIView {
         stack.addArrangedSubview(l)
     }
 
+    /// Small accent-colored tappable link, styled like the existing
+    /// "Source code" / "More Apps" buttons — used for the donation and port
+    /// links, which (unlike `sourceURL`) route to third-party sites.
+    private func addLinkButton(_ title: String, action: Selector) {
+        let b = UIButton(type: .system)
+        b.setTitle(title, for: .normal)
+        b.titleLabel?.font = Theme.label(12)
+        b.setTitleColor(Theme.accent, for: .normal)
+        b.contentHorizontalAlignment = .leading
+        b.addTarget(self, action: action, for: .touchUpInside)
+        stack.addArrangedSubview(b)
+    }
+
     @objc private func backdropTapped() { onClose?() }
     @objc private func closeTapped() { onClose?() }
     @objc private func openSource() { onOpenURL?(Self.sourceURL) }
+    @objc private func openDonation() { onOpenURL?(Self.donationURL) }
+    @objc private func openPortLink() { onOpenURL?(Self.portURL) }
     @objc private func openBluetooth() { onBluetoothMIDI?() }
     @objc private func openMoreApps() { onMoreApps?() }
 
