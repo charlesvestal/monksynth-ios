@@ -1,0 +1,6 @@
+# Copy to scripts/.deploy.local (gitignored) and fill in.
+# Needs an ADMIN-role App Store Connect API key — an App Manager key fails with
+# "Cloud signing permission error / No signing certificate iOS Distribution".
+ASC_KEY_ID=XXXXXXXXXX
+ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+DEVELOPMENT_TEAM=XXXXXXXXXX
