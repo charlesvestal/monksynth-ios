@@ -1,0 +1,93 @@
+name: MonkSynth
+options:
+  bundleIdPrefix: com.vestal
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: J4722B5MJW
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    SWIFT_OBJC_BRIDGING_HEADER: AU/MonkSynth-Bridging-Header.h
+    HEADER_SEARCH_PATHS: $(SRCROOT)/dsp $(SRCROOT)/AU
+    GCC_WARN_INHIBIT_ALL_WARNINGS: NO
+targets:
+  MonkSynth:
+    type: application
+    platform: iOS
+    sources:
+      - Host
+      - dsp
+      - path: AU
+        excludes:
+          - Info.plist
+          - AudioUnitViewController.swift
+          - MonkSynthAU.swift
+          - Resources
+      - path: AU/Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vestal.monksynth
+        PRODUCT_NAME: MonkSynth
+        INFOPLIST_FILE: Host/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Host/MonkSynth.entitlements
+    dependencies:
+      - target: MonkSynthAU
+        embed: true
+      - sdk: AVFoundation.framework
+      - sdk: CoreMIDI.framework
+      - sdk: CoreAudioKit.framework
+  MonkSynthAU:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AU
+        excludes:
+          - Resources
+      - path: AU/Resources
+        buildPhase: resources
+      - dsp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vestal.monksynth.AU
+        PRODUCT_NAME: MonkSynthAU
+        INFOPLIST_FILE: AU/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: AU/MonkSynthAU.entitlements
+    dependencies:
+      - sdk: AVFoundation.framework
+      - sdk: CoreAudioKit.framework
+  MonkSynthTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/MonkSynthTests
+      - dsp
+      - path: AU
+        excludes:
+          - Info.plist
+          - Resources
+      # `LocalizationTests` uses `Bundle(for: LocalizationTests.self)` to find
+      # the `.lproj` folders (the same pattern `ParityTests` already uses for
+      # `golden_44k.f32` via `Tests/MonkSynthTests/Resources` below) — that
+      # resolves to THIS test bundle, not the hosting `MonkSynth.app`, so the
+      # strings tables must be copied into MonkSynthTests.xctest too, not
+      # just the app/extension targets.
+      - path: AU/Resources
+        buildPhase: resources
+      - path: Tests/MonkSynthTests/Resources
+        buildPhase: resources
+    dependencies:
+      - target: MonkSynth
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: ""

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleDisplayName</key><string>MonkSynth</string>
+    <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key><string>XPC!</string>
+    <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <key>AudioComponents</key>
+            <array>
+                <dict>
+                    <key>description</key><string>MonkSynth</string>
+                    <key>factoryFunction</key><string>$(PRODUCT_MODULE_NAME).AudioUnitViewController</string>
+                    <key>manufacturer</key><string>Vstl</string>
+                    <key>name</key><string>Charles Vestal: MonkSynth</string>
+                    <key>sandboxSafe</key><true/>
+                    <key>subtype</key><string>Mnks</string>
+                    <key>tags</key>
+                    <array><string>Instrument</string><string>Synthesizer</string></array>
+                    <key>type</key><string>aumu</string>
+                    <key>version</key><integer>65536</integer>
+                </dict>
+            </array>
+        </dict>
+        <key>NSExtensionPointIdentifier</key><string>com.apple.AudioUnit-UI</string>
+        <key>NSExtensionPrincipalClass</key><string>$(PRODUCT_MODULE_NAME).AudioUnitViewController</string>
+    </dict>
+</dict>
+</plist>

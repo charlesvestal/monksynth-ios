@@ -225,6 +225,16 @@ git commit -m "Vendor upstream C DSP with sync script and unit tests"
 
 **Verify:** `Tests/ParityHarness/run.sh` → prints `golden matches (352800 samples)`
 
+> **As-built note (commit `3761346`).** The snippets below are the first draft; code
+> review hardened them before this task closed, and the shipped harness differs:
+> `run.sh` requires `RECORD_GOLDEN=1` to capture a missing golden (otherwise it
+> exits 1 — silently re-minting the golden would make the gate pass while testing
+> nothing), verifies the captured file is exactly 1411200 bytes, and
+> `render_golden.c` checks `calloc`/`fwrite`/`fclose` and writes via an adjacent
+> temp file + `rename()` so a failed run cannot leave a truncated golden in place.
+> The golden itself is unchanged — SHA-256 `307b1289…`. Read the files, not this
+> section, for current behaviour.
+
 **Steps:**
 
 - [ ] **Step 1: Write `Tests/ParityHarness/script.h`** — the shared event script, so the Swift test can replay the identical sequence.
@@ -379,6 +389,7 @@ int main(int argc, char **argv) {
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 OUT=$(mktemp -d)
+trap 'rm -rf "$OUT"' EXIT     # else every run leaks a temp dir of build output
 GOLD=Tests/ParityHarness/golden_44k.f32
 
 clang -std=c99 -O2 -Wall -Werror -Idsp -ITests/ParityHarness \
@@ -417,9 +428,19 @@ git commit -m "Add parity golden harness for the C DSP"
 
 **Files:**
 - Create: `project.yml`
-- Create: `AU/Info.plist`, `AU/MonkSynthAU.entitlements`
-- Create: `Host/Info.plist`, `Host/MonkSynth.entitlements`
+- Create: `AU/Info.plist`
+- Create: `Host/Info.plist`
 - Create: `AU/MonkSynth-Bridging-Header.h`
+
+> **Corrected after review.** An earlier draft of this task created
+> `AU/MonkSynthAU.entitlements` and `Host/MonkSynth.entitlements` declaring app
+> group `group.com.vestal.monksynth`. **Do not add them.** Nothing in this project
+> consumes a shared container — AUv3 state uses `fullState` and factory presets —
+> and an unregistered app-group entitlement makes `xcodebuild archive` fail with
+> "Provisioning profile doesn't include the App Groups capability". Qwertet, which
+> ships through this same pipeline, has no entitlements files at all. Add one back
+> only when a task actually needs a shared container, and register it in the
+> Developer Portal first.
 - Create: `AU/AudioUnitViewController.swift` (stub), `AU/MonkSynthAU.swift` (stub)
 - Create: `Host/MonkSynthApp.swift` (stub)
 
@@ -464,7 +485,6 @@ targets:
       - path: AU
         excludes:
           - Info.plist
-          - MonkSynthAU.entitlements
           - AudioUnitViewController.swift
     settings:
       base:
@@ -473,7 +493,6 @@ targets:
         INFOPLIST_FILE: Host/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_ENTITLEMENTS: Host/MonkSynth.entitlements
     dependencies:
       - target: MonkSynthAU
         embed: true
@@ -491,7 +510,6 @@ targets:
         PRODUCT_NAME: MonkSynthAU
         INFOPLIST_FILE: AU/Info.plist
         GENERATE_INFOPLIST_FILE: NO
-        CODE_SIGN_ENTITLEMENTS: AU/MonkSynthAU.entitlements
     dependencies:
       - sdk: AVFoundation.framework
       - sdk: CoreAudioKit.framework
@@ -504,7 +522,6 @@ targets:
       - path: AU
         excludes:
           - Info.plist
-          - MonkSynthAU.entitlements
           - AudioUnitViewController.swift
     dependencies:
       - target: MonkSynth
@@ -599,20 +616,12 @@ targets:
 </plist>
 ```
 
-- [ ] **Step 5: Write both entitlements files**
+- [ ] **Step 5: Exclude the AU subclass from the non-extension targets**
 
-`AU/MonkSynthAU.entitlements` and `Host/MonkSynth.entitlements` are identical:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.application-groups</key>
-    <array><string>group.com.vestal.monksynth</string></array>
-</dict>
-</plist>
-```
+`AU/MonkSynthAU.swift` is only meaningful inside the app extension. Add it to the
+`excludes:` list of the `MonkSynth` target so it is not compiled as dead code
+there, matching how Qwertet excludes its equivalent file. Leave it available to
+`MonkSynthTests`, which instantiates `MonkSynthAU` directly from Task 5 onward.
 
 - [ ] **Step 6: Write the three stubs so the project links**
 
@@ -681,6 +690,7 @@ xcodebuild build \
   -project MonkSynth.xcodeproj \
   -scheme MonkSynth \
   -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
   -configuration Debug \
   CODE_SIGNING_ALLOWED=NO
 ```
@@ -1274,7 +1284,11 @@ import AVFoundation
 final class RenderContext {
 
     private(set) var engine: OpaquePointer?
-    private let shadow: UnsafeMutablePointer<ParamShadow>
+    // NOTE: no explicit `UnsafeMutablePointer<ParamShadow>` annotation — Xcode's
+    // emit-module-separately pass cannot resolve a forward-declared C struct named
+    // in a stored-property type annotation, and fails with "cannot find type
+    // 'ParamShadow' in scope". Task 5 hit this; let the type be inferred.
+    private let shadow: OpaquePointer
 
     private var lastValues = [Float](repeating: .nan, count: Int(kParamCount.rawValue))
     private var xyNoteActive = false
@@ -3054,12 +3068,22 @@ git commit -m "Bind the editor to the audio unit in both directions"
 **Goal:** The container app runs the same UI over an `AVAudioEngine` source node, accepts CoreMIDI and Bluetooth MIDI input, and keeps playing in the background.
 
 **Files:**
-- Modify: `Host/MonkSynthApp.swift`
+- Modify: `Host/MonkSynthApp.swift`, `Host/Info.plist`
+- Create: `Host/SceneDelegate.swift`
 - Create: `Host/LocalEngine.swift`
 - Create: `Host/MIDIInput.swift`
 - Create: `Host/RootViewController.swift`
 
+> **Added after Task 3's review.** The skeleton host app uses a bare
+> `AppDelegate` + manual `UIWindow`, which logs "`UIScene` lifecycle will soon be
+> required. Failure to adopt will result in an assert in the future." Adopt
+> `UIWindowScene` here — add a `UIApplicationSceneManifest` to `Host/Info.plist`
+> and a `SceneDelegate` that owns the window — rather than retrofitting once the
+> whole UI sits on top of it. This task already rewrites the host entry point, so
+> it is the cheapest place to do it.
+
 **Acceptance Criteria:**
+- [ ] The app adopts the `UIScene` lifecycle — no "UIScene lifecycle will soon be required" console warning on launch
 - [ ] Audio session category `.playback` with `.mixWithOthers`, so it coexists with AUM
 - [ ] `AVAudioSourceNode` renders from the same `RenderContext` used by the AUv3
 - [ ] CoreMIDI input from any connected source drives notes and CCs

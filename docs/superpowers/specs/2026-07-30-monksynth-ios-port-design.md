@@ -227,5 +227,7 @@ Swift table exposed as AUv3 factory presets.
 - Contact Jonathan Taylor as a courtesy before listing.
 - Author the vector rig; the character's actual look will be iterated visually
   during implementation.
-- `/Users/charlesvestal/github/monksynth-ios` becomes a symlink to the ExtFS
-  working copy, matching the `schwung-clap` convention.
+- ~~`/Users/charlesvestal/github/monksynth-ios` becomes a symlink to the ExtFS
+  working copy.~~ **Resolved:** `/Users/charlesvestal/github` and
+  `/Volumes/ExtFS/charlesvestal/github` are the same inode — there was only ever
+  one directory. Both paths are interchangeable; no symlink needed.

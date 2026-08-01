@@ -1,0 +1,2 @@
+/* Why the app wants Bluetooth. Shown by iOS in the permission prompt. */
+"NSBluetoothAlwaysUsageDescription" = "MonkSynth은 무선 MIDI 키보드와 컨트롤러에 연결하기 위해 블루투스를 사용합니다.";

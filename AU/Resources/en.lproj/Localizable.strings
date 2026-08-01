@@ -1,0 +1,130 @@
+/* MonkSynth — English strings. Source of truth; ja/ko must carry the exact
+   same key set (LocalizationTests.testEveryLanguageHasTheSameKeys). */
+
+/* Accessibility label for the XY performance pad. */
+"pad.label" = "Performance pad. Drag horizontally for pitch, vertically for vowel.";
+
+/* Accessibility label for the character selector's ‹ arrow button that
+   steps to the previous character. */
+"character.previous" = "Previous character";
+
+/* Accessibility label for the character selector's › arrow button that
+   steps to the next character. */
+"character.next" = "Next character";
+
+/* Accessibility label naming the character selector's adjustable name/
+   dropdown control (its accessibility VALUE is the current character's
+   display name, e.g. "Monk", "Fish" — not localized, see
+   CharacterRegistry). */
+"characterSelector.label" = "Character";
+
+/* Accessibility hint for the character selector's adjustable name/dropdown
+   control: explains that swiping up/down steps the character and
+   double-tapping opens the full list. */
+"characterSelector.hint" = "Swipe up or down to change the character. Double tap to choose from a list.";
+
+/* Character dropdown overlay (opened from the character selector's ⌄):
+   title. */
+"characterPicker.title" = "Choose a Character";
+
+/* Character dropdown overlay: section header above the user's own saved
+   characters (built-in characters are listed above this, unlabelled). */
+"characterPicker.saved" = "Saved";
+
+/* About screen: title. */
+"about.title" = "MonkSynth";
+
+/* About screen: one-line description of what the instrument is. */
+"about.tagline" = "A monophonic vocal synthesizer using formant-wave-function synthesis.";
+
+/* About screen: visible credit to the original author. */
+"about.credit" = "Based on MonkSynth by Jonathan Taylor.";
+
+/* About screen: credit for the iOS port — a separate fact from
+   "about.credit" above (Jonathan Taylor wrote MonkSynth; Charles Vestal
+   ported it to iOS), never blurred into one sentence. */
+"about.portCredit" = "iOS port by Charles Vestal.";
+
+/* About screen: button/link to the iOS port author's site
+   (https://charles.pizza), paired with "about.portCredit" above. */
+"about.portLink" = "charles.pizza";
+
+/* About screen: required MIT attribution notice. */
+"about.license" = "MIT Licence. Copyright (c) 2026 Jonathan Taylor.";
+
+/* About screen: the homage + donation request. Also carries the ONE
+   permitted "Delay Lama" mention in the whole app — a factual lineage
+   fact, never used in the app title, subtitle, or keywords — folded into
+   this sentence rather than kept as a separate line so the count stays at
+   one even with the donation ask added.
+   LocalizationTests.testDelayLamaAppearsExactlyOnceInEnglish enforces
+   this. */
+"about.donation" = "MonkSynth is an homage to the classic Delay Lama VST plug-in by AudioNerdz (2002) and is offered completely free of charge. If you enjoy the plugin as much as we did making it, you are kindly requested to make a donation at www.savetibet.org.";
+
+/* About screen: button/link to the donation site
+   (https://www.savetibet.org), paired with "about.donation" above. */
+"about.donationLink" = "www.savetibet.org";
+
+/* About screen: button/link to the upstream source repository. */
+"about.source" = "Source code";
+
+/* About screen: button that opens the Bluetooth MIDI device picker (host app only). */
+"about.bluetooth" = "Connect Bluetooth MIDI";
+
+/* About screen: dismiss button. */
+"about.close" = "Close";
+
+/* About screen: button/link that opens the More Apps screen. */
+"about.moreApps" = "More Apps";
+
+/* Accessibility label for the header ⓘ button that opens the about screen. */
+"about.info" = "About MonkSynth";
+
+/* More Apps screen: title. */
+"moreapps.title" = "More Apps";
+
+/* More Apps screen: shown while the developer's app catalog is loading. */
+"moreapps.loading" = "Loading apps…";
+
+/* More Apps screen: shown when the catalog can't be fetched and there is no
+   cached copy from a previous launch — an honest failure message, not a
+   silent empty panel. */
+"moreapps.empty" = "Couldn't load other apps. Check your connection, or try the App Store link below.";
+
+/* More Apps screen: footer link to the developer's full App Store page. */
+"moreapps.viewAll" = "See all apps on the App Store";
+
+/* Alert title shown if the standalone engine fails to start. */
+"audio.start.failed.title" = "Audio could not start";
+
+/* Error description used when the standalone engine cannot build an audio format. */
+"audio.error.format" = "Could not create an audio format for the standalone engine.";
+
+/* Generic dismiss button for the audio-start-failed alert. */
+"ok" = "OK";
+
+/* Character dropdown overlay: placeholder text in the "save current patch as
+   a new character" name field. */
+"presets.namePlaceholder" = "Preset name";
+
+/* Character dropdown overlay: button that saves the current patch (sound and
+   face) as a new saved character. Kept short — sits beside the name field
+   at a fixed, narrow width. */
+"presets.save" = "Save";
+
+/* Character dropdown overlay: shown when trying to save with a blank name. */
+"presets.error.emptyName" = "Enter a name for the preset.";
+
+/* Character dropdown overlay: shown when trying to save under a name that's
+   already taken by another saved character. */
+"presets.error.duplicateName" = "A preset with that name already exists.";
+
+/* Character dropdown overlay: shown when saving fails for any other reason. */
+"presets.error.saveFailed" = "Couldn't save the preset.";
+
+/* Character dropdown overlay: shown in place of the save controls when the
+   current host doesn't support saving user presets. */
+"presets.unsupportedHost" = "This app can't save presets here.";
+
+/* Accessibility label for a saved character row's delete button. */
+"presets.delete.accessibility" = "Delete this preset";
