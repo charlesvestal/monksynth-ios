@@ -475,17 +475,15 @@ final class RenderUISnapshot: XCTestCase {
         let unsupportedSize = CGSize(width: 390, height: 560)
         let unsupported = CharacterDropdownView(frame: .zero, current: CharacterRegistry.all[0], store: unsupportedStore)
 
-        // Tall enough to lay out EVERY row unscrolled — 6 built-ins, the
-        // "Factory" header + all six factory presets, the save row, and the
-        // "Saved" header + all four seeded user entries — all in view at
-        // once. None of the columns above are tall enough for this any
-        // more now that the list holds 16 rows across three groups (it used
-        // to be enough for just built-ins + a handful of saved entries);
-        // this is the one column that actually lets a human eye judge
-        // whether the three groups (unlabelled built-ins, "Factory" +
-        // star-badged rows, "Saved" + bookmark-badged rows) read as
-        // distinct from each other, rather than a scrolled-off wall of text
-        // — required visual check, see the task report.
+        // Tall enough to lay out EVERY row unscrolled — twelve built-ins
+        // (the original six plus the six added to give upstream's factory
+        // presets their own faces), the save row, and the "Saved" header +
+        // all four seeded user entries — all in view at once. This is the
+        // one column that actually lets a human eye judge whether the two
+        // groups (unlabelled built-ins vs. "Saved" + bookmark-badged rows)
+        // read as distinct from each other, and whether twelve built-ins is
+        // still a scannable list rather than a wall of text, rather than a
+        // scrolled-off guess — required visual check, see the task report.
         let fullListSize = CGSize(width: 390, height: 1500)
         let fullList = CharacterDropdownView(frame: .zero, current: CharacterRegistry.all[2], store: store)
 

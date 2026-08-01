@@ -33,6 +33,43 @@ final class CharacterTests: XCTestCase {
         }
     }
 
+    // MARK: - One preset per character (mechanically enforced)
+
+    /// The user's finalized model: "we want 1 preset per character." Every
+    /// BUILT-IN character (`CharacterRegistry.all` — twelve now: the
+    /// original six plus the six added to give upstream's factory presets
+    /// their own faces, see `FactoryVoiceTable`) is its own face — never
+    /// borrows another's, unlike the deleted `FactoryPresetCharacter`,
+    /// which let monk end up wearing three presets at once — and has
+    /// exactly one voice source: either a hand-tuned `CharacterVoiceTable`
+    /// entry (the original six) or a factory-preset `savedParameters`
+    /// override (the six new ones), never both, never neither.
+    ///
+    /// Deliberately scoped to the FIXED built-in roster, not the merged
+    /// in-app list (`CharacterDropdownView.characters(from:)`): a user's
+    /// own saved entries are explicitly exempt from this rule — saving two
+    /// different patches under the same borrowed face is the whole point of
+    /// "save a preset with a name, along with whatever the last face was,"
+    /// and nothing in the task asks THAT to be restricted, only the fixed
+    /// roster itself.
+    func testEveryBuiltInCharacterHasExactlyOneFaceAndOneVoiceSource() {
+        let all = CharacterRegistry.all
+        let faceIDs = all.map(\.faceID)
+        XCTAssertEqual(Set(faceIDs).count, faceIDs.count,
+            "two built-in characters share a face: \(faceIDs)")
+
+        for character in all {
+            XCTAssertEqual(character.faceID, character.id,
+                "\(character.id) borrows another built-in's face instead of being its own")
+
+            let hasTunedVoice = CharacterVoiceTable.hasOwnVoice(for: character)
+            let hasFactoryVoice = character.savedParameters != nil
+            XCTAssertTrue(hasTunedVoice != hasFactoryVoice,
+                "\(character.id) must have exactly one voice source (a CharacterVoiceTable entry XOR a " +
+                "factory-preset savedParameters override), got tuned=\(hasTunedVoice) factory=\(hasFactoryVoice)")
+        }
+    }
+
     // MARK: - Lookup fallback
 
     func testLookupByKnownIDReturnsThatCharacter() {

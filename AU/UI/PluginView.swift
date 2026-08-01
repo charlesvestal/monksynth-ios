@@ -278,8 +278,8 @@ final class PluginView: UIView {
         // `stage.onCharacterChanged` below only fires on a subsequent
         // change, not for the initial value each already has at init time.
         characterSelector.characterName = stage.character.displayName
-        characterSelector.onStepBackward = { [weak self] in self?.stage.stepBackward() }
-        characterSelector.onStepForward = { [weak self] in self?.stage.stepForward() }
+        characterSelector.onStepBackward = { [weak self] in self?.stepCharacter(by: -1) }
+        characterSelector.onStepForward = { [weak self] in self?.stepCharacter(by: 1) }
         characterSelector.onOpenDropdown = { [weak self] in self?.showCharacterDropdown() }
         // Keeps the name label in sync with EVERY route `stage.character`
         // can change through, not just the two this view itself triggers —
@@ -287,6 +287,32 @@ final class PluginView: UIView {
         stage.onCharacterChanged = { [weak self] character in
             self?.characterSelector.characterName = character.displayName
         }
+    }
+
+    /// Steps `stage` to the previous (`delta: -1`) or next (`delta: 1`)
+    /// character across the FULL roster — every built-in
+    /// (`CharacterRegistry.all`, twelve now) AND every one of the user's own
+    /// saved entries — wrapping at either end, per the task: "arrows cycle
+    /// through all presets/characters." `CharacterView.stepForward()`/
+    /// `stepBackward()` alone only know about `CharacterRegistry` (that view
+    /// has no notion of `presetStore` — see its own doc comment on staying
+    /// ignorant of voices/storage), so this is where the wider roster
+    /// actually gets consulted. Reuses `CharacterDropdownView.characters(
+    /// from:)` rather than reimplementing the merge, so the arrows and the
+    /// dropdown list can never silently disagree about what "the full
+    /// roster" means. Falls back to the default character if the current
+    /// selection isn't found in the roster (shouldn't happen, but degrades
+    /// the same way `CharacterRegistry.character(after:)` does rather than
+    /// trapping).
+    private func stepCharacter(by delta: Int) {
+        let roster = CharacterDropdownView.characters(from: presetStore)
+        guard !roster.isEmpty,
+              let index = roster.firstIndex(where: { $0.id == stage.character.id })
+        else {
+            stage.select(CharacterRegistry.defaultCharacter)
+            return
+        }
+        stage.select(roster[(index + delta + roster.count) % roster.count])
     }
 
     private func showCharacterDropdown() {

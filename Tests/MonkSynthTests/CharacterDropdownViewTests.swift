@@ -137,28 +137,25 @@ final class CharacterDropdownViewTests: XCTestCase {
 
     // MARK: - Lists every registered character (no store)
 
-    /// The count is derived from `CharacterRegistry.all` PLUS
-    /// `FactoryPresetCharacter.all` — both fixed, but neither hardcoded here
-    /// as a literal number — since factory presets show regardless of
-    /// whether a store was even wired. No store wired: this is the "bare
-    /// `PluginView`, nothing saved yet" case.
+    /// The count is derived from `CharacterRegistry.all` alone — twelve now:
+    /// the original six plus the six added to give upstream's factory
+    /// presets their own faces (see `FactoryVoiceTable`) — never hardcoded
+    /// as a literal number. No store wired: this is the "bare `PluginView`,
+    /// nothing saved yet" case.
     func testDropdownListsExactlyOneRowPerRegisteredCharacterWithNoStore() {
         let dropdown = makeDropdown()
         let labels = rowLabels(in: dropdown, store: nil)
-        let expected = CharacterRegistry.all.count + FactoryPresetCharacter.all.count
-        XCTAssertEqual(labels.count, expected,
-            "expected one accessible row per registry entry plus every factory preset, got \(labels.count) for \(expected)")
-        let expectedNames = Set(CharacterRegistry.all.map(\.displayName) + FactoryPresetCharacter.all.map(\.displayName))
-        XCTAssertEqual(Set(labels), expectedNames)
+        XCTAssertEqual(labels.count, CharacterRegistry.all.count,
+            "expected one accessible row per registry entry, got \(labels.count) for \(CharacterRegistry.all.count)")
+        XCTAssertEqual(Set(labels), Set(CharacterRegistry.all.map(\.displayName)))
     }
 
-    // MARK: - Merged list: built-ins, then factory presets, then user entries
+    // MARK: - Merged list: built-ins, then user entries
 
-    /// The dropdown's list is built-ins, then factory presets, then user
-    /// entries, and its count is derived from the registry plus the factory
-    /// table plus the store — never hardcoded. This is the actual "one
-    /// list" the task asks for.
-    func testDropdownListsBuiltInsThenFactoryThenUserEntriesFromTheStore() {
+    /// The dropdown's list is built-ins, then user entries, and its count is
+    /// derived from the registry plus the store — never hardcoded. This is
+    /// the actual "one list" the task asks for.
+    func testDropdownListsBuiltInsThenUserEntriesFromTheStore() {
         let store = FakePresetStore()
         store.seed(SavedPreset(name: "Sunrise", characterID: "unicorn"))
         store.seed(SavedPreset(name: "Bubbles", characterID: "fish"))
@@ -166,34 +163,28 @@ final class CharacterDropdownViewTests: XCTestCase {
 
         let labels = rowLabels(in: dropdown, store: store)
         let expectedCount = CharacterDropdownView.characters(from: store).count
-        XCTAssertEqual(expectedCount, CharacterRegistry.all.count + FactoryPresetCharacter.all.count + 2)
+        XCTAssertEqual(expectedCount, CharacterRegistry.all.count + 2)
         XCTAssertEqual(labels.count, expectedCount,
-            "row count must equal the registry plus the factory table plus the store's saved entries, not a hardcoded number")
+            "row count must equal the registry plus the store's saved entries, not a hardcoded number")
 
-        let expectedNames = Set(CharacterRegistry.all.map(\.displayName)
-            + FactoryPresetCharacter.all.map(\.displayName) + ["Sunrise", "Bubbles"])
+        let expectedNames = Set(CharacterRegistry.all.map(\.displayName) + ["Sunrise", "Bubbles"])
         XCTAssertEqual(Set(labels), expectedNames)
     }
 
-    /// Built-ins always come first, in registry order, then every factory
-    /// preset in `kFactoryPresets`' own order, with user entries last —
-    /// proven by walking the merged list `CharacterDropdownView` itself
-    /// derives, matching the task's decision 3.
-    func testMergedListPutsBuiltInsBeforeFactoryBeforeUserEntries() {
+    /// Built-ins always come first, in registry order, with user entries
+    /// last — proven by walking the merged list `CharacterDropdownView`
+    /// itself derives, matching the task's decision 3.
+    func testMergedListPutsBuiltInsBeforeUserEntries() {
         let store = FakePresetStore()
         store.seed(SavedPreset(name: "Zzz First Alphabetically", characterID: "monk"))
 
         let merged = CharacterDropdownView.characters(from: store)
         let builtinCount = CharacterRegistry.all.count
-        let factoryCount = FactoryPresetCharacter.all.count
 
         XCTAssertEqual(Array(merged.prefix(builtinCount)).map(\.id),
                         CharacterRegistry.all.map(\.id))
-        XCTAssertEqual(Array(merged[builtinCount..<(builtinCount + factoryCount)]).map(\.id),
-                        FactoryPresetCharacter.all.map(\.id),
-                        "factory presets must follow the built-ins directly, in kFactoryPresets order")
         XCTAssertEqual(merged.last?.displayName, "Zzz First Alphabetically",
-            "a user entry must never sort ahead of the built-in roster or the factory presets, even alphabetically")
+            "a user entry must never sort ahead of the built-in roster, even alphabetically")
     }
 
     // MARK: - Rows meet the 44pt HIG row height
@@ -419,62 +410,59 @@ final class CharacterDropdownViewTests: XCTestCase {
         XCTAssertTrue(accessibleLabels(in: dropdown).contains("Read Only"), "the row itself still lists, read-only")
     }
 
-    // MARK: - Factory presets appear in the in-app list, each with a face
+    // MARK: - Upstream's preset NAMES never appear; their SOUNDS do, each
+    // under its own character
 
     /// Upstream's six factory presets stay available to HOSTS through
-    /// `MonkSynthAU.factoryPresets`/`currentPreset` (see `PresetTests`), AND
-    /// now appear in this app's own picker too, each wearing a face —
-    /// reversing the earlier "factory presets have no face so they're
-    /// dropped" decision (see the task).
-    func testAllSixFactoryPresetNamesAppearInTheDropdownEachWithANonNilFace() {
+    /// `MonkSynthAU.factoryPresets`/`currentPreset` (see `PresetTests`), but
+    /// their NAMES ("Dorje", "Jamyang", ...) must never appear in this app's
+    /// own picker — only the sound does, under one of the six characters
+    /// built for it (`DogCharacter`, `GhostCharacter`, `FireFighterCharacter`,
+    /// `PunkCharacter`, `PizzaCharacter`, `CatCharacter` — see the task:
+    /// "keep the sounds, drop the names, give each its own new character,"
+    /// reversing the earlier, now-deleted `FactoryPresetCharacter` approach
+    /// of listing the preset's own name wearing a borrowed face).
+    func testUpstreamsFactoryPresetNamesNeverAppearInTheDropdown() {
         let store = FakePresetStore()
         store.seed(SavedPreset(name: "Something", characterID: "monk"))
         let dropdown = makeDropdown(store: store)
 
         let labels = Set(accessibleLabels(in: dropdown))
         for preset in kFactoryPresets {
-            XCTAssertTrue(labels.contains(preset.name), "factory preset \"\(preset.name)\" is missing from the in-app list")
-        }
-        for character in FactoryPresetCharacter.all {
-            XCTAssertFalse(character.faceID.isEmpty, "\(character.displayName) has an empty faceID")
+            XCTAssertFalse(labels.contains(preset.name),
+                "upstream's factory preset name \"\(preset.name)\" must not appear in the in-app list")
         }
     }
 
-    /// Selecting a factory preset's row applies ITS OWN parameters, never
-    /// the borrowed face's built-in voice — the same regression
-    /// `testTappingAUserEntryRowFiresOnSelectWithItsSavedParameters` already
-    /// guards for saved user entries, now proven for factory presets too.
-    func testTappingAFactoryPresetRowFiresOnSelectWithItsOwnSavedParameters() throws {
+    /// The six characters built to voice upstream's factory presets DO
+    /// appear, each as an ordinary built-in row with its own face — no
+    /// different from any of the original six.
+    func testTheSixFactoryVoicedCharactersAppearInTheDropdownEachAsItsOwnFace() {
         let dropdown = makeDropdown()
-        let target = try XCTUnwrap(FactoryPresetCharacter.all.first(where: { $0.displayName == "Monastary" }))
+        let labels = Set(accessibleLabels(in: dropdown))
+        for name in ["Dog", "Ghost", "Fire Fighter", "Punk", "Pizza", "Cat"] {
+            XCTAssertTrue(labels.contains(name), "\"\(name)\" is missing from the in-app list")
+        }
+    }
+
+    /// Selecting one of the six factory-voiced characters' rows applies ITS
+    /// OWN preset parameters, never the built-in's `CharacterVoiceTable`
+    /// voice (which it doesn't have — see `FactoryVoiceTable`) — the same
+    /// regression `testTappingAUserEntryRowFiresOnSelectWithItsSavedParameters`
+    /// already guards for saved user entries, now proven for these six too.
+    func testTappingAFactoryVoicedCharacterRowFiresOnSelectWithItsOwnSavedParameters() throws {
+        let dropdown = makeDropdown()
 
         var selected: Character?
         dropdown.onSelect = { selected = $0 }
 
-        let row = try XCTUnwrap(accessibleView(labeled: "Monastary", in: dropdown) as? UIControl)
+        let row = try XCTUnwrap(accessibleView(labeled: "Dog", in: dropdown) as? UIControl)
         row.sendActions(for: .touchUpInside)
 
-        let preset = try XCTUnwrap(selected as? FactoryPresetCharacter)
-        XCTAssertEqual(preset.displayName, "Monastary")
+        let dog = try XCTUnwrap(selected as? DogCharacter)
         let expectedHeadSize = kFactoryPresets.first(where: { $0.name == "Monastary" })!.values[Int(Param.headSize.rawValue)]
-        XCTAssertEqual(preset.savedParameters?[.headSize], expectedHeadSize)
-        XCTAssertEqual(preset.faceID, target.faceID)
-    }
-
-    /// Factory presets can never be deleted — no delete control exists on
-    /// their rows, exactly like built-ins, regardless of how many user
-    /// entries exist alongside them.
-    func testFactoryPresetRowsOfferNoDeleteControl() throws {
-        let store = FakePresetStore()
-        store.seed(SavedPreset(name: "Some Save", characterID: "monk"))
-        let dropdown = makeDropdown(store: store)
-        let deleteLabel = NSLocalizedString("presets.delete.accessibility", comment: "")
-
-        for preset in kFactoryPresets {
-            let row = try XCTUnwrap(accessibleView(labeled: preset.name, in: dropdown))
-            XCTAssertNil(accessibleView(labeled: deleteLabel, in: row),
-                "\(preset.name)'s row must not offer a delete control")
-        }
+        XCTAssertEqual(dog.savedParameters?[.headSize], expectedHeadSize)
+        XCTAssertEqual(dog.faceID, "dog", "a factory-voiced character must be its own face, never a borrowed one")
     }
 
     // MARK: - PluginView wiring

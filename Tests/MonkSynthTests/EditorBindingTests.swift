@@ -153,6 +153,16 @@ final class EditorBindingTests: XCTestCase {
     /// Symmetric coverage for `stepBackward()` (the "previous character"
     /// arrow) — stepping backward from monk wraps straight to the last
     /// entry (cow), and that also loads cow's voice.
+    /// Stepping backward from monk wraps to `CharacterRegistry.all`'s LAST
+    /// entry — not hardcoded to a specific character/voice here, since the
+    /// registry's own ordering (`Character.swift`) is what decides which
+    /// one that is, and shouldn't need this test rewritten every time the
+    /// roster is reordered. The last entry today is one of the six
+    /// factory-voiced characters (see `FactoryVoiceTable`) — its voice
+    /// comes from its own `savedParameters` (its assigned preset's raw
+    /// values), never a `CharacterVoiceTable` entry (it doesn't have one),
+    /// mirroring exactly what `character.savedParameters ??
+    /// CharacterVoiceTable.voice(for: character)` in production computes.
     func testStepBackwardAlsoLoadsItsVoiceIntoTheParameterTree() throws {
         let vc = AudioUnitViewController()
         let unit = try vc.createAudioUnit(with: makeDescription()) as! MonkSynthAU
@@ -161,14 +171,16 @@ final class EditorBindingTests: XCTestCase {
         let pluginView = vc.view as! PluginView
         XCTAssertEqual(pluginView.stage.character.id, "monk")
 
-        pluginView.stage.stepBackward()   // monk -> cow (wraps backward)
+        pluginView.stage.stepBackward()   // monk -> the registry's last entry (wraps backward)
 
-        XCTAssertEqual(pluginView.stage.character.id, "cow")
-        XCTAssertEqual(unit.characterID, "cow")
-        for (param, value) in CharacterVoiceTable.cow {
+        let last = CharacterRegistry.all.last!
+        XCTAssertEqual(pluginView.stage.character.id, last.id)
+        XCTAssertEqual(unit.characterID, last.id)
+        let expectedVoice = last.savedParameters ?? CharacterVoiceTable.voice(for: last)
+        for (param, value) in expectedVoice {
             let treeValue = unit.parameterTree?.parameter(withAddress: param.rawValue)?.value
             XCTAssertEqual(treeValue ?? -1, value, accuracy: 1e-6,
-                            "\(param.identifier) did not load cow's voice")
+                            "\(param.identifier) did not load \(last.id)'s voice")
         }
     }
 

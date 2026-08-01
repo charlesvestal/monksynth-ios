@@ -1,45 +1,47 @@
 import UIKit
 
 /// Dismissible overlay listing the WHOLE character roster as plain text
-/// rows: every built-in character, then upstream's six factory presets
-/// (`FactoryPresetCharacter.all` — brought back into this list wearing a
-/// borrowed face, see that type's doc comment for why), then every one of
-/// the user's own saved entries — one list, not three. This is where
-/// "characters" and "presets" actually merge (see the task: "Why are the
-/// presets and characters different? It should be one list" / "I want only
-/// the characters as presets"). Saving the current patch and deleting a
-/// saved entry live here too — see `installSaveSection`/
-/// `CharacterDropdownRow`'s delete button — rather than in a second,
-/// separate overlay: there is now exactly one picker and exactly one way
-/// in, matching the task's decision 1.
+/// rows: every built-in character (`CharacterRegistry.all` — twelve now:
+/// the original six plus the six added to give upstream's factory presets
+/// their own faces, see `FactoryVoiceTable`; upstream's preset NAMES never
+/// appear in this app's own UI, only their sounds, each under a character
+/// of its own — see the task, "give upstream's six factory sounds their own
+/// characters"), then every one of the user's own saved entries — one list,
+/// not two. This is where "characters" and "presets" actually merge (see
+/// the task: "Why are the presets and characters different? It should be
+/// one list" / "I want only the characters as presets"). Saving the current
+/// patch and deleting a saved entry live here too — see
+/// `installSaveSection`/`CharacterDropdownRow`'s delete button — rather
+/// than in a second, separate overlay: there is now exactly one picker and
+/// exactly one way in, matching the task's decision 1.
 ///
 /// Modelled on `AboutView`/`MoreAppsView`: scrim, centred panel,
 /// tap-outside-to-dismiss, and it scrolls when the content doesn't fit — an
 /// AUv3 host can hand this view an extremely short rect (the AUM strip,
-/// 375×180), and the roster — now built-ins, the six factory presets, plus
-/// an open-ended number of saved entries — is expected to keep growing.
+/// 375×180), and the roster — twelve built-ins plus an open-ended number of
+/// saved entries — is expected to keep growing.
 ///
-/// "Save current…" sits right after the built-in rows and the factory
-/// section, BEFORE the "Saved" section — not at the very end of the whole
-/// scrollable list, after every saved entry. Two things were tried and
-/// rejected first: (1) at the very bottom, after the (open-ended) saved
-/// list — with even a handful of saved entries already, that pushed Save
-/// below the fold at a generous 700pt height, and the scroll distance to
-/// reach it only grows every time the user saves another one, the opposite
-/// of what a frequently-used control should do; (2) pinned above the close
-/// button, outside the scrollable list entirely, so it's always on screen
-/// with zero scrolling — but at the AUM strip (375×180) the fixed chrome
-/// (padding, Save's own controls, the gaps, Close) alone consumes nearly the
-/// whole 140pt the panel actually has, leaving no room at all for the row
-/// list — the dropdown's actual primary job, choosing a character — to show
-/// anything. Sitting right after the fixed built-in + factory rows is the
-/// middle ground: reachable after scrolling a small, CONSTANT distance
-/// regardless of how many entries have been saved (the built-in and factory
-/// counts never change), while staying part of the same single scrollable
-/// flow as everything else — no separate space-rationing logic, no risk of
-/// starving the list — exactly the proven, already-tested scrolling
-/// behaviour `AboutView`/`MoreAppsView`/the original built-ins-only version
-/// of this view already rely on at the AUM strip.
+/// "Save current…" sits right after the built-in rows, BEFORE the "Saved"
+/// section — not at the very end of the whole scrollable list, after every
+/// saved entry. Two things were tried and rejected first: (1) at the very
+/// bottom, after the (open-ended) saved list — with even a handful of saved
+/// entries already, that pushed Save below the fold at a generous 700pt
+/// height, and the scroll distance to reach it only grows every time the
+/// user saves another one, the opposite of what a frequently-used control
+/// should do; (2) pinned above the close button, outside the scrollable
+/// list entirely, so it's always on screen with zero scrolling — but at the
+/// AUM strip (375×180) the fixed chrome (padding, Save's own controls, the
+/// gaps, Close) alone consumes nearly the whole 140pt the panel actually
+/// has, leaving no room at all for the row list — the dropdown's actual
+/// primary job, choosing a character — to show anything. Sitting right
+/// after the fixed built-in rows is the middle ground: reachable after
+/// scrolling a small, CONSTANT distance regardless of how many entries have
+/// been saved (the built-in count never changes), while staying part of the
+/// same single scrollable flow as everything else — no separate
+/// space-rationing logic, no risk of starving the list — exactly the
+/// proven, already-tested scrolling behaviour `AboutView`/`MoreAppsView`/the
+/// original built-ins-only version of this view already rely on at the AUM
+/// strip.
 final class CharacterDropdownView: UIView {
 
     /// Fired when the user taps outside the panel or the close button,
@@ -66,16 +68,9 @@ final class CharacterDropdownView: UIView {
     private let panel = UIView()
     private let scrollView = UIScrollView()
     private let stack = UIStackView()
-    /// Built once, never refreshed: the six built-in rows never change
+    /// Built once, never refreshed: the twelve built-in rows never change
     /// (unlike the saved section — see `savedSection`).
     private let builtInRows = UIStackView()
-    /// Built once, never refreshed, exactly like `builtInRows`: the "Factory"
-    /// section header + one row per `FactoryPresetCharacter.all` entry.
-    /// Upstream's six factory presets are fixed data
-    /// (`AU/FactoryPresets.swift`), not tied to any `PresetStoring` — unlike
-    /// `savedSection` below, this section shows regardless of whether a
-    /// store was even handed to this view.
-    private let factorySection = UIStackView()
     /// Rebuilt after every save/delete: the "Saved" section header + one
     /// row per user entry. Kept as its own container (rather than mixed
     /// into `builtInRows`) so a refresh never has to touch — or risk
@@ -92,19 +87,19 @@ final class CharacterDropdownView: UIView {
     private static let closeButtonGap: CGFloat = 12
     private static let maxPanelWidth: CGFloat = 320
 
-    /// The merged, ordered roster this dropdown lists: every built-in
-    /// character (`CharacterRegistry.all`), then upstream's six factory
-    /// presets (`FactoryPresetCharacter.all` — always present, independent
-    /// of `store`), then every one of `store`'s saved user entries
-    /// (`UserCharacter.all(from:)`) — see the task's decision 3, "built-ins
-    /// first, then factory presets, then user entries." The count is always
-    /// derived from these three sources, never hardcoded. Exposed as a
+    /// The merged, ordered roster this dropdown lists — AND the same roster
+    /// `PluginView`'s `‹`/`›` arrows step through (see
+    /// `PluginView.stepCharacter(by:)`, which calls this directly so the two
+    /// can never silently disagree about what "the full roster" means):
+    /// every built-in character (`CharacterRegistry.all`), then every one of
+    /// `store`'s saved user entries (`UserCharacter.all(from:)`) — see the
+    /// task's decision 3, "built-ins first, then user entries." The count is
+    /// always derived from these two sources, never hardcoded. Exposed as a
     /// `static` so tests can assert against exactly what a live instance
     /// will show without needing a laid-out view.
     static func characters(from store: PresetStoring?) -> [Character] {
-        let builtinsAndFactory: [Character] = CharacterRegistry.all + FactoryPresetCharacter.all
-        guard let store else { return builtinsAndFactory }
-        return builtinsAndFactory + UserCharacter.all(from: store)
+        guard let store else { return CharacterRegistry.all }
+        return CharacterRegistry.all + UserCharacter.all(from: store)
     }
 
     init(frame: CGRect, current: Character, store: PresetStoring?) {
@@ -158,32 +153,9 @@ final class CharacterDropdownView: UIView {
             builtInRows.addArrangedSubview(row)
         }
 
-        // Factory presets — built once, right after the built-ins, exactly
-        // like `builtInRows` (see `factorySection`'s doc comment): fixed
-        // data, never refreshed, never deletable. A "Factory" header, mirroring
-        // "Saved"'s header below, plus a per-row badge (see
-        // `CharacterDropdownRow`) so the group still reads as distinct from
-        // both built-ins and user entries even after scrolling the header
-        // out of view.
-        factorySection.axis = .vertical
-        factorySection.alignment = .fill
-        factorySection.spacing = 8
-        stack.addArrangedSubview(factorySection)
-        let factoryHeader = UILabel()
-        factoryHeader.text = NSLocalizedString("characterPicker.factory", comment: "Section header above upstream's factory presets")
-        factoryHeader.font = Theme.label(12, weight: .semibold)
-        factoryHeader.textColor = Theme.textDim
-        factorySection.addArrangedSubview(factoryHeader)
-        for factoryCharacter in FactoryPresetCharacter.all {
-            let row = CharacterDropdownRow(character: factoryCharacter, isCurrent: factoryCharacter.id == current.id,
-                                            kind: .factory, showsDelete: false)
-            row.onTap = { [weak self] in self?.onSelect?(factoryCharacter) }
-            factorySection.addArrangedSubview(row)
-        }
-
         // Save current… — see the class doc comment for why this sits here
-        // (right after the fixed built-in + factory rows) rather than at the
-        // very bottom of the whole list or pinned outside it entirely.
+        // (right after the fixed built-in rows) rather than at the very
+        // bottom of the whole list or pinned outside it entirely.
         installSaveSection()
 
         savedSection.axis = .vertical
@@ -259,9 +231,8 @@ final class CharacterDropdownView: UIView {
     /// it actually supports saving — otherwise a short explanatory line
     /// takes its place, matching `PresetStoring.supportsUserPresets`'s own
     /// doc comment ("without offering a save button that cannot work").
-    /// Added directly to `stack`, right after `builtInRows`/`factorySection`
-    /// — see the class doc comment for why here rather than at the end of
-    /// the whole list.
+    /// Added directly to `stack`, right after `builtInRows` — see the class
+    /// doc comment for why here rather than at the end of the whole list.
     private func installSaveSection() {
         guard let store, store.supportsUserPresets else {
             let l = UILabel()
@@ -361,22 +332,20 @@ extension CharacterDropdownView: UIGestureRecognizerDelegate {
 }
 
 /// One tappable roster row: the character's name, a small badge identifying
-/// which of the three groups it belongs to (see `Kind` — nothing for a
-/// built-in, a star for a factory preset, a bookmark for a saved user
-/// entry), a checkmark for whichever row is currently selected, and — for a
-/// user entry, when the store supports it — a trailing delete button.
-/// `UIControl`, not a plain view with a gesture recognizer, mirroring
-/// `MoreAppsRow` — gets touch-down/up highlighting and the standard
-/// `.button` accessibility affordances for free. Fixed at the HIG's 44pt
-/// minimum row height, per the task.
+/// which of the two groups it belongs to (see `Kind` — nothing for a
+/// built-in, a bookmark for a saved user entry), a checkmark for whichever
+/// row is currently selected, and — for a user entry, when the store
+/// supports it — a trailing delete button. `UIControl`, not a plain view
+/// with a gesture recognizer, mirroring `MoreAppsRow` — gets touch-down/up
+/// highlighting and the standard `.button` accessibility affordances for
+/// free. Fixed at the HIG's 44pt minimum row height, per the task.
 private final class CharacterDropdownRow: UIControl {
 
     /// Which roster group a row belongs to — drives its badge (see `badge`
-    /// below). Deliberately NOT the same thing as `showsDelete`: a factory
-    /// preset gets its own distinct badge but never a delete button (it
-    /// can't be deleted), while a user entry's delete button depends
-    /// separately on `PresetStoring.supportsUserPresets`.
-    enum Kind { case builtIn, factory, user }
+    /// below). Deliberately NOT the same thing as `showsDelete`: a user
+    /// entry's delete button depends separately on
+    /// `PresetStoring.supportsUserPresets`.
+    enum Kind { case builtIn, user }
 
     private let nameLabel = UILabel()
     private let badge = UIImageView()
@@ -398,7 +367,6 @@ private final class CharacterDropdownRow: UIControl {
     private static func badgeImageName(for kind: Kind) -> String? {
         switch kind {
         case .builtIn: return nil
-        case .factory: return "star.fill"
         case .user: return "bookmark.fill"
         }
     }
@@ -410,13 +378,12 @@ private final class CharacterDropdownRow: UIControl {
         layer.borderWidth = isCurrent ? 2 : 1
         layer.borderColor = (isCurrent ? Theme.accent : Theme.panelBorder).cgColor
 
-        // The badge (plus each group's own section header above its first
-        // row — see `CharacterDropdownView.init`/`refreshSavedSection`) is
-        // what makes a factory preset or a saved entry visually
-        // distinguishable from a built-in, AND from each other, even when
-        // the header itself has scrolled out of view at a short host rect
-        // (the AUM strip) — a per-row cue that survives scrolling, not just
-        // a one-time divider.
+        // The badge (plus the saved section's own header above its first
+        // row — see `CharacterDropdownView.refreshSavedSection`) is what
+        // makes a saved entry visually distinguishable from a built-in, even
+        // when the header itself has scrolled out of view at a short host
+        // rect (the AUM strip) — a per-row cue that survives scrolling, not
+        // just a one-time divider.
         let badgeImageName = Self.badgeImageName(for: kind)
         badge.image = badgeImageName.flatMap { UIImage(systemName: $0) }
         badge.tintColor = Theme.textDim
