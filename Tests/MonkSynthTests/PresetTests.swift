@@ -39,27 +39,102 @@ final class PresetTests: XCTestCase {
         }
     }
 
-    func testSixFactoryPresetsInOrder() throws {
+    /// Host-facing factory presets are now the twelve characters, in
+    /// `CharacterRegistry` order — never upstream's six Tibetan preset names
+    /// (see the task: "no hosts will surface it, so don't keep them in the
+    /// factory presets list"). Count and names are both DERIVED from the
+    /// registry, never hardcoded, so this test can't drift out of sync with
+    /// the roster the app itself shows.
+    func testFactoryPresetsAreTheCharacterRegistryInOrder() throws {
         let au = try makeAU()
-        let names = au.factoryPresets?.map { $0.name }
-        XCTAssertEqual(names, ["Dorje", "Jamyang", "Monastary", "Ngawang", "Rabten", "Tinley"])
+        let presets = try XCTUnwrap(au.factoryPresets)
+
+        XCTAssertEqual(presets.count, CharacterRegistry.all.count)
+        XCTAssertEqual(presets.map(\.name), CharacterRegistry.all.map(\.displayName))
+        XCTAssertEqual(presets.map(\.number), Array(0..<CharacterRegistry.all.count))
     }
 
-    func testSelectingPresetUpdatesShadowAndTree() throws {
+    /// Selecting a factory preset for one of the six ORIGINAL characters
+    /// applies its hand-tuned `CharacterVoiceTable` voice — the same thing
+    /// picking it in the app's own dropdown does — through the parameter
+    /// tree, and leaves live performance/routing state (vowel, the XY
+    /// params, pitch bend) untouched, exactly like an in-app selection.
+    func testSelectingFactoryPresetForAnOriginalCharacterAppliesItsVoice() throws {
         let au = try makeAU()
-        let preset = try XCTUnwrap(au.factoryPresets?[2])
-        XCTAssertEqual(preset.name, "Monastary")
+        let fishIndex = try XCTUnwrap(CharacterRegistry.all.firstIndex(where: { $0.id == "fish" }))
+        let preset = try XCTUnwrap(au.factoryPresets?[fishIndex])
+        XCTAssertEqual(preset.name, "Fish")
 
         au.currentPreset = preset
 
-        let expected = kFactoryPresets[2].values
-        for (i, want) in expected.enumerated() {
-            let addr = Param.address(atIndex: i)
-            XCTAssertEqual(param_shadow_get(au.shadow, addr), want, accuracy: 1e-5,
-                           "shadow mismatch at index \(i)")
-            let treeValue = au.parameterTree!.parameter(withAddress: UInt64(i))!.value
-            XCTAssertEqual(treeValue, want, accuracy: 1e-5,
-                           "parameter tree mismatch at index \(i)")
+        XCTAssertEqual(au.characterID, "fish")
+        for (param, want) in CharacterVoiceTable.voice(for: FishCharacter()) {
+            let treeValue = au.parameterTree!.parameter(withAddress: param.rawValue)!.value
+            XCTAssertEqual(treeValue, want, accuracy: 1e-5, "\(param.name) mismatch in tree")
+            XCTAssertEqual(param_shadow_get(au.shadow, param.address), want, accuracy: 1e-5,
+                           "\(param.name) mismatch in shadow")
+        }
+        // Never stomped: not one of the 15 voice parameters.
+        XCTAssertEqual(au.parameterTree!.parameter(withAddress: Param.vowel.rawValue)!.value,
+                       Param.vowel.defaultValue, accuracy: 1e-6)
+    }
+
+    /// Selecting a factory preset for one of the six NEW characters applies
+    /// its `savedParameters` — one of upstream's own six patches, verbatim,
+    /// via `FactoryVoiceTable` — proving the sound genuinely survives even
+    /// though its original name (here, "Monastary") is gone from the list.
+    func testSelectingFactoryPresetForAFactoryVoicedCharacterAppliesItsPreset() throws {
+        let au = try makeAU()
+        let dogIndex = try XCTUnwrap(CharacterRegistry.all.firstIndex(where: { $0.id == "dog" }))
+        let preset = try XCTUnwrap(au.factoryPresets?[dogIndex])
+        XCTAssertEqual(preset.name, "Dog")
+
+        au.currentPreset = preset
+
+        XCTAssertEqual(au.characterID, "dog")
+        let expected = try XCTUnwrap(FactoryVoiceTable.values(for: "dog"))
+        XCTAssertFalse(expected.isEmpty)
+        for (param, want) in expected {
+            let treeValue = au.parameterTree!.parameter(withAddress: param.rawValue)!.value
+            XCTAssertEqual(treeValue, want, accuracy: 1e-5, "\(param.name) mismatch in tree")
+            XCTAssertEqual(param_shadow_get(au.shadow, param.address), want, accuracy: 1e-5,
+                           "\(param.name) mismatch in shadow")
+        }
+    }
+
+    /// A negative preset number is the AUv3 convention for a USER preset —
+    /// `currentPreset`'s setter must not try to resolve it against
+    /// `CharacterRegistry` (it would be out of bounds) and must not touch any
+    /// parameter; it only needs to keep mirroring whatever was assigned, same
+    /// as before this task, so the getter still reflects it.
+    func testCurrentPresetWithNegativeNumberIsRecordedButAppliesNothing() throws {
+        let au = try makeAU()
+        au.parameterTree!.parameter(withAddress: Param.headSize.rawValue)!.value = 0.42
+        au.setCharacterID(CowCharacter().id)
+
+        let userPreset = AUAudioUnitPreset()
+        userPreset.number = -1
+        userPreset.name = "Some User Preset"
+        au.currentPreset = userPreset
+
+        XCTAssertEqual(au.currentPreset?.name, "Some User Preset")
+        XCTAssertEqual(au.characterID, "cow", "a user-preset number must not reassign the character")
+        XCTAssertEqual(au.parameterTree!.parameter(withAddress: Param.headSize.rawValue)!.value, 0.42,
+                       accuracy: 1e-6, "a user-preset number must not touch parameters")
+    }
+
+    /// Upstream's six factory-preset names must appear nowhere host-facing
+    /// any more — `factoryPresets` lists characters now, never "Dorje",
+    /// "Jamyang", "Monastary", "Ngawang", "Rabten", or "Tinley" (see
+    /// `CharacterDropdownViewTests.
+    /// testUpstreamsFactoryPresetNamesNeverAppearInTheDropdown` for the
+    /// equivalent in-app-list guarantee).
+    func testUpstreamsSixFactoryPresetNamesNeverAppearInHostFacingFactoryPresets() throws {
+        let au = try makeAU()
+        let names = Set(au.factoryPresets?.map(\.name) ?? [])
+        for upstreamName in kFactoryPresets.map(\.name) {
+            XCTAssertFalse(names.contains(upstreamName),
+                           "upstream's factory preset name \"\(upstreamName)\" must not appear in factoryPresets")
         }
     }
 
@@ -276,8 +351,8 @@ final class PresetTests: XCTestCase {
     /// user presets are different namespaces.
     func testSavingWithAFactoryPresetsNameSucceeds() throws {
         let (au, _) = try makeAUWithFakeBackend()
-        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Dorje"), .success)
-        XCTAssertEqual(au.savedUserPresets.map(\.name), ["Dorje"])
+        XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Monk"), .success)
+        XCTAssertEqual(au.savedUserPresets.map(\.name), ["Monk"])
     }
 
     /// "An unknown characterID in a loaded preset falls back to monk" — a
@@ -309,13 +384,16 @@ final class PresetTests: XCTestCase {
         XCTAssertEqual(au.saveCurrentAsUserPreset(named: "One"), .success)
         XCTAssertEqual(au.saveCurrentAsUserPreset(named: "Two"), .success)
 
-        XCTAssertEqual(au.factoryPresets?.map(\.name), ["Dorje", "Jamyang", "Monastary", "Ngawang", "Rabten", "Tinley"])
+        XCTAssertEqual(au.factoryPresets?.map(\.name), CharacterRegistry.all.map(\.displayName))
 
-        let monastary = try XCTUnwrap(au.factoryPresets?[2])
-        au.currentPreset = monastary
-        let expected = kFactoryPresets[2].values
-        for (i, want) in expected.enumerated() {
-            XCTAssertEqual(param_shadow_get(au.shadow, Param.address(atIndex: i)), want, accuracy: 1e-5)
+        let catIndex = try XCTUnwrap(CharacterRegistry.all.firstIndex(where: { $0.id == "cat" }))
+        let cat = try XCTUnwrap(au.factoryPresets?[catIndex])
+        XCTAssertEqual(cat.name, "Cat")
+        au.currentPreset = cat
+        XCTAssertEqual(au.characterID, "cat")
+        let expected = try XCTUnwrap(FactoryVoiceTable.values(for: "cat"))
+        for (param, want) in expected {
+            XCTAssertEqual(param_shadow_get(au.shadow, param.address), want, accuracy: 1e-5)
         }
         XCTAssertEqual(au.savedUserPresets.map(\.name).sorted(), ["One", "Two"])
     }

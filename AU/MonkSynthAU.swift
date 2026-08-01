@@ -260,12 +260,22 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
     }
 
     // MARK: - Factory presets
+    //
+    // Host-facing factory presets are the twelve characters, not upstream's
+    // six Tibetan preset names: "no hosts will surface [those names], so
+    // don't keep them in the factory presets list." A host that shows its
+    // own preset menu sees exactly the list this app's own picker shows —
+    // Monk, Fish, Unicorn, Little Girl, Old Man, Cow, Punk, Fire Fighter,
+    // Dog, Cat, Pizza, Ghost — one list, not a parallel set of names nothing
+    // else in the app references any more. Upstream's own six patches are
+    // still reachable (see `FactoryVoiceTable`) — as the VOICES of six of
+    // these twelve characters — just never surfaced by their original names.
 
     private lazy var _factoryPresets: [AUAudioUnitPreset] =
-        kFactoryPresets.enumerated().map { i, p in
+        CharacterRegistry.all.enumerated().map { i, character in
             let preset = AUAudioUnitPreset()
             preset.number = i
-            preset.name = p.name
+            preset.name = character.displayName
             return preset
         }
 
@@ -277,11 +287,41 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
         get { _currentPreset }
         set {
             _currentPreset = newValue
-            guard let n = newValue?.number, n >= 0, n < kFactoryPresets.count else { return }
-            for (i, v) in kFactoryPresets[n].values.enumerated() {
-                param_shadow_set(shadow, Param.address(atIndex: i), v)
-                _parameterTree.parameter(withAddress: UInt64(i))?.setValue(v, originator: nil)
-            }
+            // Negative numbers are user presets (the AUv3 convention) — the
+            // host already applied that preset's saved state via `fullState`
+            // before/around setting this property (see `presetState(for:)`),
+            // so there is nothing further to apply here; this setter only
+            // needs to record `_currentPreset` for the getter, which the
+            // assignment above already did. Only a genuine factory-preset
+            // number (0..<CharacterRegistry.all.count) triggers applying a
+            // character below.
+            guard let n = newValue?.number, n >= 0, n < CharacterRegistry.all.count else { return }
+            applyFactoryPresetCharacter(CharacterRegistry.all[n])
+        }
+    }
+
+    /// Applies `character`'s face AND voice for a HOST selecting one of
+    /// `factoryPresets` by number — exactly what `AudioUnitViewController`/
+    /// `RootViewController`'s `onCharacterSelected` wiring does for an
+    /// in-app selection (arrow step or dropdown row): persist the character
+    /// id, then load `character.savedParameters` (a factory-voiced
+    /// character's own preset, verbatim — see `FactoryVoiceTable`) if it has
+    /// one, otherwise `CharacterVoiceTable.voice(for:)`. Values are written
+    /// through the parameter tree's `setValue(_:originator:)` — never
+    /// straight into the shadow — so the host observes each changed
+    /// parameter (the tree's own `implementorValueObserver`, set up in
+    /// `buildParameterTree()`, mirrors every write into the shadow the
+    /// render thread reads). This IS a genuine external restore (a host
+    /// picking a preset while the editor may already be on screen), so —
+    /// like `fullState`'s setter — `onCharacterIDChange` fires when the id
+    /// actually changed, keeping any visible editor in sync.
+    private func applyFactoryPresetCharacter(_ character: Character) {
+        let changed = character.id != characterID
+        characterID = character.id
+        if changed { onCharacterIDChange?(character.id) }
+        let values = character.savedParameters ?? CharacterVoiceTable.voice(for: character)
+        for (param, value) in values {
+            _parameterTree.parameter(withAddress: param.rawValue)?.setValue(value, originator: nil)
         }
     }
 
