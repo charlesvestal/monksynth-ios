@@ -85,6 +85,12 @@ that it appears exactly once.
 project and this is a port, not an original work. The MIT notice ships in the
 about screen; the description should say so too.
 
+**Jonathan Taylor was contacted and approved this port (2026-08-01.)** The
+courtesy conversation the design doc called for has happened. That does not
+reduce the attribution obligations above — MIT still requires the copyright
+notice, and the about screen still carries it — but the "should we ask him
+first" question is settled and does not need revisiting.
+
 ## What ships
 
 - `MonkSynth.app` — standalone instrument, iOS 16+, universal (iPhone + iPad)
