@@ -84,8 +84,26 @@ final class RenderSweep: XCTestCase {
             let values = sweepValues(env: env, defaultRange: defaultRange, count: count)
             try renderSweep(base: OldManCharacter(), keyPath: keyPath, values: values,
                              label: constant, outputPath: outputPath)
+        case "firefighter":
+            let (keyPath, defaultRange) = try XCTUnwrap(Self.fireFighterConstants[constant],
+                "unknown SWEEP_CONSTANT '\(constant)' for firefighter — known: \(Self.fireFighterConstants.keys.sorted())")
+            let values = sweepValues(env: env, defaultRange: defaultRange, count: count)
+            try renderSweep(base: FireFighterCharacter(), keyPath: keyPath, values: values,
+                             label: constant, outputPath: outputPath)
+        case "cat":
+            let (keyPath, defaultRange) = try XCTUnwrap(Self.catConstants[constant],
+                "unknown SWEEP_CONSTANT '\(constant)' for cat — known: \(Self.catConstants.keys.sorted())")
+            let values = sweepValues(env: env, defaultRange: defaultRange, count: count)
+            try renderSweep(base: CatCharacter(), keyPath: keyPath, values: values,
+                             label: constant, outputPath: outputPath)
+        case "punk":
+            let (keyPath, defaultRange) = try XCTUnwrap(Self.punkConstants[constant],
+                "unknown SWEEP_CONSTANT '\(constant)' for punk — known: \(Self.punkConstants.keys.sorted())")
+            let values = sweepValues(env: env, defaultRange: defaultRange, count: count)
+            try renderSweep(base: PunkCharacter(), keyPath: keyPath, values: values,
+                             label: constant, outputPath: outputPath)
         default:
-            XCTFail("unknown SWEEP_CHARACTER '\(characterID)' — expected 'girl' or 'oldman'")
+            XCTFail("unknown SWEEP_CHARACTER '\(characterID)' — expected 'girl', 'oldman', 'firefighter', 'cat', or 'punk'")
         }
     }
 
@@ -102,6 +120,7 @@ final class RenderSweep: XCTestCase {
         "hairlineTopControlDepth": (\GirlCharacter.geometry.hairlineTopControlDepth, 1.10...1.70),
         "armLineWidthFraction":    (\GirlCharacter.geometry.armLineWidthFraction, 0.015...0.075),
         "handRadiusFraction":      (\GirlCharacter.geometry.handRadiusFraction, 0.03...0.08),
+        "neckWidth":               (\GirlCharacter.geometry.neckWidth, 0.020...0.075),
     ]
 
     /// Same, for `OldManCharacter.Geometry`.
@@ -112,6 +131,25 @@ final class RenderSweep: XCTestCase {
         "sideHairTopLift":          (\OldManCharacter.geometry.sideHairTopLift, 0.10...0.60),
         "sideHairBulgeLift":        (\OldManCharacter.geometry.sideHairBulgeLift, -0.10...0.30),
         "wrinkleAlpha":             (\OldManCharacter.geometry.wrinkleAlpha, 0.10...0.65),
+    ]
+
+    /// Same, for `FireFighterCharacter.Geometry`'s neck-column fields (the
+    /// cone-vs-neck defect fix).
+    private static let fireFighterConstants: [String: (WritableKeyPath<FireFighterCharacter, CGFloat>, ClosedRange<CGFloat>)] = [
+        "neckWidth":                (\FireFighterCharacter.geometry.neckWidth, 0.030...0.140),
+        "shoulderNeckControlInset": (\FireFighterCharacter.geometry.shoulderNeckControlInset, 0.02...0.30),
+    ]
+
+    /// Same, for `CatCharacter.Geometry`'s neck-column fields.
+    private static let catConstants: [String: (WritableKeyPath<CatCharacter, CGFloat>, ClosedRange<CGFloat>)] = [
+        "neckWidth":                (\CatCharacter.geometry.neckWidth, 0.040...0.160),
+        "shoulderNeckControlInset": (\CatCharacter.geometry.shoulderNeckControlInset, 0.02...0.30),
+    ]
+
+    /// Same, for `PunkCharacter.Geometry`'s neck-column fields.
+    private static let punkConstants: [String: (WritableKeyPath<PunkCharacter, CGFloat>, ClosedRange<CGFloat>)] = [
+        "neckWidth":                (\PunkCharacter.geometry.neckWidth, 0.030...0.130),
+        "shoulderNeckControlInset": (\PunkCharacter.geometry.shoulderNeckControlInset, 0.02...0.30),
     ]
 
     // MARK: - Rendering

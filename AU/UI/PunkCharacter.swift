@@ -76,25 +76,39 @@ struct PunkCharacter: Character {
         var jacketRightControlX: CGFloat = 0.90
         var jacketRightControlY: CGFloat = 0.78
         var jacketNeckX: CGFloat = 0.5
+        /// Where the jacket's own collar band sits — the Y at which the
+        /// shoulder curves stop converging and hand off to the flat-topped
+        /// neck column (`neckWidth`) below. A previous version converged
+        /// both the jacket's shoulders AND the neck patch to this single
+        /// point, which read as the jacket rising to a sharp funnel point
+        /// directly under the chin rather than a body with a neck.
         var jacketNeckY: CGFloat = 0.50
-        var jacketNeckControlY: CGFloat = 0.56
+        /// How far in from each shoulder point, as a stage fraction, the
+        /// shoulder-to-neck curve's own control point sits — with its Y
+        /// pinned to `jacketNeckY` (the collar height), not
+        /// `jacketShoulderY` (the shoulder height). Keeping the control
+        /// point near the SHOULDER rather than centred under the chin
+        /// (where the two curves' destinations already are) makes the
+        /// shoulders read as spreading out then stepping up to the collar,
+        /// instead of tapering inward in a concave wasp-waist pinch right
+        /// where the neck meets the shoulders — what a centre-anchored
+        /// control point produced.
+        var shoulderNeckControlInset: CGFloat = 0.12
 
         // --- Neck ---
-        /// How far above the head's own bottom edge the skin neck patch's
+        /// How far above the head's own bottom edge the skin neck column's
         /// top sits, in head-radius units — kept slightly INSIDE the head
         /// circle so there is no seam between head fill and neck fill. An
         /// earlier version had no neck at all: the head sat directly over
         /// empty background above the jacket's own collar point.
         var neckTopOffsetRadii: CGFloat = 0.85
-        /// Half-width of the neck patch's top edge, matched to (very
-        /// slightly wider than) the head circle's own half-width at
-        /// `neckTopOffsetRadii`, so the head fill (drawn after) fully
-        /// covers the seam with no visible corner. The patch is a TRIANGLE
-        /// down to the jacket's own V-neck point (`jacketNeckX`/
-        /// `jacketNeckY`), not a rectangle — see `FireFighterCharacter`'s
-        /// identical field for why a rectangle reads as a notch cut out of
-        /// the silhouette instead of a smoothly tapering neck.
-        var neckTopHalfWidthFraction: CGFloat = 0.079
+        /// Half-width of the neck column — used at BOTH its top edge (just
+        /// under the head) and its bottom edge (at the jacket's own collar,
+        /// `jacketNeckY`), so it reads as a cylinder of constant width,
+        /// noticeably narrower than the head, rather than a triangle
+        /// tapering to a point. Chosen via `RenderSweep`
+        /// (SWEEP_CHARACTER=punk, SWEEP_CONSTANT=neckWidth).
+        var neckWidth: CGFloat = 0.082
 
         // --- Studs ---
         var studXs: [CGFloat] = [0.20, 0.32, 0.68, 0.80]
@@ -151,22 +165,25 @@ struct PunkCharacter: Character {
         body.addQuadCurve(to: p(g.jacketHemLeftX, g.jacketHemY), controlPoint: p(g.jacketLeftControlX, g.jacketLeftControlY))
         body.addLine(to: p(g.jacketHemRightX, g.jacketHemY))
         body.addQuadCurve(to: p(g.jacketShoulderRightX, g.jacketShoulderY), controlPoint: p(g.jacketRightControlX, g.jacketRightControlY))
-        body.addQuadCurve(to: p(g.jacketNeckX, g.jacketNeckY), controlPoint: p(g.jacketNeckX, g.jacketNeckControlY))
-        body.addQuadCurve(to: p(g.jacketShoulderLeftX, g.jacketShoulderY), controlPoint: p(g.jacketNeckX, g.jacketNeckControlY))
+        body.addQuadCurve(to: p(g.jacketNeckX + g.neckWidth, g.jacketNeckY),
+                           controlPoint: p(g.jacketShoulderRightX - g.shoulderNeckControlInset, g.jacketNeckY))
+        body.addLine(to: p(g.jacketNeckX - g.neckWidth, g.jacketNeckY))
+        body.addQuadCurve(to: p(g.jacketShoulderLeftX, g.jacketShoulderY),
+                           controlPoint: p(g.jacketShoulderLeftX + g.shoulderNeckControlInset, g.jacketNeckY))
         body.close()
         Self.jacket.setFill()
         body.fill()
 
-        // Neck: a skin patch bridging the head's own bottom edge down to
-        // the jacket's collar point, so the head reads as attached rather
-        // than floating over empty background. A triangle tapering to the
-        // jacket's own point, not a rectangle — see
-        // `neckTopHalfWidthFraction`'s doc comment for why.
+        // Neck: a skin-coloured COLUMN of constant width (`neckWidth`,
+        // reused at both edges) bridging the head's own bottom edge down to
+        // the jacket's own collar, so the head reads as attached to a real
+        // neck rather than the jacket funnelling to a point under the chin.
         let neckTop = headCenter.fy + headRadius * g.neckTopOffsetRadii
         let neck = UIBezierPath()
-        neck.move(to: p(headCenter.fx - g.neckTopHalfWidthFraction, neckTop))
-        neck.addLine(to: p(g.jacketNeckX, g.jacketNeckY))
-        neck.addLine(to: p(headCenter.fx + g.neckTopHalfWidthFraction, neckTop))
+        neck.move(to: p(headCenter.fx - g.neckWidth, neckTop))
+        neck.addLine(to: p(headCenter.fx - g.neckWidth, g.jacketNeckY))
+        neck.addLine(to: p(headCenter.fx + g.neckWidth, g.jacketNeckY))
+        neck.addLine(to: p(headCenter.fx + g.neckWidth, neckTop))
         neck.close()
         Self.skin.setFill()
         neck.fill()
