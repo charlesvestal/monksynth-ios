@@ -72,31 +72,51 @@ struct FireFighterCharacter: Character {
         var coatRightControlX: CGFloat = 0.92
         var coatRightControlY: CGFloat = 0.82
         var coatNeckX: CGFloat = 0.5
-        /// Where the coat's own V-neck apex sits. Raised from an original
-        /// 0.56 — well below the head's own bottom edge (headCenter.fy +
-        /// headRadius ≈ 0.505) — to 0.50, so the neck patch below has only
-        /// a short span to bridge instead of the head reading as floating
-        /// over empty background on a bare sliver of neck.
+        /// Where the coat's own collar band sits — the Y at which the
+        /// shoulder curves stop converging and hand off to the flat-topped
+        /// neck column (`neckWidth`) below. A SECOND prior attempt (after
+        /// the original 0.56) collapsed this to a single point at 0.50,
+        /// which — combined with the neck patch tapering to that same
+        /// point — made the whole coat read as a funnel/cone balanced
+        /// point-up under the chin instead of a body with a neck. Restored
+        /// to a real collar: the shoulder curves now land on the two edges
+        /// of `neckWidth` at this Y, not on one shared point.
         var coatNeckY: CGFloat = 0.50
-        var coatNeckControlY: CGFloat = 0.62
+        /// How far in from each shoulder point (`coatShoulderLeftX`/
+        /// `coatShoulderRightX`), as a stage fraction, the shoulder-to-neck
+        /// curve's own control point sits — with its Y pinned to
+        /// `coatNeckY`, the same height as the collar itself (not
+        /// `coatShoulderY`, the shoulder height). Keeping the control point
+        /// near the SHOULDER (not centred under the chin, where the two
+        /// curves' destinations already are) is what makes the curve drop
+        /// to collar height while still close to full shoulder width, then
+        /// stay flat over to the neck — the shoulders read as "spreading
+        /// out then stepping up to the collar", not tapering inward in a
+        /// concave wasp-waist pinch. A centred control point (an earlier
+        /// version's approach) pulled the curve in toward the midline far
+        /// too early, carving a concave notch into the silhouette right
+        /// where the neck meets the shoulders.
+        var shoulderNeckControlInset: CGFloat = 0.12
 
         // --- Neck ---
-        /// How far above the head's own bottom edge the skin neck patch's
+        /// How far above the head's own bottom edge the skin neck column's
         /// top sits, in head-radius units — kept slightly INSIDE the head
         /// circle (rather than starting exactly at its edge) so there is no
         /// seam between head fill and neck fill.
         var neckTopOffsetRadii: CGFloat = 0.90
-        /// Half-width of the neck patch's top edge, matched to (very
-        /// slightly wider than) the head circle's own half-width at
-        /// `neckTopOffsetRadii` — see that field's doc comment — so the
-        /// head fill (drawn after) fully covers the seam with no visible
-        /// corner. The patch itself is a TRIANGLE down to the coat's own
-        /// V-neck point (`coatNeckX`/`coatNeckY`), not a rectangle: an
-        /// earlier version used a constant-width rectangle, whose straight
-        /// vertical sides met the round head above and the coat's sharp
-        /// point below at hard 90° corners, reading as a pair of notches
-        /// cut out of the silhouette rather than a smoothly tapering neck.
-        var neckTopHalfWidthFraction: CGFloat = 0.072
+        /// Half-width of the neck column — used at BOTH its top edge (just
+        /// under the head) and its bottom edge (at the coat's own collar,
+        /// `coatNeckY`), so the column reads as a cylinder of constant
+        /// width rather than a triangle tapering to a point. This is what
+        /// actually makes it a *neck* rather than a funnel: an earlier
+        /// version tapered this patch down to a single point at the coat's
+        /// V-neck apex, which — even though the patch itself wasn't a
+        /// notch-cornered rectangle — still read as the coat rising to a
+        /// sharp spike directly under the chin. Chosen via
+        /// `RenderSweep` (SWEEP_CHARACTER=firefighter,
+        /// SWEEP_CONSTANT=neckWidth): noticeably narrower than the head
+        /// (head half-width ≈ 0.165) but clearly wider than a point.
+        var neckWidth: CGFloat = 0.075
 
         // --- Stripe ---
         var stripeTopY: CGFloat = 0.78
@@ -171,23 +191,28 @@ struct FireFighterCharacter: Character {
         body.addQuadCurve(to: p(g.coatHemLeftX, g.coatHemY), controlPoint: p(g.coatLeftControlX, g.coatLeftControlY))
         body.addLine(to: p(g.coatHemRightX, g.coatHemY))
         body.addQuadCurve(to: p(g.coatShoulderRightX, g.coatShoulderY), controlPoint: p(g.coatRightControlX, g.coatRightControlY))
-        body.addQuadCurve(to: p(g.coatNeckX, g.coatNeckY), controlPoint: p(g.coatNeckX, g.coatNeckControlY))
-        body.addQuadCurve(to: p(g.coatShoulderLeftX, g.coatShoulderY), controlPoint: p(g.coatNeckX, g.coatNeckControlY))
+        body.addQuadCurve(to: p(g.coatNeckX + g.neckWidth, g.coatNeckY),
+                           controlPoint: p(g.coatShoulderRightX - g.shoulderNeckControlInset, g.coatNeckY))
+        body.addLine(to: p(g.coatNeckX - g.neckWidth, g.coatNeckY))
+        body.addQuadCurve(to: p(g.coatShoulderLeftX, g.coatShoulderY),
+                           controlPoint: p(g.coatShoulderLeftX + g.shoulderNeckControlInset, g.coatNeckY))
         body.close()
         Self.coat.setFill()
         body.fill()
 
-        // Neck: a skin patch bridging the head's own bottom edge down to
-        // the coat's V-neck apex, so the head reads as attached rather than
-        // floating over empty background — the same technique
-        // `MonkCharacter`/`DogCharacter` use for their own necks. A
-        // triangle tapering to the coat's own point, not a rectangle — see
-        // `neckTopHalfWidthFraction`'s doc comment for why.
+        // Neck: a skin-coloured COLUMN of constant width (`neckWidth`,
+        // reused at both edges) bridging the head's own bottom edge down to
+        // the coat's own collar, so the head reads as attached to a real
+        // neck rather than floating, and the coat reads as shoulders
+        // spreading from the neck's base rather than a funnel rising to a
+        // point under the chin — the same technique `MonkCharacter` uses
+        // for its own neck.
         let neckTop = headCenter.fy + headRadius * g.neckTopOffsetRadii
         let neck = UIBezierPath()
-        neck.move(to: p(headCenter.fx - g.neckTopHalfWidthFraction, neckTop))
-        neck.addLine(to: p(g.coatNeckX, g.coatNeckY))
-        neck.addLine(to: p(headCenter.fx + g.neckTopHalfWidthFraction, neckTop))
+        neck.move(to: p(headCenter.fx - g.neckWidth, neckTop))
+        neck.addLine(to: p(headCenter.fx - g.neckWidth, g.coatNeckY))
+        neck.addLine(to: p(headCenter.fx + g.neckWidth, g.coatNeckY))
+        neck.addLine(to: p(headCenter.fx + g.neckWidth, neckTop))
         neck.close()
         Self.skin.setFill()
         neck.fill()

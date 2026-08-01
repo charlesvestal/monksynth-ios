@@ -50,7 +50,13 @@ struct GirlCharacter: Character {
     // whatever the original code did.
     struct Geometry {
         // --- Dress ---
-        /// Stage position where the dress's shoulders meet the neckline.
+        /// Stage position of the CENTRE of the dress's own collar band —
+        /// the Y at which its left/right silhouette curves stop converging
+        /// and hand off to the flat-topped neck column (`neckWidth`) below,
+        /// rather than to a single point. An earlier version had the dress
+        /// converge to one point here with no neck at all bridging it to
+        /// the head above, which — even with the small gap — read as the
+        /// dress rising to a funnel point directly under the chin.
         var dressNeckX: CGFloat = 0.5
         var dressNeckY: CGFloat = 0.34
         /// Control points that bow the dress's left/right silhouette
@@ -66,6 +72,20 @@ struct GirlCharacter: Character {
         var dressHemY: CGFloat = 0.99
         /// Top edge of the darker hem trim band.
         var hemTrimTopY: CGFloat = 0.92
+
+        // --- Neck ---
+        /// How far above the head's own bottom edge the skin neck column's
+        /// top sits, in head-radius units — kept slightly INSIDE the head
+        /// circle (rather than starting exactly at its edge) so there is no
+        /// seam between head fill and neck fill.
+        var neckTopOffsetRadii: CGFloat = 0.85
+        /// Half-width of the neck column — used at BOTH its top edge (just
+        /// under the head) and its bottom edge (at the dress's own collar,
+        /// `dressNeckY`), so it reads as a cylinder of constant width,
+        /// noticeably narrower than the head, rather than a triangle
+        /// tapering to a point. Chosen via `RenderSweep`
+        /// (SWEEP_CHARACTER=girl, SWEEP_CONSTANT=neckWidth).
+        var neckWidth: CGFloat = 0.045
 
         // --- Hands ---
         /// Stage X position of each hand/sleeve blob.
@@ -155,16 +175,37 @@ struct GirlCharacter: Character {
         func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
         let g = geometry
 
-        // Dress: a big, simple triangle/cone — most of the stage is body,
-        // not head, on purpose.
+        // Dress: a big, simple triangle/cone widening down to the hem —
+        // most of the stage is body, not head, on purpose. Its own TOP
+        // edge, though, is a short flat collar band (`neckWidth` wide), not
+        // a point: a point here reads as the dress itself funnelling up to
+        // a spike under the chin, which is the neck column below exists to
+        // avoid.
         let dress = UIBezierPath()
-        dress.move(to: p(g.dressNeckX, g.dressNeckY))
+        dress.move(to: p(g.dressNeckX - g.neckWidth, g.dressNeckY))
         dress.addQuadCurve(to: p(g.dressHemLeftX, g.dressHemY), controlPoint: p(g.dressLeftControlX, g.dressLeftControlY))
         dress.addLine(to: p(g.dressHemRightX, g.dressHemY))
-        dress.addQuadCurve(to: p(g.dressNeckX, g.dressNeckY), controlPoint: p(g.dressRightControlX, g.dressRightControlY))
+        dress.addQuadCurve(to: p(g.dressNeckX + g.neckWidth, g.dressNeckY), controlPoint: p(g.dressRightControlX, g.dressRightControlY))
+        dress.addLine(to: p(g.dressNeckX - g.neckWidth, g.dressNeckY))
         dress.close()
         Self.dress.setFill()
         dress.fill()
+
+        // Neck: a skin-coloured column of constant width (`neckWidth`,
+        // reused at both edges) bridging the head's own bottom edge down to
+        // the dress's own collar, so the head reads as attached to a real
+        // neck rather than floating just above the dress's point — the
+        // same technique `MonkCharacter` uses for its own neck. Drawn
+        // before the head so the head fill covers its top portion cleanly.
+        let neckTop = headCenter.fy + headRadius * g.neckTopOffsetRadii
+        let neck = UIBezierPath()
+        neck.move(to: p(g.dressNeckX - g.neckWidth, neckTop))
+        neck.addLine(to: p(g.dressNeckX - g.neckWidth, g.dressNeckY))
+        neck.addLine(to: p(g.dressNeckX + g.neckWidth, g.dressNeckY))
+        neck.addLine(to: p(g.dressNeckX + g.neckWidth, neckTop))
+        neck.close()
+        Theme.skin.setFill()
+        neck.fill()
 
         // Hem trim.
         let hem = UIBezierPath()

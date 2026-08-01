@@ -73,37 +73,40 @@ struct CatCharacter: Character {
         var bodyRightControlX: CGFloat = 0.88
         var bodyRightControlY: CGFloat = 0.78
         var bodyNeckX: CGFloat = 0.5
+        /// Where the body's own collar band sits — the Y at which the
+        /// shoulder curves stop converging and hand off to the flat-topped
+        /// neck column (`neckWidth`) below, rather than to a single point.
+        /// A previous version tapered the body all the way to one point
+        /// here (with the neck patch below ALSO tapering toward that same
+        /// point), which read as the whole torso rising to a sharp funnel
+        /// point directly under the chin instead of a body with a neck.
         var bodyNeckY: CGFloat = 0.52
-        var bodyNeckControlY: CGFloat = 0.58
+        /// How far in from each shoulder point, as a stage fraction, the
+        /// shoulder-to-neck curve's own control point sits — with its Y
+        /// pinned to `bodyNeckY` (the collar height), not `bodyShoulderY`
+        /// (the shoulder height). Keeping the control point near the
+        /// SHOULDER rather than centred under the chin (where the two
+        /// curves' destinations already are) makes the shoulders read as
+        /// spreading out then stepping up to the collar, instead of tapering
+        /// inward in a concave wasp-waist pinch right where the neck meets
+        /// the shoulders — what a centre-anchored control point produced.
+        var shoulderNeckControlInset: CGFloat = 0.12
 
         // --- Neck ---
-        /// How far above the head's own bottom edge the coat-coloured neck
-        /// patch's top sits, in head-radius units — deep enough to sit
-        /// safely under the muzzle patch (drawn afterwards, on top), so the
-        /// visible sliver below the muzzle reads as the coat's own colour
-        /// continuing down into a neck rather than a gap of bare
-        /// background between chin and shoulders (present even before this
-        /// pass enlarged the head, just less obvious at the smaller size).
+        /// How far above the head's own bottom edge the neck column's top
+        /// sits, in head-radius units — deep enough to sit safely under the
+        /// muzzle patch (drawn afterwards, on top), so the visible sliver
+        /// below the muzzle reads as a neck continuing down into the
+        /// shoulders rather than a gap of bare background between chin and
+        /// shoulders.
         var neckTopOffsetRadii: CGFloat = 0.85
-        /// Where the neck patch's own taper bottoms out — deliberately a
-        /// little PAST the body's own V-neck apex (`bodyNeckY` 0.52), not
-        /// AT it: tapering the patch to a point exactly on the body's own
-        /// (already zero-width) apex made both shapes pinch to zero width
-        /// at the identical spot, reading as an hourglass waist instead of
-        /// a neck. Stopping the taper here instead, where the body's own
-        /// curve has already regained real width, means the two shapes'
-        /// union never pinches all the way to a point.
-        var neckBottomY: CGFloat = 0.565
-        /// Half-width of the neck patch's top edge, matched to (very
-        /// slightly wider than) the head circle's own half-width at
-        /// `neckTopOffsetRadii`. A TRIANGLE down to the body's own V-neck
-        /// point (`bodyNeckX`/`bodyNeckY`), not a rectangle — a rectangle's
-        /// straight sides meeting the round head above and the body's sharp
-        /// point below at hard 90° corners reads as a pair of notches cut
-        /// out of the silhouette rather than a smoothly tapering neck (see
-        /// `FireFighterCharacter`'s identical field, where this was caught
-        /// on first render).
-        var neckTopHalfWidthFraction: CGFloat = 0.093
+        /// Half-width of the neck column — used at BOTH its top edge (just
+        /// under the head/muzzle) and its bottom edge (at the body's own
+        /// collar, `bodyNeckY`), so it reads as a cylinder of constant
+        /// width, noticeably narrower than the head, rather than a triangle
+        /// tapering to a point. Chosen via `RenderSweep`
+        /// (SWEEP_CHARACTER=cat, SWEEP_CONSTANT=neckWidth).
+        var neckWidth: CGFloat = 0.095
 
         // --- Tail ---
         // Four cubic segments, base to tip and back to a second base point
@@ -201,27 +204,34 @@ struct CatCharacter: Character {
         body.addQuadCurve(to: p(g.bodyHemLeftX, g.bodyHemY), controlPoint: p(g.bodyLeftControlX, g.bodyLeftControlY))
         body.addLine(to: p(g.bodyHemRightX, g.bodyHemY))
         body.addQuadCurve(to: p(g.bodyShoulderRightX, g.bodyShoulderY), controlPoint: p(g.bodyRightControlX, g.bodyRightControlY))
-        body.addQuadCurve(to: p(g.bodyNeckX, g.bodyNeckY), controlPoint: p(g.bodyNeckX, g.bodyNeckControlY))
-        body.addQuadCurve(to: p(g.bodyShoulderLeftX, g.bodyShoulderY), controlPoint: p(g.bodyNeckX, g.bodyNeckControlY))
+        body.addQuadCurve(to: p(g.bodyNeckX + g.neckWidth, g.bodyNeckY),
+                           controlPoint: p(g.bodyShoulderRightX - g.shoulderNeckControlInset, g.bodyNeckY))
+        body.addLine(to: p(g.bodyNeckX - g.neckWidth, g.bodyNeckY))
+        body.addQuadCurve(to: p(g.bodyShoulderLeftX, g.bodyShoulderY),
+                           controlPoint: p(g.bodyShoulderLeftX + g.shoulderNeckControlInset, g.bodyNeckY))
         body.close()
         Self.coat.setFill()
         body.fill()
 
-        // Neck: a coat-coloured patch bridging the head's own bottom edge
-        // down to the body's collar point, so the head reads as attached
-        // rather than floating over empty background. A triangle tapering
-        // to the body's own point, not a rectangle — see
-        // `neckTopHalfWidthFraction`'s doc comment for why. Drawn before
-        // the head/muzzle so they cover its top portion cleanly, leaving
-        // only the sliver below the muzzle visible — the same technique
-        // `MonkCharacter`/`DogCharacter` use for their own necks.
+        // Neck: a COLUMN of constant width (`neckWidth`, reused at both
+        // edges) bridging the head's own bottom edge down to the body's own
+        // collar, so the head reads as attached to a real neck rather than
+        // a coat funnelling to a point under the chin. Coloured with the
+        // same darker shade the tail/ears use — distinct from both the
+        // head and the shoulders below (both plain `coat`) — so the eye
+        // reads head → neck → shoulders as three parts instead of one
+        // continuous fur-coloured cone. Drawn before the head/muzzle so
+        // they cover its top portion cleanly, leaving only the sliver below
+        // the muzzle visible — the same technique `MonkCharacter` uses for
+        // its own neck.
         let neckTop = headCenter.fy + headRadius * g.neckTopOffsetRadii
         let neck = UIBezierPath()
-        neck.move(to: p(headCenter.fx - g.neckTopHalfWidthFraction, neckTop))
-        neck.addLine(to: p(g.bodyNeckX, g.neckBottomY))
-        neck.addLine(to: p(headCenter.fx + g.neckTopHalfWidthFraction, neckTop))
+        neck.move(to: p(headCenter.fx - g.neckWidth, neckTop))
+        neck.addLine(to: p(headCenter.fx - g.neckWidth, g.bodyNeckY))
+        neck.addLine(to: p(headCenter.fx + g.neckWidth, g.bodyNeckY))
+        neck.addLine(to: p(headCenter.fx + g.neckWidth, neckTop))
         neck.close()
-        Self.coat.setFill()
+        Self.coatShadow.setFill()
         neck.fill()
 
         // Tail: curls up from the body's base along the right edge — a cat-
