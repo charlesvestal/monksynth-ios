@@ -19,6 +19,28 @@ import UIKit
 /// remaining subview is the name target.
 final class CharacterSelectorTests: XCTestCase {
 
+    // MARK: - Fake store (for the "arrows cycle saved entries too" test below)
+
+    /// In-memory `PresetStoring` fixture — mirrors the fake
+    /// `CharacterDropdownViewTests`/`RenderUISnapshot` each keep privately
+    /// to their own file; this file needs its own for the same reason
+    /// those do (each is `private`/`fileprivate` to its own file), not
+    /// because the shape differs.
+    private final class FakePresetStore: PresetStoring {
+        let supportsUserPresets = true
+        private(set) var savedUserPresets: [SavedPreset] = []
+        private var snapshots: [String: PresetSnapshot] = [:]
+
+        func snapshot(forUserPresetNamed name: String) -> PresetSnapshot? { snapshots[name] }
+        func saveCurrentAsUserPreset(named name: String) -> PresetSaveResult { .unsupported }
+        func deleteUserPreset(named name: String) {}
+
+        func seed(_ name: String, characterID: String) {
+            savedUserPresets.append(SavedPreset(name: name, characterID: characterID))
+            snapshots[name] = PresetSnapshot(params: Param.allCases.map(\.defaultValue), characterID: characterID)
+        }
+    }
+
     // MARK: - Helpers
 
     private func arrowButtons(in selector: CharacterSelector) -> (left: UIButton, right: UIButton) {
@@ -285,6 +307,53 @@ final class CharacterSelectorTests: XCTestCase {
             + [CharacterRegistry.defaultCharacter.id]
         XCTAssertEqual(backwardVisited, expectedBackward,
             "stepping ‹ through the whole roster must wrap back around in reverse")
+    }
+
+    /// The task's requirement, verified end to end: with saved entries
+    /// present, the arrows step through the FULL roster — every built-in
+    /// AND every saved entry — not just `CharacterRegistry` (the bug the
+    /// task calls out: "today they may only cycle CharacterRegistry").
+    /// `PluginView.stepCharacter(by:)` consults
+    /// `CharacterDropdownView.characters(from: presetStore)`, the exact same
+    /// merged list the dropdown itself shows, so this proves the arrows and
+    /// the dropdown can never silently disagree about what "the full
+    /// roster" means.
+    func testSelectorArrowsStepThroughSavedEntriesTooWithWraparound() throws {
+        let store = FakePresetStore()
+        store.seed("Sunrise", characterID: "unicorn")
+        store.seed("Bubbles", characterID: "fish")
+
+        let view = PluginView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        view.presetStore = store
+        view.setNeedsLayout(); view.layoutIfNeeded()
+        XCTAssertEqual(view.stage.character.id, "monk")
+
+        let roster = CharacterDropdownView.characters(from: store)
+        XCTAssertEqual(roster.count, CharacterRegistry.all.count + 2,
+            "sanity: the roster the arrows walk must include both saved entries")
+
+        let (left, right) = arrowButtons(in: view.characterSelector)
+
+        var forwardVisited = [view.stage.character.id]
+        for _ in 0..<roster.count {
+            right.sendActions(for: .touchUpInside)
+            forwardVisited.append(view.stage.character.id)
+        }
+        XCTAssertEqual(forwardVisited, roster.map(\.id) + ["monk"],
+            "stepping › through the whole roster (built-ins AND saved entries) must wrap back to monk")
+        XCTAssertTrue(forwardVisited.contains("user:Sunrise"), "forward stepping never reached the saved \"Sunrise\" entry")
+        XCTAssertTrue(forwardVisited.contains("user:Bubbles"), "forward stepping never reached the saved \"Bubbles\" entry")
+
+        view.stage.select(CharacterRegistry.defaultCharacter)
+        var backwardVisited = [view.stage.character.id]
+        for _ in 0..<roster.count {
+            left.sendActions(for: .touchUpInside)
+            backwardVisited.append(view.stage.character.id)
+        }
+        let expectedBackward = [CharacterRegistry.defaultCharacter.id]
+            + roster.dropFirst().reversed().map(\.id) + [CharacterRegistry.defaultCharacter.id]
+        XCTAssertEqual(backwardVisited, expectedBackward,
+            "stepping ‹ through the whole roster must wrap back around in reverse, saved entries included")
     }
 
     /// The selector's displayed name tracks `stage.character` across every

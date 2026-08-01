@@ -136,9 +136,19 @@ extension Character {
 /// default; the rest follow in the order they were added.
 ///
 /// Order here is what the arrow buttons walk (`CharacterView.stepForward()`/
-/// `stepBackward()`) and the order the picker overlay lists — it is
-/// independent of `id`, so re-ordering this array changes both without
+/// `stepBackward()`, and — for the FULL roster including saved entries —
+/// `PluginView.stepCharacter(by:)`) and the order the picker overlay lists —
+/// it is independent of `id`, so re-ordering this array changes both without
 /// touching anything persisted.
+///
+/// The last six (dog, ghost, fire fighter, punk, pizza, cat) each give one
+/// of upstream's factory presets its own face — see `FactoryVoiceTable`'s
+/// doc comment for the measured sound->character mapping and how it was
+/// derived — replacing the earlier, now-deleted `FactoryPresetCharacter`
+/// approach of borrowing one of the original six's faces (which broke "one
+/// preset per character": monk alone used to end up with three). Listed
+/// here in `kFactoryPresets`' own order (Dorje, Jamyang, Monastary, Ngawang,
+/// Rabten, Tinley) via the character each one now voices.
 enum CharacterRegistry {
     static let all: [Character] = [
         MonkCharacter(),
@@ -147,6 +157,12 @@ enum CharacterRegistry {
         GirlCharacter(),
         OldManCharacter(),
         CowCharacter(),
+        FireFighterCharacter(),   // Dorje
+        PunkCharacter(),          // Jamyang
+        DogCharacter(),           // Monastary
+        PizzaCharacter(),         // Ngawang
+        GhostCharacter(),         // Rabten
+        CatCharacter(),           // Tinley
     ]
 
     static var defaultCharacter: Character { all[0] }

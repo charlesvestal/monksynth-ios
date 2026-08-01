@@ -31,6 +31,16 @@ enum CharacterVoiceTable {
         voices[character.id] ?? voices[CharacterRegistry.defaultCharacter.id] ?? [:]
     }
 
+    /// True when `character` has its own hand-tuned entry in this table,
+    /// rather than merely falling back to the default's voice via
+    /// `voice(for:)`. Exists for `CharacterTests`' "every built-in character
+    /// has exactly one voice source" invariant: the six voices below XOR a
+    /// factory-preset `Character.savedParameters` override (see
+    /// `FactoryVoiceTable`) — never both, never neither.
+    static func hasOwnVoice(for character: Character) -> Bool {
+        voices[character.id] != nil
+    }
+
     private static let voices: [String: [Param: AUValue]] = [
         "monk": monk,
         "fish": fish,

@@ -64,12 +64,29 @@ final class CharacterVoiceTests: XCTestCase {
         return output
     }
 
+    /// The six ORIGINAL characters — the ones this file's whole point is
+    /// about: hand-tuned `CharacterVoiceTable` entries. Deliberately NOT
+    /// `CharacterRegistry.all` (twelve now: these six plus the six added by
+    /// the "give upstream's factory presets their own characters" task —
+    /// see `FactoryVoiceTable`): those six never go through
+    /// `CharacterVoiceTable.voice(for:)` in production (their
+    /// `Character.savedParameters` is non-nil, which short-circuits it —
+    /// see that property's own doc comment), so asserting anything about
+    /// `CharacterVoiceTable.voice(for:)`'s RESULT for one of them would only
+    /// be testing the harmless "falls back to the default's voice" case
+    /// `CharacterVoiceTable.voice(for:)` already documents, not anything a
+    /// real session actually does. Coverage for those six's own preset-based
+    /// voices lives in `FactoryVoiceCharacterTests` instead.
+    private static let originalSix: [Character] = [
+        MonkCharacter(), FishCharacter(), UnicornCharacter(), GirlCharacter(), OldManCharacter(), CowCharacter(),
+    ]
+
     /// Rendered once per character (not once per test method) — six renders
     /// total for the whole class, computed lazily on first use and shared by
     /// every test below.
     private static let rendered: [String: [Float]] = {
         var result: [String: [Float]] = [:]
-        for character in CharacterRegistry.all {
+        for character in originalSix {
             result[character.id] = render(CharacterVoiceTable.voice(for: character))
         }
         return result
@@ -238,7 +255,7 @@ final class CharacterVoiceTests: XCTestCase {
     /// the actually-measured spread is well inside it (see the task
     /// report) — this is not a knife-edge pass.
     func testLoudnessParityWithinSixDB() throws {
-        let levels = try CharacterRegistry.all.map { ($0.id, try heldDBFS($0.id)) }
+        let levels = try Self.originalSix.map { ($0.id, try heldDBFS($0.id)) }
         let values = levels.map(\.1)
         let spread = values.max()! - values.min()!
         XCTAssertLessThanOrEqual(spread, 6.0,
@@ -248,7 +265,7 @@ final class CharacterVoiceTests: XCTestCase {
     // MARK: - 3. Every voice is audible, finite
 
     func testEveryVoiceIsAudibleAndFinite() throws {
-        for character in CharacterRegistry.all {
+        for character in Self.originalSix {
             let samples = try buffer(for: character.id)
             for (i, s) in samples.enumerated() {
                 XCTAssertTrue(s.isFinite, "\(character.id) produced a non-finite sample at index \(i): \(s)")
@@ -262,7 +279,7 @@ final class CharacterVoiceTests: XCTestCase {
     // MARK: - 4. The voices are genuinely distinct
 
     func testNoTwoCharactersProduceIdenticalRenderedOutput() throws {
-        let ids = CharacterRegistry.all.map(\.id)
+        let ids = Self.originalSix.map(\.id)
         for i in 0..<ids.count {
             for j in (i + 1)..<ids.count {
                 let a = try buffer(for: ids[i])
@@ -286,7 +303,7 @@ final class CharacterVoiceTests: XCTestCase {
     ]
 
     func testEveryCharacterHasAVoiceSettingExactlyTheCharacterisingParameters() {
-        for character in CharacterRegistry.all {
+        for character in Self.originalSix {
             let voice = CharacterVoiceTable.voice(for: character)
             XCTAssertEqual(Set(voice.keys), Self.expectedVoiceParams,
                 "\(character.id)'s voice doesn't set exactly the 15 characterising parameters: " +
@@ -300,7 +317,7 @@ final class CharacterVoiceTests: XCTestCase {
             .vowel, .xyNoteOn, .xyVowel, .xyPitchTarget,
             .pitchBend, .pitchBendRouting, .pitchWheelRaw,
         ]
-        for character in CharacterRegistry.all {
+        for character in Self.originalSix {
             let touched = Set(CharacterVoiceTable.voice(for: character).keys).intersection(forbidden)
             XCTAssertTrue(touched.isEmpty,
                 "\(character.id)'s voice must never touch live performance/routing parameters, touched: \(touched)")
@@ -313,7 +330,7 @@ final class CharacterVoiceTests: XCTestCase {
     /// applies, since voices never write it) matching the default, not just
     /// about voices not writing to it.
     func testPitchBendRoutingStaysAtDefaultForEveryCharacter() {
-        for character in CharacterRegistry.all {
+        for character in Self.originalSix {
             XCTAssertNil(CharacterVoiceTable.voice(for: character)[.pitchBendRouting],
                 "\(character.id)'s voice must not set pitchBendRouting, leaving it at its default")
         }
