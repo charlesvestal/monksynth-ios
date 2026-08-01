@@ -296,6 +296,74 @@ final class RenderUISnapshot: XCTestCase {
         print("SNAPSHOT_WRITTEN /tmp/ui_moreapps.png bytes=\(data.count)")
     }
 
+    /// Required visual check for the donation ask (`about.donation` /
+    /// `about.donationLink`) and the iOS port credit (`about.portCredit` /
+    /// `about.portLink`) added to `AboutView`: a roomy standalone size where
+    /// nothing needs to scroll, AND the AUM strip — 375×180, the shortest
+    /// rect a real host hands this view (see `AboutView`'s own doc comment
+    /// on why it scrolls at all) — where the panel is far shorter than its
+    /// content and MUST scroll rather than clip. Confirms by eye that: both
+    /// new links read as legible, visibly-tappable accent-colored text
+    /// distinct from the body copy; the "Based on MonkSynth by Jonathan
+    /// Taylor" / "iOS port by Charles Vestal" / MIT-notice facts stay
+    /// visually distinct lines rather than blurring together; and the panel
+    /// scrolls at the strip size instead of clipping content off silently.
+    func testWriteAboutViewDonationAndPortCreditSheet() throws {
+        let stripSize = CGSize(width: 375, height: 180)
+        let sizes: [(String, CGSize)] = [
+            ("tall 390x844", CGSize(width: 390, height: 844)),
+            ("AUM strip 375x180, top", stripSize),
+            ("AUM strip 375x180, scrolled to bottom", stripSize),
+        ]
+        let gap: CGFloat = 20
+        let label: CGFloat = 18
+
+        // `AboutView`'s scroll view is a private implementation detail (see
+        // its own `layoutSubviews`), so reach it the same structural way
+        // `AboutViewTests.allSubviews` does, rather than adding a test-only
+        // public seam just for this one assertion.
+        func allSubviews(of view: UIView) -> [UIView] {
+            view.subviews + view.subviews.flatMap { allSubviews(of: $0) }
+        }
+
+        func snapshot(_ size: CGSize, scrolledToBottom: Bool) -> UIImage {
+            let view = AboutView(frame: CGRect(origin: .zero, size: size))
+            view.showsBluetoothButton = true
+            view.setNeedsLayout(); view.layoutIfNeeded()
+            if scrolledToBottom, let scroll = allSubviews(of: view).compactMap({ $0 as? UIScrollView }).first {
+                scroll.contentOffset = CGPoint(x: 0, y: max(0, scroll.contentSize.height - scroll.bounds.height))
+            }
+            return UIGraphicsImageRenderer(size: size).image { c in view.layer.render(in: c.cgContext) }
+        }
+
+        let columnImages = [
+            snapshot(sizes[0].1, scrolledToBottom: false),
+            snapshot(sizes[1].1, scrolledToBottom: false),
+            snapshot(sizes[2].1, scrolledToBottom: true),
+        ]
+
+        let sheet = CGSize(width: sizes.reduce(0) { $0 + $1.1.width + gap } + gap,
+                           height: (sizes.map(\.1.height).max() ?? 0) + gap * 2 + label)
+        let renderer = UIGraphicsImageRenderer(size: sheet)
+        let image = renderer.image { ctx in
+            UIColor(white: 0.06, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: sheet))
+            var x = gap
+            for (i, entry) in sizes.enumerated() {
+                let (name, size) = entry
+                columnImages[i].draw(at: CGPoint(x: x, y: gap + label))
+                (name as NSString).draw(
+                    at: CGPoint(x: x, y: gap),
+                    withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                                     .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+                x += size.width + gap
+            }
+        }
+        let data = try XCTUnwrap(image.pngData())
+        try data.write(to: URL(fileURLWithPath: "/tmp/ui_about_donation.png"))
+        print("SNAPSHOT_WRITTEN /tmp/ui_about_donation.png bytes=\(data.count)")
+    }
+
     /// Renders only `rect` (in `view`'s own coordinate space) of a laid-out
     /// view, at 1x scale so the crop math stays simple. Used below to zoom
     /// in on the stage zone — at full-UI scale the step arrows are too

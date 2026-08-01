@@ -37,17 +37,33 @@
 /* About screen: one-line description of what the instrument is. */
 "about.tagline" = "A monophonic vocal synthesizer using formant-wave-function synthesis.";
 
-/* About screen: the ONE permitted "Delay Lama" mention in the whole app —
-   a factual lineage line, never used in the app title, subtitle, or
-   keywords. LocalizationTests.testDelayLamaAppearsExactlyOnceInEnglish
-   enforces this. */
-"about.heritage" = "Inspired by the classic Delay Lama VST plug-in by AudioNerdz (2002).";
-
 /* About screen: visible credit to the original author. */
 "about.credit" = "Based on MonkSynth by Jonathan Taylor.";
 
+/* About screen: credit for the iOS port — a separate fact from
+   "about.credit" above (Jonathan Taylor wrote MonkSynth; Charles Vestal
+   ported it to iOS), never blurred into one sentence. */
+"about.portCredit" = "iOS port by Charles Vestal.";
+
+/* About screen: button/link to the iOS port author's site
+   (https://charles.pizza), paired with "about.portCredit" above. */
+"about.portLink" = "charles.pizza";
+
 /* About screen: required MIT attribution notice. */
 "about.license" = "MIT Licence. Copyright (c) 2026 Jonathan Taylor.";
+
+/* About screen: the homage + donation request. Also carries the ONE
+   permitted "Delay Lama" mention in the whole app — a factual lineage
+   fact, never used in the app title, subtitle, or keywords — folded into
+   this sentence rather than kept as a separate line so the count stays at
+   one even with the donation ask added.
+   LocalizationTests.testDelayLamaAppearsExactlyOnceInEnglish enforces
+   this. */
+"about.donation" = "MonkSynth is an homage to the classic Delay Lama VST plug-in by AudioNerdz (2002) and is offered completely free of charge. If you enjoy the plugin as much as we did making it, you are kindly requested to make a donation at www.savetibet.org.";
+
+/* About screen: button/link to the donation site
+   (https://www.savetibet.org), paired with "about.donation" above. */
+"about.donationLink" = "www.savetibet.org";
 
 /* About screen: button/link to the upstream source repository. */
 "about.source" = "Source code";
