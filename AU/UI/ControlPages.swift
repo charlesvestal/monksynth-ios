@@ -69,9 +69,9 @@ final class ControlPages: UIView {
     private static let inset: CGFloat = 8
 
     /// The tabs become a column on the left when the strip's width is at
-    /// least this many times its height (iPhone landscape, iPad landscape,
-    /// the AUM strip); otherwise they are a row across the top. The column
-    /// lets the knobs use the strip's whole height.
+    /// least this many times its height (e.g. iPhone landscape, iPad
+    /// landscape, the AUM strip); otherwise they are a row across the top.
+    /// The column lets the knobs use the strip's whole height.
     static let sideTabsAspect: CGFloat = 3.5
     private static let sideTabsWidth: CGFloat = 72
     private static let maxKnobCellWidth: CGFloat = 110

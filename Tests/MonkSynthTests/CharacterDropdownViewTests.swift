@@ -539,4 +539,20 @@ final class CharacterDropdownViewTests: XCTestCase {
         XCTAssertEqual(view.stage.character.id, before)
         XCTAssertFalse(view.subviews.contains(where: { $0 is CharacterDropdownView }))
     }
+
+    /// Every registered character (and a `UserCharacter`) renders an opaque
+    /// thumbnail of the expected size — the scene actually fills the tile
+    /// rather than leaving transparent corners.
+    func testThumbnailsDrawTheSceneForEveryCharacter() {
+        for c in CharacterRegistry.all + [UserCharacter(name: "Mine", faceID: "cat", params: [])] {
+            let img = CharacterThumbnail.image(for: c, side: 40)
+            XCTAssertEqual(img.size, CGSize(width: 40, height: 40))
+            let cg = img.cgImage!
+            var px = [UInt8](repeating: 0, count: 4)
+            let ctx = CGContext(data: &px, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))   // samples bottom-left
+            XCTAssertEqual(px[3], 255, "\(c.id) thumbnail corner is transparent")
+        }
+    }
 }

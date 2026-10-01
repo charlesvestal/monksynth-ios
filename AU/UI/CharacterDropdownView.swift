@@ -123,9 +123,9 @@ final class CharacterDropdownView: UIView {
         addGestureRecognizer(tap)
 
         panel.backgroundColor = Theme.panel
-        panel.layer.cornerRadius = Theme.cornerRadius
-        panel.layer.borderWidth = 1
-        panel.layer.borderColor = Theme.panelBorder.cgColor
+        panel.layer.cornerRadius = Theme.stripCornerRadius
+        panel.layer.borderWidth = Theme.outline
+        panel.layer.borderColor = Theme.ink.cgColor
         panel.clipsToBounds = true
         addSubview(panel)
 
@@ -139,7 +139,7 @@ final class CharacterDropdownView: UIView {
 
         let title = UILabel()
         title.text = NSLocalizedString("characterPicker.title", comment: "Character picker overlay title")
-        title.font = Theme.label(16, weight: .bold)
+        title.font = Theme.display(18)
         title.textColor = Theme.textPrimary
         title.numberOfLines = 0
         stack.addArrangedSubview(title)
@@ -172,11 +172,13 @@ final class CharacterDropdownView: UIView {
 
         var closeConfig = UIButton.Configuration.filled()
         closeConfig.title = NSLocalizedString("about.close", comment: "Dismiss the about screen")
-        closeConfig.baseBackgroundColor = Theme.panelBorder
-        closeConfig.baseForegroundColor = Theme.textPrimary
+        closeConfig.baseBackgroundColor = Theme.cream
+        closeConfig.baseForegroundColor = Theme.ink
         closeConfig.cornerStyle = .medium
+        closeConfig.background.strokeColor = Theme.ink
+        closeConfig.background.strokeWidth = Theme.outline
         closeButton.configuration = closeConfig
-        closeButton.titleLabel?.font = Theme.label(13, weight: .semibold)
+        closeButton.titleLabel?.font = Theme.display(13)
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         panel.addSubview(closeButton)
     }
@@ -353,6 +355,7 @@ private final class CharacterDropdownRow: UIControl {
     /// `PresetStoring.supportsUserPresets`.
     enum Kind { case builtIn, user }
 
+    private let thumb = UIImageView()
     private let nameLabel = UILabel()
     private let badge = UIImageView()
     private let checkmark = UIImageView()
@@ -364,6 +367,7 @@ private final class CharacterDropdownRow: UIControl {
     var onDelete: (() -> Void)?
 
     static let height: CGFloat = 44
+    private static let thumbSize: CGFloat = 40
     private static let checkmarkSize: CGFloat = 18
     private static let badgeSize: CGFloat = 14
     private static let deleteButtonWidth: CGFloat = 40
@@ -379,10 +383,19 @@ private final class CharacterDropdownRow: UIControl {
 
     init(character: Character, isCurrent: Bool, kind: Kind, showsDelete: Bool, accent: UIColor) {
         super.init(frame: .zero)
-        backgroundColor = isCurrent ? Theme.panelBorder : Theme.panel
+        backgroundColor = Theme.panel
         layer.cornerRadius = 8
-        layer.borderWidth = isCurrent ? 2 : 1
-        layer.borderColor = (isCurrent ? accent : Theme.panelBorder).cgColor
+        layer.borderWidth = isCurrent ? Theme.outline : 1
+        layer.borderColor = (isCurrent ? accent : Theme.ink).cgColor
+
+        thumb.image = CharacterThumbnail.image(for: character, side: Self.thumbSize)
+        thumb.layer.cornerRadius = 10
+        thumb.layer.borderWidth = Theme.outline
+        thumb.layer.borderColor = Theme.ink.cgColor
+        thumb.clipsToBounds = true
+        thumb.isUserInteractionEnabled = false
+        thumb.isAccessibilityElement = false
+        addSubview(thumb)
 
         // The badge (plus the saved section's own header above its first
         // row — see `CharacterDropdownView.refreshSavedSection`) is what
@@ -466,11 +479,15 @@ private final class CharacterDropdownRow: UIControl {
                                   y: (bounds.height - Self.checkmarkSize) / 2,
                                   width: Self.checkmarkSize, height: Self.checkmarkSize)
 
+        thumb.frame = CGRect(x: pad, y: (bounds.height - Self.thumbSize) / 2,
+                              width: Self.thumbSize, height: Self.thumbSize)
+
         let badgeW: CGFloat = badge.isHidden ? 0 : Self.badgeSize
-        badge.frame = CGRect(x: pad, y: (bounds.height - Self.badgeSize) / 2,
+        let badgeX = pad + Self.thumbSize + 8
+        badge.frame = CGRect(x: badgeX, y: (bounds.height - Self.badgeSize) / 2,
                               width: badgeW, height: Self.badgeSize)
 
-        let nameX = pad + (badgeW > 0 ? badgeW + 6 : 0)
+        let nameX = badgeX + (badgeW > 0 ? badgeW + 6 : 0)
         let trailingReserved = (bounds.width - checkmark.frame.minX) + 4
         let nameW = max(0, bounds.width - nameX - trailingReserved)
         nameLabel.frame = CGRect(x: nameX, y: 0, width: nameW, height: bounds.height)
@@ -512,10 +529,12 @@ private final class CharacterSaveRow: UIView {
         saveConfig.title = NSLocalizedString(
             "presets.save", comment: "Button that saves the current patch as a new user preset")
         saveConfig.baseBackgroundColor = accent
-        saveConfig.baseForegroundColor = Theme.background
+        saveConfig.baseForegroundColor = Theme.ink
         saveConfig.cornerStyle = .medium
+        saveConfig.background.strokeColor = Theme.ink
+        saveConfig.background.strokeWidth = Theme.outline
         saveButton.configuration = saveConfig
-        saveButton.titleLabel?.font = Theme.label(13, weight: .semibold)
+        saveButton.titleLabel?.font = Theme.display(13)
         saveButton.titleLabel?.adjustsFontSizeToFitWidth = true
         saveButton.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
         addSubview(saveButton)
