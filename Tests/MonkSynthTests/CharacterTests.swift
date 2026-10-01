@@ -204,49 +204,21 @@ final class CharacterTests: XCTestCase {
 
     // MARK: - The character art never steals the pad's drags
 
-    /// `stage` and `pad` are separate sibling `UIView`s (`PluginView.stage`,
-    /// `PluginView.pad`). `stage` is non-interactive now (see
-    /// `CharacterView.init`'s `isUserInteractionEnabled = false`) — it has
-    /// no gesture of any kind — but this geometric guarantee is still worth
-    /// keeping: it's what several other tests (and `CharacterSelector`'s own
-    /// header-row placement) lean on to reason about touch/layout
-    /// independently of whether any given zone happens to be interactive.
-    /// `LayoutTests` already asserts pad-doesn't-overlap-stage for a couple
-    /// of specific sizes; this sweeps a wider range, including the
-    /// collapsed-stage case the design doc calls out as fine ("there is
-    /// simply nothing to tap").
-    func testStageAndPadNeverOverlapAcrossLayoutSizes() {
-        let sizes: [CGSize] = [
-            CGSize(width: 320, height: 480),
-            CGSize(width: 390, height: 844),
-            CGSize(width: 844, height: 390),
-            CGSize(width: 1024, height: 768),
-            CGSize(width: 375, height: 180),   // AUM strip — stage collapses
-            CGSize(width: 480, height: 320),
-        ]
-        for size in sizes {
-            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
-            XCTAssertFalse(l.stage.intersects(l.pad),
-                           "stage \(l.stage) overlaps pad \(l.pad) at size \(size)")
-        }
-    }
-
-    /// End-to-end version of the same guarantee using real views: laying
-    /// out a `PluginView` and tapping squarely inside `pad`'s frame must
-    /// reach the pad, never `stage` — proven here by confirming UIKit's own
-    /// hit-test resolves a point inside `pad` to `pad` (or one of its
-    /// subviews), never to `stage`.
-    func testHitTestInsidePadFrameNeverResolvesToStage() {
+    /// The character now stands inside the scene with the pad layered over
+    /// the whole thing (see `SceneView`), so they intentionally overlap.
+    /// A touch on the character's feet — squarely inside the stage — must
+    /// still reach the pad: the pad is on top, and `CharacterView` is
+    /// non-interactive anyway.
+    ///
+    /// The probe sits right of centre: the drawer handle's 44pt hit region
+    /// overlaps the scene's bottom-centre and (correctly) wins there.
+    func testTouchesInTheSceneReachThePadNotTheCharacter() {
         let view = PluginView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        view.setNeedsLayout()
         view.layoutIfNeeded()
-
-        let probe = CGPoint(x: view.pad.frame.midX, y: view.pad.frame.midY)
-        let hit = view.hitTest(probe, with: nil)
-        XCTAssertNotNil(hit)
-        XCTAssertFalse(hit === view.stage, "a touch over the pad's centre must not hit-test to the stage")
-        XCTAssertTrue(hit === view.pad || (hit?.isDescendant(of: view.pad) ?? false),
-                     "a touch over the pad's centre should hit-test to the pad")
+        let local = CGPoint(x: view.sceneView.bounds.midX + 60, y: view.sceneView.bounds.maxY - 20)
+        XCTAssertTrue(view.stage.frame.contains(local), "precondition: the probe is on the character")
+        let p = view.sceneView.convert(local, to: view)
+        XCTAssertTrue(view.hitTest(p, with: nil) === view.pad)
     }
 
     // MARK: - Accessibility

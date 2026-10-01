@@ -1,6 +1,7 @@
 import UIKit
 
-/// The primary performance surface: X sets pitch, Y sets vowel. Dragging
+/// The primary performance surface: X sets pitch, Y sets vowel. Lives
+/// inside `SceneView`, stretched transparently over the character's scene. Dragging
 /// writes the upstream xyPitchTarget/xyVowel/xyNoteOn parameters (indices
 /// 18/17/16) rather than calling the audio engine directly, so a host
 /// recording automation captures the whole performance and can replay it.
@@ -17,9 +18,11 @@ final class XYPadView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
+        isOpaque = false
+        backgroundColor = .clear
         // See KnobView: without .redraw, a host resizing the AUv3 view scales
         // the stale drawing instead of re-running draw(_:), skewing the
-        // crosshair and the position dot.
+        // ticks, vowel scale and touch marker.
         contentMode = .redraw
         isAccessibilityElement = true
         accessibilityLabel = NSLocalizedString("pad.label", comment: "XY pad")
@@ -60,6 +63,10 @@ final class XYPadView: UIView {
         if !isPlaying {
             isPlaying = true
             onParameterChange?(.xyNoteOn, 1.0)
+            if showsHint {
+                showsHint = false
+                UserDefaults.standard.set(true, forKey: Self.hintDismissedKey)
+            }
         }
         setNeedsDisplay()
     }
@@ -98,25 +105,53 @@ final class XYPadView: UIView {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { end(touches) }
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { end(touches) }
 
+    /// The touch marker's dot colour — the current character's accent, set
+    /// by `SceneView` on character change.
+    var accent: UIColor = Theme.accent { didSet { setNeedsDisplay() } }
+
+    /// UserDefaults key: set once the scene has been touched; until then a
+    /// small "touch to sing" hint shows (the scene no longer looks like a pad).
+    static let hintDismissedKey = "scene.hintDismissed"
+    private var showsHint = !UserDefaults.standard.bool(forKey: XYPadView.hintDismissedKey)
+
+    /// Transparent overlay over the scene: pitch ticks along the bottom, a
+    /// vowel scale up the right edge, the first-touch hint, and — while
+    /// touching — ripple rings around an accent dot. No box, no crosshair.
     override func draw(_ rect: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
-
-        Theme.panelBorder.setStroke()
-        ctx.setLineWidth(1)
-        ctx.move(to: CGPoint(x: rect.minX, y: rect.midY))
-        ctx.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        ctx.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        ctx.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        ctx.strokePath()
-
-        let cx = rect.minX + CGFloat(pitch) * rect.width
-        let cy = rect.minY + CGFloat(1 - vowel) * rect.height
-        let r: CGFloat = isPlaying ? 22 : 14
-        let dot = CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)
-        Theme.accent.withAlphaComponent(isPlaying ? 0.35 : 0.18).setFill()
-        ctx.fillEllipse(in: dot)
-        Theme.accent.setStroke()
-        ctx.setLineWidth(1.5)
-        ctx.strokeEllipse(in: dot)
+        let rect = bounds
+        guard rect.width > 0, rect.height > 0 else { return }
+        let ink = Toon.ink
+        // Pitch ticks along the bottom: 25 marks, octaves tallest.
+        for i in 0...24 {
+            let x = 12 + (rect.width - 24) * CGFloat(i) / 24
+            let h: CGFloat = i % 12 == 0 ? 16 : (i % 2 == 1 ? 7 : 11)
+            let p = UIBezierPath()
+            p.move(to: CGPoint(x: x, y: rect.maxY - 4)); p.addLine(to: CGPoint(x: x, y: rect.maxY - h))
+            Toon.stroke(p, width: 2, color: UIColor.white.withAlphaComponent(0.75))
+        }
+        // Vowel scale up the right edge, OO at the bottom.
+        if rect.height >= 90 {
+            let font = Theme.display(11)
+            for (i, v) in ["OO", "OH", "AH", "EH", "EE"].enumerated() {
+                let y = 14 + (rect.height - 50) * (1 - CGFloat(i) / 4)
+                let s = NSAttributedString(string: v, attributes: [
+                    .font: font, .foregroundColor: UIColor.white.withAlphaComponent(0.85),
+                    .strokeColor: ink, .strokeWidth: -3])
+                let size = s.size()
+                s.draw(at: CGPoint(x: rect.maxX - 8 - size.width, y: y))
+            }
+        }
+        if showsHint && !isPlaying && rect.height >= 90 {
+            let s = NSAttributedString(string: NSLocalizedString("pad.hint", comment: "first-touch hint"),
+                                       attributes: [.font: Theme.display(15), .foregroundColor: UIColor.white,
+                                                    .strokeColor: ink, .strokeWidth: -4])
+            let size = s.size()
+            s.draw(at: CGPoint(x: rect.midX - size.width / 2, y: rect.minY + 12))
+        }
+        guard isPlaying else { return }
+        let c = CGPoint(x: rect.minX + CGFloat(pitch) * rect.width, y: rect.minY + CGFloat(1 - vowel) * rect.height)
+        Toon.stroke(Toon.circle(c.x, c.y, 30), width: 3, color: UIColor.white.withAlphaComponent(0.45))
+        Toon.stroke(Toon.circle(c.x, c.y, 20), width: 3, color: UIColor.white.withAlphaComponent(0.8))
+        Toon.shape(Toon.circle(c.x, c.y, 10), fill: accent, lineWidth: 4, shaded: false)
     }
 }

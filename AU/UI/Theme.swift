@@ -16,7 +16,10 @@ enum Theme {
 
     static let cornerRadius: CGFloat = 10
     static let gutter: CGFloat = 8
-    static let stripHeight: CGFloat = 92
+    /// Preferred control-strip heights: taller in portrait (two rows: tabs
+    /// over full-size knobs), shorter when wide (tabs become a side column).
+    static let stripHeight: CGFloat = 132
+    static let stripHeightWide: CGFloat = 96
 
     /// Below this, a control strip cannot show a usable knob: the tab bar and
     /// the name+value captions consume the whole height and the dial computes
@@ -25,8 +28,13 @@ enum Theme {
     /// shouldn't shrink below while there's still room to honour it — see
     /// that function's doc comment.
     static let minUsableStripHeight: CGFloat = 78
-    static let minPadHeight: CGFloat = 120
-    static let stageCollapseBelowHeight: CGFloat = 260
+
+    /// SF Rounded heavy — names, tabs, scene labels.
+    static func display(_ size: CGFloat) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: .heavy)
+        guard let d = base.fontDescriptor.withDesign(.rounded) else { return base }
+        return UIFont(descriptor: d, size: size)
+    }
 
     static func label(_ size: CGFloat, weight: UIFont.Weight = .semibold) -> UIFont {
         .systemFont(ofSize: size, weight: weight)

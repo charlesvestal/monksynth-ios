@@ -3,72 +3,49 @@ import UIKit
 @testable import MonkSynth
 
 /// Covers `PluginView.layout(in:drawerOpen:safeArea:)`, the pure static
-/// layout math behind the three-zone container (Stage / Pad / Controls) and
-/// its collapsible drawer handle. Deliberately exercises only the static
+/// layout math behind the container (header row / Scene / Controls) and its
+/// collapsible drawer handle. Deliberately exercises only the static
 /// function, never a live `PluginView` instance — every geometric fact this
 /// suite cares about, including the handle's, is reachable from `ZoneLayout`
-/// alone.
+/// alone. (Where the character stands inside the scene, and whether it shows
+/// at all, is `SceneView`'s call — see `SceneViewTests`.)
 ///
 /// The controls strip is a drawer, in both orientations, defaulting OPEN:
-/// it gets `Theme.stripHeight` when there's room, and otherwise shrinks —
-/// but not below `Theme.minUsableStripHeight` while there's still enough
-/// available height to honour that floor. Closed, it drops to zero height.
-/// The Stage yields space first (down to zero below
-/// `Theme.stageCollapseBelowHeight`); the Pad takes whatever remains and
-/// may land below `Theme.minPadHeight` at extreme sizes — that's an
-/// accepted trade against ever hiding an OPEN strip.
+/// it gets `Theme.stripHeight` (portrait) or `Theme.stripHeightWide` (wide)
+/// when there's room, and otherwise shrinks — but not below
+/// `Theme.minUsableStripHeight` while there's still enough available height
+/// to honour that floor. Closed, it drops to zero height. The scene spans
+/// the full inner width between the header row and the strip and takes
+/// whatever height remains, which may be very little at extreme sizes —
+/// that's an accepted trade against ever hiding an OPEN strip.
 final class LayoutTests: XCTestCase {
 
-    // MARK: - Aspect-ratio breakpoint
+    // MARK: - One scene in every orientation
 
-    /// Portrait (aspect ratio < 1.0) stacks: monk on top, pad below, controls
-    /// strip at the bottom, all spanning the full inner width.
-    func testPortraitStacksVerticallyBelowUnityAspectRatio() {
-        let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 390, height: 844))
-
-        let expectedWidth = 390 - 2 * Theme.gutter
-        XCTAssertEqual(l.stage.width, expectedWidth, accuracy: 0.5,
-                        "stage must span the full inner width when stacked")
-        XCTAssertEqual(l.pad.width, expectedWidth, accuracy: 0.5,
-                        "pad must span the full inner width when stacked")
-        XCTAssertEqual(l.controls.width, expectedWidth, accuracy: 0.5,
-                        "controls must span the full inner width when stacked")
-        XCTAssertGreaterThanOrEqual(l.pad.minY, l.stage.maxY - 0.5,
-                                     "pad must sit below the stage, not overlapping it")
-        XCTAssertGreaterThanOrEqual(l.controls.minY, l.pad.maxY - 0.5,
-                                     "controls must sit below the pad, not overlapping it")
-    }
-
-    /// Landscape (aspect ratio >= 1.0, including the square case) splits:
-    /// monk beside the pad, with the control strip laid out below both.
-    func testLandscapeSplitsHorizontallyAtOrAboveUnityAspectRatio() {
-        let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 844, height: 390))
-
-        XCTAssertGreaterThan(l.controls.height, 0, "the control strip must be visible in landscape")
-        XCTAssertGreaterThan(l.stage.width, 0, "at this height the stage should not have collapsed")
-        XCTAssertGreaterThanOrEqual(l.pad.minX, l.stage.maxX - 0.5,
-                                     "pad must sit beside the stage, not overlapping it")
+    func testSceneSpansTheFullWidthBetweenHeaderAndStripInBothOrientations() {
+        for size in [CGSize(width: 390, height: 844), CGSize(width: 844, height: 390), CGSize(width: 1024, height: 768)] {
+            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
+            XCTAssertEqual(l.scene.width, size.width - 2 * Theme.gutter, accuracy: 0.5, "\(size)")
+            XCTAssertGreaterThanOrEqual(l.scene.minY, l.infoButton.maxY, "\(size)")
+            XCTAssertLessThanOrEqual(l.scene.maxY, l.controls.minY - Theme.gutter + 0.5, "\(size)")
+        }
     }
 
     // MARK: - Short host rect (AUM-style strip)
 
-    /// The exact size AUM hands this view for a compact strip. The aspect
-    /// ratio still routes it through the landscape split, and the available
-    /// height (164pt after gutters) comfortably clears `Theme.stripHeight` +
-    /// a gutter, so the strip gets its full preferred height rather than
-    /// merely the floor. That leaves only 64pt for the stage/pad row, well
-    /// under `Theme.stageCollapseBelowHeight`, so the stage yields entirely
-    /// and the pad gets the whole (now-thinner) row — smaller than
-    /// `Theme.minPadHeight`, which is accepted now that the alternative
-    /// would be hiding the strip instead.
-    func testAUMStripKeepsControlsAtFullHeightAndCollapsesTheStage() {
+    /// The exact size AUM hands this view for a compact strip. It's wide,
+    /// so the strip prefers `Theme.stripHeightWide`, and the available
+    /// height (164pt after gutters) comfortably clears that plus a gutter,
+    /// so the strip gets its full preferred height rather than merely the
+    /// floor. The scene gets whatever is left below the header — very
+    /// little here, which is accepted now that the alternative would be
+    /// hiding the strip instead.
+    func testAUMStripKeepsControlsAtFullHeight() {
         let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 375, height: 180))
 
-        XCTAssertEqual(l.controls.height, Theme.stripHeight, accuracy: 0.5,
+        XCTAssertEqual(l.controls.height, Theme.stripHeightWide, accuracy: 0.5,
                         "an AUM-strip host rect has room for the strip's full preferred height")
-        XCTAssertEqual(l.stage.width, 0, accuracy: 0.5, "stage must collapse to zero width")
-        XCTAssertEqual(l.stage.height, 0, accuracy: 0.5, "stage must collapse to zero height")
-        XCTAssertGreaterThan(l.pad.height, 0, "the pad must still get whatever height remains")
+        XCTAssertGreaterThanOrEqual(l.scene.height, 0)
     }
 
     // MARK: - No negative or NaN frames, anywhere
@@ -76,7 +53,7 @@ final class LayoutTests: XCTestCase {
     /// Sweeps a wide range of host-supplied sizes — from a full-screen
     /// iPad down to a degenerate 1x1 rect — and asserts every zone stays a
     /// well-formed, non-negative, finite rectangle. This is what actually
-    /// exercises the clamping in `portraitLayout`/`landscapeLayout`.
+    /// exercises the clamping in `sceneLayout`.
     func testNoZoneIsEverNegativeOrNaNAtAnySize() {
         let sizes: [CGSize] = [
             CGSize(width: 320, height: 480),   // iPhone SE portrait
@@ -91,7 +68,7 @@ final class LayoutTests: XCTestCase {
 
         for size in sizes {
             let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
-            for (name, rect) in [("stage", l.stage), ("pad", l.pad), ("controls", l.controls)] {
+            for (name, rect) in [("scene", l.scene), ("controls", l.controls)] {
                 XCTAssertTrue(rect.width.isFinite, "\(name).width not finite at \(size)")
                 XCTAssertTrue(rect.height.isFinite, "\(name).height not finite at \(size)")
                 XCTAssertGreaterThanOrEqual(rect.width, 0, "\(name).width negative at \(size)")
@@ -104,7 +81,7 @@ final class LayoutTests: XCTestCase {
 
     /// The whole point of removing the drawer: at every realistic host size,
     /// the control strip actually occupies space — never zero, even when
-    /// the size is short enough to force the stage away entirely.
+    /// the size is short enough to leave the scene almost no height.
     func testControlStripIsAlwaysPresentAcrossRealisticHostSizes() {
         let sizes: [CGSize] = [
             CGSize(width: 320, height: 480),
@@ -123,16 +100,17 @@ final class LayoutTests: XCTestCase {
         }
     }
 
-    /// A strip with ample room around it gets its full preferred height —
-    /// there's no drawer left to fall back to, so this is the only shape a
-    /// roomy layout can take.
+    /// A strip with ample room around it gets its full preferred height:
+    /// the taller two-row strip in portrait, the shorter one when wide.
     func testAmpleRoomGivesTheStripItsFullPreferredHeight() {
-        let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 844, height: 390))
-        XCTAssertEqual(l.controls.height, Theme.stripHeight, accuracy: 0.5)
+        let portrait = PluginView.layout(in: CGRect(x: 0, y: 0, width: 390, height: 844))
+        XCTAssertEqual(portrait.controls.height, Theme.stripHeight, accuracy: 0.5)
+        let landscape = PluginView.layout(in: CGRect(x: 0, y: 0, width: 844, height: 390))
+        XCTAssertEqual(landscape.controls.height, Theme.stripHeightWide, accuracy: 0.5)
     }
 
     /// Whenever the host rect has at least `Theme.minUsableStripHeight` of
-    /// vertical room to give the whole stage/pad/controls stack (i.e. it
+    /// vertical room to give the whole scene/controls stack (i.e. it
     /// isn't smaller than the floor itself), the strip must not be shown
     /// any shorter than that floor — a knob has to stay drawable. Covers a
     /// spread of aspect ratios and both the "ample room" and "just enough
@@ -153,17 +131,18 @@ final class LayoutTests: XCTestCase {
         }
     }
 
-    // MARK: - Pad never goes negative, even where it dips below minPadHeight
+    // MARK: - Scene never goes negative
 
-    /// At extreme sizes the pad can now legitimately end up shorter than
-    /// `Theme.minPadHeight` (the strip takes priority over it), but it must
-    /// never go negative or NaN — `testNoZoneIsEverNegativeOrNaNAtAnySize`
-    /// already sweeps that broadly; this pins the specific AUM-strip case
-    /// the task called out by name.
-    func testPadStaysNonNegativeEvenWhenShorterThanMinPadHeight() {
-        let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 375, height: 180))
-        XCTAssertTrue(l.pad.height.isFinite)
-        XCTAssertGreaterThanOrEqual(l.pad.height, 0)
+    /// At tiny sizes the scene can end up with almost no height (the strip
+    /// takes priority over it), but it must never go negative or NaN —
+    /// `testNoZoneIsEverNegativeOrNaNAtAnySize` already sweeps that broadly;
+    /// this pins the AUM-strip case and a couple of even smaller ones.
+    func testSceneStaysNonNegativeAtTinySizes() {
+        for size in [CGSize(width: 375, height: 180), CGSize(width: 400, height: 120), CGSize(width: 100, height: 100)] {
+            let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
+            XCTAssertTrue(l.scene.height.isFinite, "\(size)")
+            XCTAssertGreaterThanOrEqual(l.scene.height, 0, "\(size)")
+        }
     }
 
     // MARK: - Safe area
@@ -189,14 +168,14 @@ final class LayoutTests: XCTestCase {
     }
 
     /// The whole visible layout must respect the safe area, not only the
-    /// controls strip — a pad running under the indicator would swallow
-    /// drags too.
+    /// controls strip — a scene (pad) running under the indicator would
+    /// swallow drags too.
     func testEveryZoneStaysInsideTheSafeArea() {
         let insets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
         for size in [CGSize(width: 390, height: 844), CGSize(width: 844, height: 390)] {
             let b = CGRect(origin: .zero, size: size)
             let l = PluginView.layout(in: b, safeArea: insets)
-            for (name, r) in [("stage", l.stage), ("pad", l.pad), ("controls", l.controls)]
+            for (name, r) in [("scene", l.scene), ("controls", l.controls)]
             where r.height > 0 {
                 XCTAssertGreaterThanOrEqual(r.minY, insets.top - 0.5, "\(name) top at \(size)")
                 XCTAssertLessThanOrEqual(r.maxY, b.maxY - insets.bottom + 0.5,
@@ -284,17 +263,16 @@ final class LayoutTests: XCTestCase {
 
     /// The usual size sweep: a spread of realistic host-supplied rects,
     /// portrait and landscape, phone and tablet, plus the AUM strip where
-    /// the stage is known to collapse. The same sweep the old edge-arrow
-    /// tests used (and `CharacterTests`' stage/pad-overlap sweep still
-    /// uses) — kept identical so this suite exercises exactly the sizes
-    /// that mattered before, not a hand-picked new set.
+    /// the scene is too short to show the character. The same sweep the
+    /// old edge-arrow tests used — kept identical so this suite exercises
+    /// exactly the sizes that mattered before, not a hand-picked new set.
     private static let usualSizeSweep: [CGSize] = [
         CGSize(width: 320, height: 480),
         CGSize(width: 390, height: 844),
         CGSize(width: 844, height: 390),
         CGSize(width: 1024, height: 768),
         CGSize(width: 1024, height: 1366),
-        CGSize(width: 375, height: 180),   // AUM strip — stage collapses
+        CGSize(width: 375, height: 180),   // AUM strip — character hidden
         CGSize(width: 480, height: 320),
     ]
 
@@ -307,8 +285,8 @@ final class LayoutTests: XCTestCase {
     /// preferred width, with no slack left to also centre it. Not
     /// intersecting `infoButton`/`handle` always wins over exact centering
     /// — that trade is covered separately by
-    /// `testCharacterSelectorDoesNotIntersectPadControlsHandleOrInfoButton`
-    /// and `testCharacterSelectorIsPresentEvenWhenStageCollapses`.
+    /// `testCharacterSelectorDoesNotIntersectSceneControlsHandleOrInfoButton`
+    /// and `testCharacterSelectorIsPresentAtTheAUMStrip`.
     func testCharacterSelectorIsHorizontallyCenteredWithinTheSafeWidth() {
         let aumStrip = CGSize(width: 375, height: 180)
         for size in Self.usualSizeSweep where size != aumStrip {
@@ -333,9 +311,9 @@ final class LayoutTests: XCTestCase {
             "selector should centre within the safe width \(bounds.inset(by: insets)), got \(l.characterSelector)")
     }
 
-    /// Unlike the old edge arrows (only shown beside a non-collapsed
-    /// stage), `characterSelector` lives in the header row and is computed
-    /// independently of `stage` — so it must meet the 44pt HIG minimum tap
+    /// Unlike the old edge arrows (only shown beside a visible character),
+    /// `characterSelector` lives in the header row and is computed
+    /// independently of the scene — so it must meet the 44pt HIG minimum tap
     /// target in both dimensions at EVERY size in the sweep, no "not shown
     /// here" exception.
     func testCharacterSelectorMeetsMinimumTapTargetAcrossTheSizeSweep() {
@@ -348,17 +326,16 @@ final class LayoutTests: XCTestCase {
         }
     }
 
-    /// Across the whole sweep, the selector may not intersect the pad, the
-    /// controls strip, the drawer handle, or the info button — the four
-    /// things the task explicitly calls out as off-limits (stricter than
-    /// the old arrows, which were allowed to sit over `stage` itself; the
-    /// selector isn't drawn over any zone, it lives in its own header row).
-    func testCharacterSelectorDoesNotIntersectPadControlsHandleOrInfoButton() {
+    /// Across the whole sweep, the selector may not intersect the scene
+    /// (which is the pad), the controls strip, the drawer handle, or the
+    /// info button — the selector isn't drawn over any zone, it lives in
+    /// its own header row.
+    func testCharacterSelectorDoesNotIntersectSceneControlsHandleOrInfoButton() {
         for size in Self.usualSizeSweep {
             let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
             let selector = l.characterSelector
-            XCTAssertFalse(selector.intersects(l.pad),
-                "selector \(selector) overlaps pad \(l.pad) at \(size)")
+            XCTAssertFalse(selector.intersects(l.scene),
+                "selector \(selector) overlaps scene \(l.scene) at \(size)")
             XCTAssertFalse(selector.intersects(l.controls),
                 "selector \(selector) overlaps controls \(l.controls) at \(size)")
             XCTAssertFalse(selector.intersects(l.handle),
@@ -368,17 +345,15 @@ final class LayoutTests: XCTestCase {
         }
     }
 
-    /// The specific gain of this design over the old edge arrows, called
-    /// out by name in the task: at the exact AUM-strip size where the stage
-    /// collapses entirely (see
-    /// `testAUMStripKeepsControlsAtFullHeightAndCollapsesTheStage`, and
-    /// where the old arrows used to vanish along with it), the selector
-    /// must still be there, and still meet its own 44pt tap target.
-    func testCharacterSelectorIsPresentEvenWhenStageCollapses() {
+    /// The specific gain of this design over the old edge arrows: at the
+    /// exact AUM-strip size where the scene is too short to show the
+    /// character (and where the old arrows used to vanish along with it),
+    /// the selector must still be there, and still meet its own 44pt tap
+    /// target.
+    func testCharacterSelectorIsPresentAtTheAUMStrip() {
         let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 375, height: 180))
-        XCTAssertEqual(l.stage, .zero, "precondition: stage collapses at this size")
         XCTAssertGreaterThanOrEqual(l.characterSelector.width, 44,
-            "the character selector must remain usable even when the stage collapses")
+            "the character selector must remain usable even when the character is hidden")
         XCTAssertGreaterThanOrEqual(l.characterSelector.height, 44)
     }
 

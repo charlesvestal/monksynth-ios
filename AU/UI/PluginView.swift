@@ -2,8 +2,10 @@ import UIKit
 
 /// Zone frames for one layout pass. Pure data so LayoutTests can assert on it.
 struct ZoneLayout: Equatable {
-    var stage: CGRect
-    var pad: CGRect
+    /// The playable scene: everything between the header row and the strip.
+    /// `SceneView` fills it with the character's backdrop, the character
+    /// standing on its bottom edge, and the XY pad over all of it.
+    var scene: CGRect
     var controls: CGRect
 
     /// The drawer handle's tap target. Always derived from `controls.minY`
@@ -21,25 +23,27 @@ struct ZoneLayout: Equatable {
     /// `CharacterSelector`'s frame — see
     /// `PluginView.characterSelectorFrame(bounds:safeArea:infoButton:handle:)`.
     /// Lives in the header row alongside `infoButton`, computed independently
-    /// of `stage`/`pad`/`controls` — unlike the edge arrows this control
-    /// replaced (which went to `.zero` the instant `stage` collapsed), this
-    /// is non-zero at every realistic host size, including the AUM strip
-    /// (375×180) where the stage collapses entirely. That's the point of
-    /// this design: the selector is reachable everywhere the arrows used to
-    /// vanish.
+    /// of `scene`/`controls` — unlike the edge arrows this control replaced
+    /// (which went to `.zero` the instant the character was hidden), this is
+    /// non-zero at every realistic host size, including the AUM strip
+    /// (375×180) where the scene is too short to show the character at all.
+    /// That's the point of this design: the selector is reachable everywhere
+    /// the arrows used to vanish.
     var characterSelector: CGRect = .zero
 }
 
-/// The responsive three-zone container: Stage (the selected character), Pad
-/// (the XY performance surface), and Controls (the five-page knob strip).
+/// The responsive container: a header row (character selector + ⓘ), the
+/// Scene (`SceneView` — the selected character standing in its own
+/// backdrop, with the XY pad stretched transparently over the whole thing,
+/// so the scene itself is the performance surface), and Controls (the
+/// five-page knob strip).
 ///
 /// The control strip is a collapsible drawer, in both orientations,
 /// defaulting to OPEN — the user asked for controls to be visible by
 /// default; collapsing is something they reach for, not the starting state.
-/// Portrait stacks the three zones vertically (stage / pad / strip);
-/// landscape splits Stage and Pad side by side above the strip. Either way
-/// the strip is pinned to the bottom of the view, so closing it grows the
-/// Pad (and, at short heights, the Stage) into the reclaimed space.
+/// In every orientation the scene spans the full inner width from below
+/// the header row to the strip, and the strip is pinned to the bottom of
+/// the view, so closing it grows the scene into the reclaimed space.
 ///
 /// A drawer shipped here once before and was reported as unreachable/dead:
 /// the handle's hit region was anchored to `controls.maxY`, which — because
@@ -54,22 +58,31 @@ struct ZoneLayout: Equatable {
 /// knob — as long as there is at least that much room to give it; only a
 /// truly degenerate host rect (smaller than the floor itself) forces it any
 /// shorter. Closed, the strip is zero-height; only the handle draws. The
-/// Stage yields space first (see `portraitLayout`/`landscapeLayout`), then
-/// the Pad takes whatever is left; the Pad can end up below
-/// `Theme.minPadHeight` at extreme sizes, which is an acceptable trade
-/// against ever hiding the controls entirely when the drawer is open.
+/// scene takes whatever is left, which can be very little at extreme sizes
+/// — an acceptable trade against ever hiding the controls entirely when the
+/// drawer is open. The scene stays playable however short it gets; only
+/// the character hides once it would be too small to read (that's
+/// `SceneView.characterRect(in:)`'s call, not the layout's).
 ///
-/// The split is chosen by aspect ratio (`inner.width >= inner.height`), not
-/// device idiom, because an AUv3 host can hand this view any rect at all —
-/// AUM in particular can give a wide, short strip on an iPhone. Below
-/// `Theme.stageCollapseBelowHeight` of available height, the Stage yields so
-/// the Pad stays playable; see `portraitLayout`/`landscapeLayout` for how
-/// each orientation implements that.
+/// The strip's preferred height is chosen by aspect ratio
+/// (`inner.width >= inner.height` → `Theme.stripHeightWide`, otherwise
+/// `Theme.stripHeight`), not device idiom, because an AUv3 host can hand
+/// this view any rect at all — AUM in particular can give a wide, short
+/// strip on an iPhone.
 final class PluginView: UIView {
 
+    /// The character art. Lives inside `sceneView` (which detaches it when
+    /// the scene is too short to show it); kept as a property here because
+    /// the controllers and tests drive it through `pluginView.stage`.
     let stage = CharacterView()
+    /// The XY performance surface, stretched over the whole of `sceneView`.
+    /// Kept as a property here because the controllers wire
+    /// `pluginView.pad.onParameterChange`.
     let pad = XYPadView()
     let controls = ControlPages()
+
+    /// The playable scene: backdrop + `stage` + `pad`. See `SceneView`.
+    lazy var sceneView = SceneView(stage: stage, pad: pad)
 
     /// Fired when the about screen's "Source code" link is tapped. Left to
     /// the owning view controller to handle because the two containers this
@@ -115,7 +128,7 @@ final class PluginView: UIView {
     /// the tap-the-art picker, and the filled-pill control that followed it
     /// — see that type's own doc comment. Lives in the header row
     /// (`characterSelectorFrame`), not beside the character art, so it
-    /// survives a collapsed stage.
+    /// survives a scene too short to show the character.
     let characterSelector = CharacterSelector()
 
     /// Whether the control drawer is expanded. Defaults to `true`: the user
@@ -158,23 +171,20 @@ final class PluginView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = Theme.background
-        for v in [stage, pad, controls] as [UIView] { addSubview(v) }
-
-        pad.layer.cornerRadius = Theme.cornerRadius
-        pad.backgroundColor = Theme.panel
-        pad.layer.borderWidth = 1
-        pad.layer.borderColor = Theme.panelBorder.cgColor
+        addSubview(sceneView)
+        addSubview(controls)
 
         // Belt-and-suspenders: `controls`'s frame is always sized so
         // `ControlPages`'s own layout fits inside it (see
         // `controlStripHeight`), but clipping guards against it bleeding
-        // into the pad above when the drawer is closed (zero height) or at
+        // into the scene above when the drawer is closed (zero height) or at
         // the smallest degenerate host rects a test might throw at it.
         controls.clipsToBounds = true
 
         installDrawerHandle()
         installInfoButton()
         installCharacterSelector()
+        sceneView.character = stage.character
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -284,8 +294,10 @@ final class PluginView: UIView {
         // Keeps the name label in sync with EVERY route `stage.character`
         // can change through, not just the two this view itself triggers —
         // see `CharacterView.onCharacterChanged`'s doc comment.
+        // Also re-dresses the scene (backdrop + touch-marker accent).
         stage.onCharacterChanged = { [weak self] character in
             self?.characterSelector.characterName = character.displayName
+            self?.sceneView.character = character
         }
     }
 
@@ -333,9 +345,9 @@ final class PluginView: UIView {
         characterDropdownView = nil
     }
 
-    /// Portrait stacks (stage / pad / strip); landscape splits (stage | pad)
-    /// above the strip. The strip is a drawer in both orientations — see
-    /// the class doc comment for the open/closed contract.
+    /// Header row, then the scene, then the strip, in every orientation.
+    /// The strip is a drawer in both orientations — see the class doc
+    /// comment for the open/closed contract.
     ///
     /// Pure and static so `LayoutTests` can exercise every corner of the
     /// arithmetic without instantiating any UIKit views.
@@ -360,18 +372,13 @@ final class PluginView: UIView {
         guard inner.width > 0, inner.height > 0 else {
             let selector = characterSelectorFrame(bounds: bounds, safeArea: safeArea,
                                                    infoButton: infoButton, handle: .zero)
-            return ZoneLayout(stage: .zero, pad: .zero, controls: .zero, handle: .zero,
+            return ZoneLayout(scene: .zero, controls: .zero, handle: .zero,
                                infoButton: infoButton, characterSelector: selector)
         }
 
-        let isWide = inner.width >= inner.height
-        var l = isWide
-            ? landscapeLayout(inner: inner, gutter: g, drawerOpen: drawerOpen)
-            : portraitLayout(inner: inner, gutter: g, drawerOpen: drawerOpen)
+        var l = sceneLayout(inner: inner, gutter: g, drawerOpen: drawerOpen)
         l.infoButton = infoButton
-        // Computed AFTER the rest of the layout (it needs `l.handle`) —
-        // mirrors how `arrowFrames(for:)` used to be computed after `l.stage`
-        // existed.
+        // Computed AFTER the rest of the layout (it needs `l.handle`).
         l.characterSelector = characterSelectorFrame(bounds: bounds, safeArea: safeArea,
                                                        infoButton: infoButton, handle: l.handle)
         return l
@@ -393,12 +400,12 @@ final class PluginView: UIView {
     }
 
     /// Height of the header row `characterSelector` and `infoButton` share,
-    /// carved out of the stage/pad row's own budget in
-    /// `landscapeLayout`/`portraitLayout` below — see `headerReserve` there.
-    /// Deliberately never carved out of the control strip's own height: the
-    /// strip must keep its `Theme.minUsableStripHeight` floor regardless of
-    /// whether there's also a header to fit, so the reserve only ever
-    /// shrinks `topH`/`remaining` (the stage+pad budget), never `stripH`.
+    /// carved out of the scene's own budget in `sceneLayout` below — see
+    /// `headerReserve` there. Deliberately never carved out of the control
+    /// strip's own height: the strip must keep its
+    /// `Theme.minUsableStripHeight` floor regardless of whether there's also
+    /// a header to fit, so the reserve only ever shrinks the scene, never
+    /// `stripH`.
     private static let headerHeight: CGFloat = infoButtonSize
 
     /// Width `characterSelector` claims when there's room for it — "‹ Monk
@@ -479,32 +486,29 @@ final class PluginView: UIView {
     /// is what's left over once the strip's own top gutter is reserved),
     /// while the drawer is OPEN.
     ///
-    /// Prefers `Theme.stripHeight`. When the available space doesn't stretch
+    /// Prefers `preferred` (`Theme.stripHeight` or `Theme.stripHeightWide`,
+    /// chosen by `sceneLayout`). When the available space doesn't stretch
     /// that far, the strip still won't drop below `Theme.minUsableStripHeight`
     /// — the height below which `ControlPages` can no longer draw an actual
     /// knob, only a tab bar over an invisible dial (its tab row plus
     /// `KnobView.captionHeight` eat the whole thing) — as long as `available`
-    /// itself is at least that floor; whatever sits above the strip yields
-    /// first. Only when `available` itself is smaller than the floor does the
-    /// strip shrink further, because there is nothing left to give it. Never
+    /// itself is at least that floor; the scene above yields first. Only
+    /// when `available` itself is smaller than the floor does the strip
+    /// shrink further, because there is nothing left to give it. Never
     /// exceeds `available` and never goes negative.
-    private static func controlStripHeight(available: CGFloat, gutter g: CGFloat) -> CGFloat {
+    ///
+    /// Only called while the drawer is open: closed, the strip is zero
+    /// height rather than some small "collapsed" height, so closing the
+    /// drawer actually gives the reclaimed space back to the scene — the
+    /// whole point of being able to collapse it — and so `controls`, which
+    /// stays `clipsToBounds`, draws nothing at all. Only the handle (a
+    /// sibling view, not a subview of `controls`) remains visible.
+    private static func controlStripHeight(available: CGFloat, gutter g: CGFloat,
+                                           preferred: CGFloat) -> CGFloat {
         let roomAboveTheGutter = max(0, available - g)
-        let preferred = min(Theme.stripHeight, roomAboveTheGutter)
-        let floored = max(preferred, min(Theme.minUsableStripHeight, available))
+        let preferredFit = min(preferred, roomAboveTheGutter)
+        let floored = max(preferredFit, min(Theme.minUsableStripHeight, available))
         return max(0, min(floored, available))
-    }
-
-    /// The strip's height for this layout pass: `controlStripHeight` while
-    /// the drawer is open, zero while it's closed. Zero rather than some
-    /// small "collapsed" height so closing the drawer actually gives the
-    /// reclaimed space back to the Pad (and, at short heights, the Stage)
-    /// — the whole point of being able to collapse it — and so `controls`,
-    /// which stays `clipsToBounds`, draws nothing at all when closed. Only
-    /// the handle (a sibling view, not a subview of `controls`) remains
-    /// visible.
-    private static func stripHeight(available: CGFloat, gutter g: CGFloat, drawerOpen: Bool) -> CGFloat {
-        drawerOpen ? controlStripHeight(available: available, gutter: g) : 0
     }
 
     /// The drawer handle's hit region, derived from the just-computed
@@ -532,97 +536,34 @@ final class PluginView: UIView {
                height: drawerHitSize.height)
     }
 
-    /// Landscape: stage | pad side by side above the strip, below the header.
+    /// The scene takes the full inner width from below the header row to
+    /// the strip's top gutter, in both orientations; only the strip's
+    /// preferred height differs (see `Theme.stripHeight`/`stripHeightWide`).
     ///
     /// `headerReserve` (`headerHeight` plus one gutter) comes out of the
-    /// stage/pad row's own budget (`topH`) — never out of `stripH`, which is
-    /// computed from `inner.height` directly, above/before this reserve is
-    /// even applied, so the control strip's own floor
-    /// (`Theme.minUsableStripHeight`) holds exactly as it did before the
-    /// header existed. `contentTop` shifts `stage`/`pad`'s Y origin down by
-    /// that same reserve so they start below the header rather than under
-    /// it.
-    ///
-    /// Below `Theme.stageCollapseBelowHeight` the stage yields entirely.
-    /// Unlike portrait, hiding it here buys the pad no extra *height* — both
-    /// columns already share `topH` regardless of whether the stage draws
-    /// anything into its column — so this is a flat "the character isn't
-    /// worth showing this short" cutoff, not a space reallocation.
-    private static func landscapeLayout(inner: CGRect, gutter g: CGFloat, drawerOpen: Bool) -> ZoneLayout {
-        let stripH = stripHeight(available: inner.height, gutter: g, drawerOpen: drawerOpen)
+    /// scene's own budget — never out of `stripH`, which is computed from
+    /// `inner.height` directly, before this reserve is applied, so the
+    /// control strip's own floor (`Theme.minUsableStripHeight`) holds
+    /// regardless of the header.
+    private static func sceneLayout(inner: CGRect, gutter g: CGFloat, drawerOpen: Bool) -> ZoneLayout {
+        let isWide = inner.width >= inner.height
+        let stripH = drawerOpen
+            ? controlStripHeight(available: inner.height, gutter: g,
+                                 preferred: isWide ? Theme.stripHeightWide : Theme.stripHeight)
+            : 0
         let headerReserve = headerHeight + g
-        let contentTop = inner.minY + headerReserve
-        let topH = max(0, inner.height - stripH - g - headerReserve)
-        let controlsFrame = CGRect(x: inner.minX, y: inner.maxY - stripH,
-                                    width: inner.width, height: stripH)
-        let handle = handleFrame(for: controlsFrame)
-
-        if inner.height < Theme.stageCollapseBelowHeight || topH < Theme.minPadHeight {
-            return ZoneLayout(
-                stage: .zero,
-                pad: CGRect(x: inner.minX, y: contentTop, width: inner.width, height: topH),
-                controls: controlsFrame,
-                handle: handle)
-        }
-
-        let stageW = max(0, (inner.width - g) * 0.40)
-        let padW = max(0, inner.width - stageW - g)
-        return ZoneLayout(
-            stage: CGRect(x: inner.minX, y: contentTop, width: stageW, height: topH),
-            pad: CGRect(x: inner.minX + stageW + g, y: contentTop, width: padW, height: topH),
-            controls: controlsFrame,
-            handle: handle)
-    }
-
-    /// Portrait: stage over pad over the strip, below the header. Short
-    /// heights make the stage yield its space to the pad gradually — the pad
-    /// is topped up toward `minPadHeight` first and the stage gets whatever
-    /// remains, down to zero. See `landscapeLayout`'s doc comment for how
-    /// `headerReserve`/`contentTop` fit into this without touching the
-    /// control strip's own floor.
-    private static func portraitLayout(inner: CGRect, gutter g: CGFloat, drawerOpen: Bool) -> ZoneLayout {
-        let stripH = stripHeight(available: inner.height, gutter: g, drawerOpen: drawerOpen)
-        let headerReserve = headerHeight + g
-        let contentTop = inner.minY + headerReserve
-        let remaining = max(0, inner.height - stripH - g - headerReserve)
-        var stageH = remaining * 0.48
-        var padH = remaining - stageH - g
-
-        // Short view: the stage yields first so the pad stays playable.
-        //
-        // `padH` is clamped to `max(0, remaining - g)` — never more than
-        // what's left after reserving one gutter for the stage/pad divider.
-        // That in turn guarantees `stageH = max(0, remaining - padH - g)`
-        // can never go negative: since padH <= remaining - g whenever that
-        // quantity is >= 0, `remaining - padH - g >= 0` always holds, so the
-        // outer `max(0, ...)` never actually has to bite except when
-        // `remaining` itself is negative — a case that only arises well
-        // below any size this view will realistically be given, but is
-        // still handled without producing a negative frame. At extreme
-        // sizes `padH` itself can land below `minPadHeight` (the min/max
-        // pair above doesn't force it up past what `remaining` can actually
-        // supply) — acceptable, since the alternative would be hiding the
-        // strip while it's meant to be open, which is exactly what this
-        // contract rules out.
-        if inner.height < Theme.stageCollapseBelowHeight || padH < Theme.minPadHeight {
-            padH = min(max(Theme.minPadHeight, padH), max(0, remaining - g))
-            stageH = max(0, remaining - padH - g)
-        }
-
-        let controlsFrame = CGRect(x: inner.minX, y: inner.maxY - stripH,
-                                    width: inner.width, height: stripH)
-        return ZoneLayout(
-            stage: CGRect(x: inner.minX, y: contentTop, width: inner.width, height: stageH),
-            pad: CGRect(x: inner.minX, y: contentTop + stageH + (stageH > 0 ? g : 0),
-                        width: inner.width, height: padH),
-            controls: controlsFrame,
-            handle: handleFrame(for: controlsFrame))
+        let sceneH = max(0, inner.height - stripH - (stripH > 0 ? g : 0) - headerReserve)
+        let controls = CGRect(x: inner.minX, y: inner.maxY - stripH, width: inner.width, height: stripH)
+        return ZoneLayout(scene: CGRect(x: inner.minX, y: inner.minY + headerReserve, width: inner.width, height: sceneH),
+                          controls: controls, handle: handleFrame(for: controls))
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let l = Self.layout(in: bounds, drawerOpen: drawerOpen, safeArea: safeAreaInsets)
-        pad.frame = l.pad
+        // `SceneView` lays out its own backdrop, character and pad (and
+        // detaches the character when the scene is too short for it).
+        sceneView.frame = l.scene
         controls.frame = l.controls
 
         drawerHandle.frame = l.handle
@@ -633,30 +574,13 @@ final class PluginView: UIView {
         drawerHandleChevron.frame = drawerHandleBar.bounds
         bringSubviewToFront(drawerHandle)
 
-        // CharacterView's own display link only stops once its `window`
-        // goes nil (see `CharacterView.updateDisplayLink`) — `isHidden`
-        // alone leaves it attached to the hierarchy and ticking (idle
-        // animation advance + setNeedsDisplay) every frame for a view
-        // nobody can see. Fully detaching the stage when it collapses is
-        // the fix that's reachable from here without touching
-        // CharacterView.swift: removal triggers
-        // `didMoveToWindow()`, which re-evaluates `updateDisplayLink()` and
-        // tears the link down.
-        let collapsed = l.stage.width < 1 || l.stage.height < 1
-        if collapsed {
-            if stage.superview != nil { stage.removeFromSuperview() }
-        } else {
-            if stage.superview == nil { insertSubview(stage, at: 0) }
-            stage.frame = l.stage
-        }
-
         // Top-left corner of the header row, alongside `infoButton` — see
         // `characterSelectorFrame`'s doc comment for how the two share that
         // row without colliding at any host size, including the AUM strip
-        // where `stage` collapses entirely. Unlike the old arrows (hidden
-        // whenever the stage collapsed), this is always shown: presence at
-        // every size, not just when there's room beside the character art,
-        // is the entire point of this control.
+        // where the scene is too short to show the character. Unlike the old
+        // arrows (hidden whenever the character was), this is always shown:
+        // presence at every size, not just when there's room beside the
+        // character art, is the entire point of this control.
         characterSelector.frame = l.characterSelector
         bringSubviewToFront(characterSelector)
 
@@ -668,9 +592,9 @@ final class PluginView: UIView {
         // UIKit's hit-testing hands any touch that starts inside this
         // button's own 44x44 frame to `infoButton` first (hit-testing walks
         // subviews front-to-back and returns the first view whose bounds
-        // contain the point) — moot in practice now that `pad`/`stage` start
-        // below the header row (see `landscapeLayout`/`portraitLayout`'s
-        // `headerReserve`), but kept for the same reason `characterSelector`
+        // contain the point) — moot in practice now that the scene starts
+        // below the header row (see `sceneLayout`'s `headerReserve`), but
+        // kept for the same reason `characterSelector`
         // is brought to the front too: neither should ever lose a touch to
         // a zone that happens to be drawn on top.
         infoButton.frame = l.infoButton
