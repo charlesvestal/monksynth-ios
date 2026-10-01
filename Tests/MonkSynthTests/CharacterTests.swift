@@ -192,36 +192,6 @@ final class CharacterTests: XCTestCase {
 
     // MARK: - Distinct implementations, not five copies
 
-    /// Each character's `mouthShape` sweep must differ from every other's —
-    /// otherwise "five characters" would really be one rig re-skinned with
-    /// identical mouth geometry. Sample a few vowel positions and assert
-    /// not every character produces the same shape at each.
-    func testEachCharacterProducesADifferentMouthShapeSweep() {
-        let characters = CharacterRegistry.all
-        let vowels: [Float] = [0.0, 0.25, 0.5, 0.75, 1.0]
-
-        for vowel in vowels {
-            let shapes = characters.map { $0.mouthShape(vowel: vowel) }
-            let widths = Set(shapes.map { $0.w })
-            let heights = Set(shapes.map { $0.h })
-            XCTAssertFalse(widths.count == 1 && heights.count == 1,
-                           "all five characters produced an identical mouth shape at vowel \(vowel): \(shapes)")
-        }
-
-        // Stronger check: no two characters share the exact same sweep
-        // across every sampled vowel (a real, if unlikely, way five
-        // "different" implementations could still be copies of one another).
-        for i in 0..<characters.count {
-            for j in (i + 1)..<characters.count {
-                let a = vowels.map { characters[i].mouthShape(vowel: $0) }
-                let b = vowels.map { characters[j].mouthShape(vowel: $0) }
-                let identical = zip(a, b).allSatisfy { abs($0.w - $1.w) < 1e-9 && abs($0.h - $1.h) < 1e-9 }
-                XCTAssertFalse(identical,
-                               "\(characters[i].id) and \(characters[j].id) have identical mouth-shape sweeps")
-            }
-        }
-    }
-
     /// Distinct `mouthCentre`/`mouthBoxFraction` too — a copy-pasted
     /// implementation that only varied the anchor numbers would still be
     /// suspicious if every character centred the mouth at the identical

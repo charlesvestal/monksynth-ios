@@ -78,6 +78,9 @@ final class IdleAnimatorTests: XCTestCase {
 
     /// `mouthShape(vowel:)` is what replaces upstream's 24 discrete sprite
     /// frames — it must interpolate smoothly with no snap between anchors.
+    /// The endpoints come from `ToonMouth.anchors` (OO and EE) scaled by the
+    /// monk's `mouthStyle.scale` (0.8) and expressed as a stage fraction
+    /// (`/ Toon.stageUnits`, 300).
     func testMouthShapeIsContinuousAcrossVowelRange() {
         let monk = MonkCharacter()
         let steps = 100
@@ -96,10 +99,10 @@ final class IdleAnimatorTests: XCTestCase {
 
         let first = monk.mouthShape(vowel: 0)
         let last = monk.mouthShape(vowel: 1)
-        XCTAssertEqual(first.w, 0.16, accuracy: 1e-9)
-        XCTAssertEqual(first.h, 0.26, accuracy: 1e-9)
-        XCTAssertEqual(last.w, 0.44, accuracy: 1e-9)
-        XCTAssertEqual(last.h, 0.07, accuracy: 1e-9)
+        XCTAssertEqual(first.w, 24 * 0.8 / 300, accuracy: 1e-9)
+        XCTAssertEqual(first.h, 26 * 0.8 / 300, accuracy: 1e-9)
+        XCTAssertEqual(last.w, 74 * 0.8 / 300, accuracy: 1e-9)
+        XCTAssertEqual(last.h, 18 * 0.8 / 300, accuracy: 1e-9)
     }
 
     /// The user preferred the original's stepped, sprite-sheet motion to the

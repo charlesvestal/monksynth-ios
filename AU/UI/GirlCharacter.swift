@@ -1,334 +1,42 @@
 import UIKit
 
-/// A little girl: a deliberately small head over a larger triangular dress,
-/// two round pigtails, and big friendly eyes. First pass; the user will
-/// iterate on the art with the render harness.
-struct GirlCharacter: Character {
+/// A little girl: two round pigtail buns with pink bows, a flared pink dress
+/// with a scalloped white collar, and a small round head. Sings on a
+/// sunny playground.
+struct GirlCharacter: ToonCharacter {
     let id = "girl"
     let displayName = "Little Girl"
+    let palette = Palette(accent: UIColor(hex: 0xFF5FA2), skyTop: UIColor(hex: 0x8FD3F7),
+                          skyBottom: UIColor(hex: 0xE6F7FF), ground: UIColor(hex: 0x7CC96A))
+    let mouthStyle = ToonMouth.Style(x: 150, y: 170, scale: 0.7, variant: .lips, lip: UIColor(hex: 0xE2557A))
 
-    private static let hair = UIColor(red: 0.36, green: 0.20, blue: 0.13, alpha: 1)
-    private static let dress = UIColor(red: 0.80, green: 0.32, blue: 0.52, alpha: 1)
-    private static let dressTrim = Self.dress.adjusted(brightnessScale: 0.75)
-    private static let cheek = UIColor(red: 0.95, green: 0.55, blue: 0.55, alpha: 1)
+    private static let bun = UIColor(hex: 0x7A4425)
+    private static let bow = UIColor(hex: 0xFF5FA2)
 
-    // MARK: - Mouth anchors — small throughout, unlike every other
-    // character's sweep: a child's mouth barely opens at the low end and
-    // stays compact even at the wide end.
-    private static let mouthAnchors: [(w: CGFloat, h: CGFloat)] = [
-        (0.10, 0.16), (0.16, 0.20), (0.22, 0.15), (0.26, 0.10), (0.30, 0.06),
-    ]
-
-    func mouthShape(vowel v: Float) -> (w: CGFloat, h: CGFloat) {
-        let clamped = min(max(v, 0), 1)
-        let scaled = CGFloat(clamped) * CGFloat(Self.mouthAnchors.count - 1)
-        let i = min(Int(scaled), Self.mouthAnchors.count - 2)
-        let t = scaled - CGFloat(i)
-        let a = Self.mouthAnchors[i], b = Self.mouthAnchors[i + 1]
-        return (a.w + (b.w - a.w) * t, a.h + (b.h - a.h) * t)
+    func drawToonBody() {
+        Toon.shape(Toon.circle(72, 78, 34), fill: Self.bun)
+        Toon.shape(Toon.circle(228, 78, 34), fill: Self.bun)
+        Toon.shape(Toon.path("M40 300 C48 248 88 222 150 222 C212 222 252 248 260 300 Z"), fill: UIColor(hex: 0xFF6FA8))
+        Toon.shape(Toon.path("M150 226 C130 236 108 236 98 226 C110 214 130 212 150 220 C170 212 190 214 202 226 C192 236 170 236 150 226 Z"), fill: .white, lineWidth: Toon.medium)
+        Toon.shape(Toon.path("M132 186 L168 186 L170 222 L130 222 Z"), fill: UIColor(hex: 0xF2C39D), lineWidth: Toon.medium)
+        Toon.shape(Toon.circle(150, 128, 66), fill: UIColor(hex: 0xF6CBA6))
+        Toon.shape(Toon.path("M84 124 C80 64 120 46 150 46 C180 46 220 64 216 124 C200 104 186 96 176 84 C160 100 128 104 100 104 C94 110 88 116 84 124 Z"), fill: UIColor(hex: 0x8A4D2A))
+        Toon.shape(Toon.circle(100, 96, 9), fill: Self.bow, lineWidth: Toon.fine)
+        Toon.shape(Toon.circle(200, 96, 9), fill: Self.bow, lineWidth: Toon.fine)
     }
 
-    let mouthBoxFraction: CGFloat = 0.30
-    let mouthCentre: (fx: CGFloat, fy: CGFloat) = (0.5, 0.255)
-
-    // Deliberately smaller than the monk's 0.17: the head-to-body ratio is
-    // the character's whole point, per the design brief.
-    private let headCenter = (fx: CGFloat(0.5), fy: CGFloat(0.20))
-    private let headRadius: CGFloat = 0.115
-
-    // MARK: - Tunable geometry
-    //
-    // Everything `drawBody`/`drawEyes` position or size, gathered here so
-    // the rig can be tuned by editing one block instead of hunting through
-    // Bezier paths — and so `Tests/MonkSynthTests/RenderSweep.swift` can
-    // mutate a single field on a copy of the character before rendering it,
-    // without touching the drawing code at all (that's why this is a
-    // `struct` held in a `var`, not baked in as `let` constants). Most
-    // fields are head-radius units measured from `headCenter` — i.e. the
-    // value the original inline literal multiplied `headRadius` by; a few
-    // (noted individually) are plain stage fractions instead, matching
-    // whatever the original code did.
-    struct Geometry {
-        // --- Dress ---
-        /// Stage position of the CENTRE of the dress's own collar band —
-        /// the Y at which its left/right silhouette curves stop converging
-        /// and hand off to the flat-topped neck column (`neckWidth`) below,
-        /// rather than to a single point. An earlier version had the dress
-        /// converge to one point here with no neck at all bridging it to
-        /// the head above, which — even with the small gap — read as the
-        /// dress rising to a funnel point directly under the chin.
-        var dressNeckX: CGFloat = 0.5
-        var dressNeckY: CGFloat = 0.34
-        /// Control points that bow the dress's left/right silhouette
-        /// outward on the way down to the hem corners.
-        var dressLeftControlX: CGFloat = 0.22
-        var dressLeftControlY: CGFloat = 0.62
-        var dressRightControlX: CGFloat = 0.78
-        var dressRightControlY: CGFloat = 0.62
-        /// The dress's bottom-left / bottom-right hem corners (stage
-        /// fractions).
-        var dressHemLeftX: CGFloat = 0.08
-        var dressHemRightX: CGFloat = 0.92
-        var dressHemY: CGFloat = 0.99
-        /// Top edge of the darker hem trim band.
-        var hemTrimTopY: CGFloat = 0.92
-
-        // --- Neck ---
-        /// How far above the head's own bottom edge the skin neck column's
-        /// top sits, in head-radius units — kept slightly INSIDE the head
-        /// circle (rather than starting exactly at its edge) so there is no
-        /// seam between head fill and neck fill.
-        var neckTopOffsetRadii: CGFloat = 0.85
-        /// Half-width of the neck column — used at BOTH its top edge (just
-        /// under the head) and its bottom edge (at the dress's own collar,
-        /// `dressNeckY`), so it reads as a cylinder of constant width,
-        /// noticeably narrower than the head, rather than a triangle
-        /// tapering to a point. Chosen via `RenderSweep`
-        /// (SWEEP_CHARACTER=girl, SWEEP_CONSTANT=neckWidth).
-        var neckWidth: CGFloat = 0.045
-
-        // --- Hands ---
-        /// Stage X position of each hand/sleeve blob.
-        var handLeftX: CGFloat = 0.26
-        var handRightX: CGFloat = 0.74
-        var handY: CGFloat = 0.46
-        /// Hand blob radius, as a fraction of stage width.
-        var handRadiusFraction: CGFloat = 0.05
-        /// The hand blob is slightly taller than wide.
-        var handHeightScale: CGFloat = 2.2
-
-        // --- Pigtails ---
-        /// How far out from head centre each pigtail bun sits, in head
-        /// radii.
-        var pigtailOffsetRadii: CGFloat = 1.5
-        /// Pigtails sit very slightly above head centre (stage fraction).
-        var pigtailYInset: CGFloat = 0.01
-        /// Bun radius, as a fraction of `stage.width * headRadius`.
-        var pigtailRadiusFraction: CGFloat = 0.62
-        /// The trailing wisp below each bun: start/end/control distances
-        /// from the bun's own centre, in bun-radius units.
-        var wispStartRadii: CGFloat = 0.6
-        var wispEndRadii: CGFloat = 2.0
-        var wispControlRadii: CGFloat = 1.3
-        var wispLineWidthFraction: CGFloat = 0.02
-
-        // --- Hairline / fringe (bangs) ---
-        /// How far round the head, in degrees from straight up, the
-        /// fringe's outer corners meet the head's own outline. Pinning
-        /// these exactly onto the head circle (see `drawBody`) is what
-        /// keeps the cap flush with the head's edge at 10/2 o'clock instead
-        /// of leaving a sliver of skin between hair and head.
-        var hairlineSideAngleDeg: CGFloat = 60
-        /// How far past the head's top edge the fringe's peak pokes, in
-        /// head-radius units (>1 = past the top) — the poof at the crown.
-        var hairlinePeakDepth: CGFloat = 1.15
-        /// How far above the head the crown-rounding control points sit, in
-        /// head-radius units — higher than the peak itself so the crown
-        /// reads as a soft dome rather than a sharp tent.
-        var hairlineTopControlDepth: CGFloat = 1.45
-        /// Horizontal inset of the crown-rounding control points, in
-        /// head-radius units from centre.
-        var hairlineTopControlXInset: CGFloat = 0.4
-        /// *** Vertical position of the hairline across the forehead ***:
-        /// how far down the fringe's lower edge reaches at the centre of
-        /// the forehead, in head-radius units above head centre. Smaller
-        /// means the fringe reaches further down (more forehead covered).
-        /// This is the single control point for one smooth arc spanning
-        /// corner-to-corner — replacing the old two-segment dip that cut a
-        /// sharp V/dent — so tuning it moves the whole lower edge as a
-        /// gentle curve that follows the head's own curvature instead of
-        /// fighting it.
-        var hairlineCenterDepth: CGFloat = 0.32
-
-        // --- Cheeks ---
-        var cheekXOffset: CGFloat = 0.7
-        var cheekYOffset: CGFloat = 0.35
-        var cheekRadiusFraction: CGFloat = 0.28
-        var cheekAlpha: CGFloat = 0.5
-
-        // --- Eyes ---
-        /// Horizontal offset of each eye from head centre, as a plain stage
-        /// fraction (not head-radius units — matches the original code).
-        var eyeXOffset: CGFloat = 0.045
-        var lashHalfWidthFraction: CGFloat = 0.024
-        var lashLineWidthFraction: CGFloat = 0.01
-        var eyeRadiusFraction: CGFloat = 0.03
-        var irisRadiusScale: CGFloat = 0.68
-        var highlightRadiusScale: CGFloat = 0.34
-        var highlightOffsetScale: CGFloat = 1.3
-
-        // --- Arms ---
-        /// Where each arm leaves the dress — a point pinned to the dress's
-        /// own shoulder curve, stage fractions. This is what connects the
-        /// hands to the body: without an arm between them, the hands used
-        /// to render as two circles with nothing tying them to the dress.
-        var armShoulderLeftX: CGFloat = 0.445
-        var armShoulderRightX: CGFloat = 0.555
-        var armShoulderY: CGFloat = 0.40
-        /// Stroke width of the arm, as a fraction of stage width.
-        var armLineWidthFraction: CGFloat = 0.045
-    }
-
-    var geometry = Geometry()
-
-    func drawBody(in stage: CGRect) {
-        func p(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint { point(fx, fy, in: stage) }
-        let g = geometry
-
-        // Dress: a big, simple triangle/cone widening down to the hem —
-        // most of the stage is body, not head, on purpose. Its own TOP
-        // edge, though, is a short flat collar band (`neckWidth` wide), not
-        // a point: a point here reads as the dress itself funnelling up to
-        // a spike under the chin, which is the neck column below exists to
-        // avoid.
-        let dress = UIBezierPath()
-        dress.move(to: p(g.dressNeckX - g.neckWidth, g.dressNeckY))
-        dress.addQuadCurve(to: p(g.dressHemLeftX, g.dressHemY), controlPoint: p(g.dressLeftControlX, g.dressLeftControlY))
-        dress.addLine(to: p(g.dressHemRightX, g.dressHemY))
-        dress.addQuadCurve(to: p(g.dressNeckX + g.neckWidth, g.dressNeckY), controlPoint: p(g.dressRightControlX, g.dressRightControlY))
-        dress.addLine(to: p(g.dressNeckX - g.neckWidth, g.dressNeckY))
-        dress.close()
-        Self.dress.setFill()
-        dress.fill()
-
-        // Neck: a skin-coloured column of constant width (`neckWidth`,
-        // reused at both edges) bridging the head's own bottom edge down to
-        // the dress's own collar, so the head reads as attached to a real
-        // neck rather than floating just above the dress's point — the
-        // same technique `MonkCharacter` uses for its own neck. Drawn
-        // before the head so the head fill covers its top portion cleanly.
-        let neckTop = headCenter.fy + headRadius * g.neckTopOffsetRadii
-        let neck = UIBezierPath()
-        neck.move(to: p(g.dressNeckX - g.neckWidth, neckTop))
-        neck.addLine(to: p(g.dressNeckX - g.neckWidth, g.dressNeckY))
-        neck.addLine(to: p(g.dressNeckX + g.neckWidth, g.dressNeckY))
-        neck.addLine(to: p(g.dressNeckX + g.neckWidth, neckTop))
-        neck.close()
-        Theme.skin.setFill()
-        neck.fill()
-
-        // Hem trim.
-        let hem = UIBezierPath()
-        hem.move(to: p(g.dressHemLeftX, g.hemTrimTopY))
-        hem.addLine(to: p(g.dressHemRightX, g.hemTrimTopY))
-        hem.addLine(to: p(g.dressHemRightX, g.dressHemY))
-        hem.addLine(to: p(g.dressHemLeftX, g.dressHemY))
-        hem.close()
-        Self.dressTrim.setFill()
-        hem.fill()
-
-        // Arms: a short dress-coloured stroke from the dress's own
-        // shoulder out to each hand, so the hands read as attached to the
-        // body rather than floating free with no arm between them.
-        for (shoulderX, handX) in [(g.armShoulderLeftX, g.handLeftX), (g.armShoulderRightX, g.handRightX)] {
-            let arm = UIBezierPath()
-            arm.move(to: p(shoulderX, g.armShoulderY))
-            arm.addLine(to: p(handX, g.handY))
-            arm.lineWidth = stage.width * g.armLineWidthFraction
-            arm.lineCapStyle = .round
-            Self.dress.setStroke()
-            arm.stroke()
+    func drawToonFace(_ e: Expression) {
+        let lift = -e.loudness * 6
+        if e.blinking {
+            Toon.eyeClosed(124, 132, 14)
+            Toon.eyeClosed(176, 132, 14)
+        } else {
+            Toon.eyeOpen(124, 130, 16, iris: UIColor(hex: 0x2F7D5B))
+            Toon.eyeOpen(176, 130, 16, iris: UIColor(hex: 0x2F7D5B))
         }
-
-        // Two hands as simple rounded blobs, connected to the dress by the
-        // arms drawn above.
-        for cx: CGFloat in [g.handLeftX, g.handRightX] {
-            let c = p(cx, g.handY)
-            let r = stage.width * g.handRadiusFraction
-            let hand = UIBezierPath(ovalIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * g.handHeightScale))
-            Self.dress.setFill()
-            hand.fill()
-        }
-
-        // Pigtails: round buns on either side, drawn before the head so
-        // the head sits on top of their inner edge.
-        for cx: CGFloat in [headCenter.fx - headRadius * g.pigtailOffsetRadii, headCenter.fx + headRadius * g.pigtailOffsetRadii] {
-            let c = point(cx, headCenter.fy - g.pigtailYInset, in: stage)
-            let r = stage.width * headRadius * g.pigtailRadiusFraction
-            let bun = UIBezierPath(ovalIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
-            Self.hair.setFill()
-            bun.fill()
-            // A little wisp trailing down from each bun.
-            let wisp = UIBezierPath()
-            wisp.move(to: CGPoint(x: c.x, y: c.y + r * g.wispStartRadii))
-            wisp.addQuadCurve(to: CGPoint(x: c.x, y: c.y + r * g.wispEndRadii),
-                               controlPoint: CGPoint(x: c.x + (cx < headCenter.fx ? -r : r), y: c.y + r * g.wispControlRadii))
-            wisp.lineWidth = stage.width * g.wispLineWidthFraction
-            wisp.lineCapStyle = .round
-            Self.hair.setStroke()
-            wisp.stroke()
-        }
-
-        // Head.
-        let head = UIBezierPath(arcCenter: point(headCenter.fx, headCenter.fy, in: stage),
-                                 radius: stage.width * headRadius,
-                                 startAngle: 0, endAngle: .pi * 2, clockwise: true)
-        Theme.skin.setFill()
-        head.fill()
-
-        // Fringe/bangs across the forehead: a dome from side to side whose
-        // outer corners are pinned exactly onto the head's own circle (so
-        // there's no sliver of skin between hair and head edge at 10/2
-        // o'clock), and whose lower edge is a single smooth arc — not the
-        // old two-segment dip that cut a V/dent across the forehead — so it
-        // follows the head's curve instead of fighting it.
-        let sideAngle = g.hairlineSideAngleDeg * .pi / 180
-        let leftCorner = point(headCenter.fx - sin(sideAngle) * headRadius,
-                                headCenter.fy - cos(sideAngle) * headRadius, in: stage)
-        let rightCorner = point(headCenter.fx + sin(sideAngle) * headRadius,
-                                 headCenter.fy - cos(sideAngle) * headRadius, in: stage)
-        let peak = point(headCenter.fx, headCenter.fy - headRadius * g.hairlinePeakDepth, in: stage)
-        let leftTopControl = point(headCenter.fx - headRadius * g.hairlineTopControlXInset,
-                                    headCenter.fy - headRadius * g.hairlineTopControlDepth, in: stage)
-        let rightTopControl = point(headCenter.fx + headRadius * g.hairlineTopControlXInset,
-                                     headCenter.fy - headRadius * g.hairlineTopControlDepth, in: stage)
-        let bottomControl = point(headCenter.fx, headCenter.fy - headRadius * g.hairlineCenterDepth, in: stage)
-
-        let bangs = UIBezierPath()
-        bangs.move(to: leftCorner)
-        bangs.addQuadCurve(to: peak, controlPoint: leftTopControl)
-        bangs.addQuadCurve(to: rightCorner, controlPoint: rightTopControl)
-        bangs.addQuadCurve(to: leftCorner, controlPoint: bottomControl)
-        bangs.close()
-        Self.hair.setFill()
-        bangs.fill()
-
-        // Rosy cheeks.
-        for cx: CGFloat in [headCenter.fx - headRadius * g.cheekXOffset, headCenter.fx + headRadius * g.cheekXOffset] {
-            let c = point(cx, headCenter.fy + headRadius * g.cheekYOffset, in: stage)
-            let r = stage.width * headRadius * g.cheekRadiusFraction
-            let blush = UIBezierPath(ovalIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
-            Self.cheek.withAlphaComponent(g.cheekAlpha).setFill()
-            blush.fill()
-        }
-    }
-
-    func drawEyes(in stage: CGRect, blinking: Bool) {
-        let g = geometry
-        for cx: CGFloat in [headCenter.fx - g.eyeXOffset, headCenter.fx + g.eyeXOffset] {
-            let c = point(cx, headCenter.fy, in: stage)
-            if blinking {
-                let lash = UIBezierPath()
-                lash.move(to: CGPoint(x: c.x - stage.width * g.lashHalfWidthFraction, y: c.y))
-                lash.addLine(to: CGPoint(x: c.x + stage.width * g.lashHalfWidthFraction, y: c.y))
-                lash.lineWidth = stage.width * g.lashLineWidthFraction
-                lash.lineCapStyle = .round
-                Theme.robeShadow.setStroke()
-                lash.stroke()
-                continue
-            }
-            let r = stage.width * g.eyeRadiusFraction
-            let eye = UIBezierPath(ovalIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
-            UIColor.white.setFill()
-            eye.fill()
-            let irisR = r * g.irisRadiusScale
-            let iris = UIBezierPath(ovalIn: CGRect(x: c.x - irisR, y: c.y - irisR, width: irisR * 2, height: irisR * 2))
-            UIColor(red: 0.20, green: 0.42, blue: 0.30, alpha: 1).setFill()
-            iris.fill()
-            let hl = irisR * g.highlightRadiusScale
-            let highlight = UIBezierPath(ovalIn: CGRect(x: c.x - hl * g.highlightOffsetScale, y: c.y - hl * g.highlightOffsetScale, width: hl * 2, height: hl * 2))
-            UIColor.white.setFill()
-            highlight.fill()
-        }
+        Toon.stroke(Toon.path("M110 \(108 + lift) Q122 \(102 + lift) 134 \(106 + lift)"), width: Toon.fine)
+        Toon.stroke(Toon.path("M166 \(106 + lift) Q178 \(102 + lift) 190 \(108 + lift)"), width: Toon.fine)
+        Toon.cheek(106, 156, 13)
+        Toon.cheek(194, 156, 13)
     }
 }

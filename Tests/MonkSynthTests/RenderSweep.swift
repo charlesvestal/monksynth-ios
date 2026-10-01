@@ -1,16 +1,18 @@
 // Parameter-sweep tuning harness for character geometry. Not an assertion
 // test — like `RenderCloseup`, it's a tool for a human to look at.
 //
-// Renders one named `Geometry` constant of `girl` or `oldman` across N
+// Renders one named `Geometry` constant of `firefighter`, `cat`, or `punk`
+// (the still-unported Task 4 characters; `girl`/`oldman` lost their
+// `Geometry` structs when Task 3 ported them to `ToonCharacter`) across N
 // values into a labelled contact sheet (with the same 10% grid overlay
 // `RenderCloseup` uses) at /tmp/sweep.png. Configure it with a line-based
 // `KEY=value` file at /tmp/sweep_config.txt:
 //
 //   cat > /tmp/sweep_config.txt <<EOF
-//   SWEEP_CHARACTER=girl
-//   SWEEP_CONSTANT=hairlineCenterDepth
-//   SWEEP_MIN=0.15
-//   SWEEP_MAX=0.50
+//   SWEEP_CHARACTER=firefighter
+//   SWEEP_CONSTANT=neckWidth
+//   SWEEP_MIN=0.03
+//   SWEEP_MAX=0.14
 //   SWEEP_COUNT=5
 //   EOF
 //   scripts/test.sh MonkSynthTests/RenderSweep && open /tmp/sweep.png
@@ -24,11 +26,11 @@
 // the same names are read too and take precedence over the file when
 // present, for toolchains where they do get forwarded. Every setting is
 // optional — a bare `scripts/test.sh MonkSynthTests/RenderSweep` sweeps
-// the girl's hairline fix over a sensible default range, so there's always
-// something to look at.
+// the fire fighter's neck-column fix over a sensible default range, so
+// there's always something to look at.
 //
-// The constant is selected by name, not by editing `GirlCharacter.swift`/
-// `OldManCharacter.swift`: each character's `Geometry` is a `var` stored
+// The constant is selected by name, not by editing the character's own
+// source file: each of these characters' `Geometry` is a `var` stored
 // property (see those files' "Tunable geometry" doc comments), so this
 // harness makes a copy of the base character, mutates exactly one field on
 // it via `WritableKeyPath`, and renders that copy — the drawing code itself
@@ -66,24 +68,12 @@ final class RenderSweep: XCTestCase {
 
     func testWriteSweep() throws {
         let env = resolvedConfig()
-        let characterID = env["SWEEP_CHARACTER"] ?? "girl"
-        let constant = env["SWEEP_CONSTANT"] ?? "hairlineCenterDepth"
+        let characterID = env["SWEEP_CHARACTER"] ?? "firefighter"
+        let constant = env["SWEEP_CONSTANT"] ?? "neckWidth"
         let count = max(2, Int(env["SWEEP_COUNT"] ?? "5") ?? 5)
         let outputPath = env["SWEEP_OUTPUT"] ?? "/tmp/sweep.png"
 
         switch characterID {
-        case "girl":
-            let (keyPath, defaultRange) = try XCTUnwrap(Self.girlConstants[constant],
-                "unknown SWEEP_CONSTANT '\(constant)' for girl — known: \(Self.girlConstants.keys.sorted())")
-            let values = sweepValues(env: env, defaultRange: defaultRange, count: count)
-            try renderSweep(base: GirlCharacter(), keyPath: keyPath, values: values,
-                             label: constant, outputPath: outputPath)
-        case "oldman":
-            let (keyPath, defaultRange) = try XCTUnwrap(Self.oldManConstants[constant],
-                "unknown SWEEP_CONSTANT '\(constant)' for oldman — known: \(Self.oldManConstants.keys.sorted())")
-            let values = sweepValues(env: env, defaultRange: defaultRange, count: count)
-            try renderSweep(base: OldManCharacter(), keyPath: keyPath, values: values,
-                             label: constant, outputPath: outputPath)
         case "firefighter":
             let (keyPath, defaultRange) = try XCTUnwrap(Self.fireFighterConstants[constant],
                 "unknown SWEEP_CONSTANT '\(constant)' for firefighter — known: \(Self.fireFighterConstants.keys.sorted())")
@@ -103,35 +93,11 @@ final class RenderSweep: XCTestCase {
             try renderSweep(base: PunkCharacter(), keyPath: keyPath, values: values,
                              label: constant, outputPath: outputPath)
         default:
-            XCTFail("unknown SWEEP_CHARACTER '\(characterID)' — expected 'girl', 'oldman', 'firefighter', 'cat', or 'punk'")
+            XCTFail("unknown SWEEP_CHARACTER '\(characterID)' — expected 'firefighter', 'cat', or 'punk'")
         }
     }
 
     // MARK: - Known sweepable constants
-
-    /// Every `GirlCharacter.Geometry` field worth sweeping, with a sensible
-    /// default (min, max) range — named explicitly (no reflection) so a
-    /// typo in `SWEEP_CONSTANT` fails loudly via `XCTUnwrap` instead of
-    /// silently sweeping the wrong field.
-    private static let girlConstants: [String: (WritableKeyPath<GirlCharacter, CGFloat>, ClosedRange<CGFloat>)] = [
-        "hairlineCenterDepth":     (\GirlCharacter.geometry.hairlineCenterDepth, 0.10...0.55),
-        "hairlineSideAngleDeg":    (\GirlCharacter.geometry.hairlineSideAngleDeg, 35...85),
-        "hairlinePeakDepth":       (\GirlCharacter.geometry.hairlinePeakDepth, 0.95...1.40),
-        "hairlineTopControlDepth": (\GirlCharacter.geometry.hairlineTopControlDepth, 1.10...1.70),
-        "armLineWidthFraction":    (\GirlCharacter.geometry.armLineWidthFraction, 0.015...0.075),
-        "handRadiusFraction":      (\GirlCharacter.geometry.handRadiusFraction, 0.03...0.08),
-        "neckWidth":               (\GirlCharacter.geometry.neckWidth, 0.020...0.075),
-    ]
-
-    /// Same, for `OldManCharacter.Geometry`.
-    private static let oldManConstants: [String: (WritableKeyPath<OldManCharacter, CGFloat>, ClosedRange<CGFloat>)] = [
-        "sideHairOuterRadius":      (\OldManCharacter.geometry.sideHairOuterRadius, 0.95...1.60),
-        "sideHairInnerTaperRadius": (\OldManCharacter.geometry.sideHairInnerTaperRadius, 0.45...0.95),
-        "sideHairTopAttachRadius":  (\OldManCharacter.geometry.sideHairTopAttachRadius, 0.70...1.00),
-        "sideHairTopLift":          (\OldManCharacter.geometry.sideHairTopLift, 0.10...0.60),
-        "sideHairBulgeLift":        (\OldManCharacter.geometry.sideHairBulgeLift, -0.10...0.30),
-        "wrinkleAlpha":             (\OldManCharacter.geometry.wrinkleAlpha, 0.10...0.65),
-    ]
 
     /// Same, for `FireFighterCharacter.Geometry`'s neck-column fields (the
     /// cone-vs-neck defect fix).
