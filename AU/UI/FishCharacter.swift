@@ -37,4 +37,22 @@ struct FishCharacter: ToonCharacter {
             Toon.eyeOpen(192, 126, 28, look: CGPoint(x: -3, y: 2))
         }
     }
+
+    /// Undersea: swaying kelp either side, rising bubbles over a sandy floor.
+    func drawBackdrop(in rect: CGRect, stage: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
+        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
+        let L = W * 0.12, R = W * 0.88
+        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
+        Backdrop.kelp(L, H, H * 0.6, u: u)
+        Backdrop.kelp(L + 30, H, H * 0.45, u: u)
+        Backdrop.kelp(R, H, H * 0.55, u: u)
+        let gy = (H * 0.86).rounded()
+        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
+        Backdrop.bubble(R - 30, H * 0.3, 14, u: u)
+        Backdrop.bubble(R - 10, H * 0.18, 9, u: u)
+        Backdrop.bubble(L + 40, H * 0.22, 11, u: u)
+        ctx.restoreGState()
+    }
 }

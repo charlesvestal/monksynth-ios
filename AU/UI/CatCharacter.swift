@@ -66,4 +66,16 @@ struct CatCharacter: ToonCharacter {
         Toon.stroke(Toon.path("M180 148 L230 140"), width: 2.5)
         Toon.stroke(Toon.path("M180 158 L228 162"), width: 2.5)
     }
+
+    /// A night-time alley: a lit window behind, the sill level with the ground.
+    func drawBackdrop(in rect: CGRect, stage: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
+        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
+        let gy = (H * 0.72).rounded(), cx = W / 2
+        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
+        Backdrop.window(cx, gy - 6, W * 0.7, gy - H * 0.08, u: u)
+        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
+        ctx.restoreGState()
+    }
 }

@@ -40,4 +40,18 @@ struct UnicornCharacter: ToonCharacter {
         Toon.cheek(100, 142)
         Toon.cheek(200, 142)
     }
+
+    /// Pastel meadow under a rainbow, with a couple of drifting clouds.
+    func drawBackdrop(in rect: CGRect, stage: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
+        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
+        let gy = (H * 0.72).rounded(), cx = W / 2, L = W * 0.12, R = W * 0.88
+        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
+        Backdrop.rainbow(cx, gy, min(W * 0.48, H * 0.62), u: u)
+        Backdrop.cloud(L + 10, H * 0.24, 0.8, u: u)
+        Backdrop.cloud(R - 10, H * 0.34, 0.65, u: u)
+        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
+        ctx.restoreGState()
+    }
 }

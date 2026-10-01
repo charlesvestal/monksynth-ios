@@ -43,4 +43,18 @@ struct OldManCharacter: ToonCharacter {
         Toon.shape(Toon.path("M108 162 C120 148 140 150 150 158 C160 150 180 148 192 162 C176 166 162 166 150 162 C138 166 124 166 108 162 Z"),
                    fill: Self.hair, lineWidth: Toon.medium)
     }
+
+    /// A wallpapered room: striped wall, a night window, a floor lamp.
+    func drawBackdrop(in rect: CGRect, stage: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
+        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
+        let gy = (H * 0.72).rounded(), L = W * 0.12, R = W * 0.88
+        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
+        Backdrop.stripes(W, gy, u: u)
+        Backdrop.window(L + 34, gy - H * 0.2, min(90, W * 0.2), H * 0.32, u: u)
+        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
+        Backdrop.lamp(R - 6, gy + 4, H / 300, u: u)
+        ctx.restoreGState()
+    }
 }
