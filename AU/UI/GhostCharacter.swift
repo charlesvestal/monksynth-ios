@@ -36,18 +36,15 @@ struct GhostCharacter: ToonCharacter {
 
     /// A moonlit graveyard: a starry night sky, blank tombstones either side.
     func drawBackdrop(in rect: CGRect, stage: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
-        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
-        let gy = (H * 0.72).rounded(), cx = W / 2, L = W * 0.12, R = W * 0.88
-        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
-        Backdrop.moon(R - 20, H * 0.2, min(34, H * 0.09), u: u)
-        Backdrop.star(L + 10, H * 0.14, 6, u: u)
-        Backdrop.star(cx - W * 0.2, H * 0.08, 4, u: u)
-        Backdrop.star(cx + W * 0.15, H * 0.12, 5, u: u)
-        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
-        Backdrop.tomb(L + 10, gy + 6, H / 300, u: u)
-        Backdrop.tomb(R - 10, gy + 8, H / 360, u: u)
-        ctx.restoreGState()
+        Backdrop.scene(in: rect, stage: stage, palette: palette) { W, H, u in
+            let gy = (H * 0.72).rounded(), cx = W / 2, L = W * 0.12, R = W * 0.88
+            Backdrop.moon(R - 20, H * 0.2, min(34, H * 0.09), u: u)
+            Backdrop.star(L + 10, H * 0.14, 6, u: u)
+            Backdrop.star(cx - W * 0.2, H * 0.08, 4, u: u)
+            Backdrop.star(cx + W * 0.15, H * 0.12, 5, u: u)
+            Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: self.palette.ground, u: u)
+            Backdrop.tomb(L + 10, gy + 6, H / 300, u: u)
+            Backdrop.tomb(R - 10, gy + 8, H / 360, u: u)
+        }
     }
 }

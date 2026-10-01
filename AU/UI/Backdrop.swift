@@ -10,6 +10,23 @@ enum Backdrop {
         ground(rect, y: rect.minY + rect.height * 0.72, color: palette.ground, u: u)
     }
 
+    /// Shared shell for every character's `drawBackdrop`: clips to `rect`,
+    /// translates so scene coordinates start at (0,0), draws the sky, then
+    /// hands `body` the local width/height and the stage-unit scale `u` for
+    /// its own prop calls. Every gen.mjs `scene()` case draws its sky first,
+    /// so this always does too.
+    static func scene(in rect: CGRect, stage: CGRect, palette: Palette,
+                      _ body: (_ W: CGFloat, _ H: CGFloat, _ u: CGFloat) -> Void) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.saveGState()
+        ctx.clip(to: rect)
+        ctx.translateBy(x: rect.minX, y: rect.minY)
+        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
+        sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
+        body(W, H, u)
+        ctx.restoreGState()
+    }
+
     static func sky(_ rect: CGRect, top: UIColor, bottom: UIColor) {
         guard let ctx = UIGraphicsGetCurrentContext(),
               let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
@@ -164,7 +181,7 @@ enum Backdrop {
         Toon.fill(Toon.circle(x - 20 * k, y - 83 * k, 4 * k), UIColor(hex: 0x7DFF3A))
     }
 
-    static func spot(_ x: CGFloat, _ W: CGFloat, _ H: CGFloat, color: UIColor, u: CGFloat) {
+    static func spot(_ x: CGFloat, _ H: CGFloat, color: UIColor) {
         Toon.fill(Toon.path("M\(x - 14) 0 L\(x + 14) 0 L\(x + 120) \(H) L\(x - 120) \(H) Z"), color.withAlphaComponent(0.18))
     }
 
