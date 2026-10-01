@@ -206,3 +206,37 @@ element and label; the character remains non-accessible.
   - Each sheet is looked at after every character/surface change; a
     character is done only when its sheet has been reviewed.
 - App icon (`RenderAppIcon`) regenerated from the new monk.
+
+## Amendments from the mockup review (2026-10-01)
+
+The approved mockups are the art source of truth:
+`docs/mockups/stage-redesign/gen.mjs` (every character, mouth and scene as
+path data in a 300×300 stage), with `characters.png`, `mouths.png` and the
+three `scene-*.svg` renders beside it. The Swift port draws the same paths
+in the same 300-unit space (mapped onto the stage rect), so the numbers
+carry over unchanged.
+
+These supersede the sections above where they differ:
+
+- **Mouth size targets** are the ones the mockups were approved at, not the
+  earlier guesses: at AH the mouth is at least **0.11** of the stage tall;
+  at EE at least **0.14** wide; and EE's width/height ratio is at least
+  **3×** OO's. The mouth anchors are shared by every character, so the old
+  "every character has a different mouth sweep" test is replaced by these.
+- **Attachment.** Every head connects to its body: a neck (or a
+  continuous neck-and-body shape) runs under the head, and anything worn
+  (robe, collar, beads) sits on top of it, never floating. A test renders
+  each character alone and asserts the opaque pixels form one connected
+  region.
+- **Touch marker** is two white ripple rings around a small accent dot with
+  an ink edge, not a filled disc (a filled ring read as a gong next to the
+  monk's sun).
+- **Sun** has rays and sits low, partly behind a mountain.
+- Per-character details settled in review: monk beads drape on the robe
+  below the neckline and the sash starts at the neckline; the fish's dorsal
+  fin grows out of the body; the unicorn's mane starts at the crown; the
+  pizza's cheese edge follows the crust's arc; the cat has no bib; the
+  ghost's tombstones are blank; the fire fighter's reflective band is
+  clipped to the coat.
+- **Old Man's** side tufts sit behind the head; **Little Girl's** hair ties
+  are round, at the buns.
