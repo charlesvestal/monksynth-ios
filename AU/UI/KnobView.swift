@@ -8,6 +8,8 @@ final class KnobView: UIView {
     let param: Param
     var value: Float { didSet { setNeedsDisplay(); updateAccessibility() } }
     var onChange: ((Float) -> Void)?
+    /// The value arc's colour — the owning view's character accent.
+    var accent: UIColor = Theme.defaultAccent { didSet { setNeedsDisplay() } }
 
     private var dragStart: CGPoint = .zero
     private var valueAtDragStart: Float = 0
@@ -119,7 +121,7 @@ final class KnobView: UIView {
     private static let nameFontSize: CGFloat = 8
     private static let valueFontSize: CGFloat = 11
 
-    /// A sticker dial: a ring (dark track, `Theme.accent` value arc) with an
+    /// A sticker dial: a ring (dark track, `accent` value arc) with an
     /// ink rim and a hard ink shadow straight down, around a cream face with
     /// an ink outline and an ink pointer bar.
     override func draw(_ rect: CGRect) {
@@ -143,7 +145,7 @@ final class KnobView: UIView {
                                    startAngle: start, endAngle: angle, clockwise: true)
             lit.lineWidth = ringW + 1
             lit.lineCapStyle = .butt
-            Theme.accent.setStroke()
+            accent.setStroke()
             lit.stroke()
         }
         Toon.stroke(Toon.circle(c.x, c.y, outerR - border / 2), width: border)

@@ -30,7 +30,7 @@ final class ControlPages: UIView {
     private(set) var pageIndex = 0
     /// The segmented bar: one ink-outlined capsule (`tabTrack`) holding the
     /// five buttons in `tabBar`. The selected button is filled with
-    /// `Theme.accent` and outlined in ink; the rest are transparent.
+    /// `accent` and outlined in ink; the rest are transparent.
     private let tabTrack = UIView()
     private let tabBar = UIStackView()
     private var tabButtons: [UIButton] = []
@@ -48,6 +48,16 @@ final class ControlPages: UIView {
 
     /// The button for `pageIndex`.
     var selectedTabButton: UIButton? { tabButtons.first { $0.tag == pageIndex } }
+    var tabButtonsForTesting: [UIButton] { tabButtons }
+
+    /// The character's accent: fills the selected tab and every knob's
+    /// value arc. Set by `PluginView.applyPalette(_:)`.
+    var accent: UIColor = Theme.defaultAccent {
+        didSet {
+            colourTabs(animated: false)
+            knobs.forEach { $0.accent = accent }
+        }
+    }
 
     /// Tabs and knobs start this far below the strip's top edge: the drawer
     /// handle's pill straddles that edge (see `PluginView.handlePillFrame`)
@@ -58,10 +68,10 @@ final class ControlPages: UIView {
     /// outline plus breathing room).
     private static let inset: CGFloat = 8
 
-    /// The tabs become a column on the left once the strip is this many
-    /// times wider than tall — iPhone landscape, iPad, and the AUM strip —
-    /// so the knobs get the strip's whole height instead of sharing it with
-    /// a tab row.
+    /// The tabs become a column on the left when the strip's width is at
+    /// least this many times its height (iPhone landscape, iPad landscape,
+    /// the AUM strip); otherwise they are a row across the top. The column
+    /// lets the knobs use the strip's whole height.
     static let sideTabsAspect: CGFloat = 3.5
     private static let sideTabsWidth: CGFloat = 72
     private static let maxKnobCellWidth: CGFloat = 110
@@ -109,20 +119,13 @@ final class ControlPages: UIView {
         knobs.first { $0.param == param }
     }
 
-    /// Re-reads `Theme.accent` after a character change: the selected tab's
-    /// fill and every knob's value arc.
-    func applyPalette() {
-        colourTabs(animated: false)
-        knobs.forEach { $0.setNeedsDisplay() }
-    }
-
     /// Fills the selected tab with the accent. Crossfades when the user
     /// switches page on screen; instant under Reduce Motion or off-screen.
     private func colourTabs(animated: Bool) {
         let apply = {
             for b in self.tabButtons {
                 let selected = b.tag == self.pageIndex
-                b.backgroundColor = selected ? Theme.accent : .clear
+                b.backgroundColor = selected ? self.accent : .clear
                 b.layer.borderWidth = selected ? Theme.outline : 0
                 b.setTitleColor(selected ? Theme.ink : Theme.textDim, for: .normal)
             }
@@ -157,6 +160,7 @@ final class ControlPages: UIView {
         knobs = Self.pages[index].params.map { p in
             let initial = valueProvider?(p) ?? p.defaultValue
             let k = KnobView(param: p, value: initial)
+            k.accent = accent
             k.onChange = { [weak self] v in self?.onParameterChange?(p, v) }
             knobRow.addArrangedSubview(k)
             return k

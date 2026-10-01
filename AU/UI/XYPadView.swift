@@ -107,7 +107,7 @@ final class XYPadView: UIView {
 
     /// The touch marker's dot colour — the current character's accent, set
     /// by `SceneView` on character change.
-    var accent: UIColor = Theme.accent { didSet { setNeedsDisplay() } }
+    var accent: UIColor = Theme.defaultAccent { didSet { setNeedsDisplay() } }
 
     /// UserDefaults key: set once the scene has been touched; until then a
     /// small "touch to sing" hint shows (the scene no longer looks like a pad).

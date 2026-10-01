@@ -8,7 +8,7 @@ import UIKit
 ///
 /// Two round sticker buttons (cream, ink outline, hard ink shadow) step to
 /// the previous/next character, wrapping; between them the character's name
-/// in heavy rounded type with a small `Theme.accent` chevron after it.
+/// in heavy rounded type with a small chevron in the character's accent after it.
 /// Tapping the name opens `CharacterDropdownView`; the chevron is drawn on
 /// the name control's layer, not a separate tap target.
 ///
@@ -64,9 +64,9 @@ final class CharacterSelector: UIView {
         }
     }
 
-    /// The colour of the chevron after the name — `Theme.accent` as of the
-    /// last `applyPalette()`.
-    private(set) var chevronColor: UIColor = Theme.accent
+    /// The colour of the chevron after the name — the accent passed to the
+    /// last `applyPalette(accent:)`.
+    private(set) var chevronColor: UIColor = Theme.defaultAccent
 
     private let leftButton = UIButton(type: .system)
     private let rightButton = UIButton(type: .system)
@@ -187,9 +187,9 @@ final class CharacterSelector: UIView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    /// Re-tints the chevron after the name with `Theme.accent`.
-    func applyPalette() {
-        chevronColor = Theme.accent
+    /// Re-tints the chevron after the name with the character's accent.
+    func applyPalette(accent: UIColor) {
+        chevronColor = accent
         chevron.strokeColor = chevronColor.cgColor
     }
 
