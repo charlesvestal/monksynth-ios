@@ -9,7 +9,6 @@ enum Theme {
     static let background  = UIColor(hex: 0x1D1719)
     static let panel       = UIColor(hex: 0x2A2225)
     static let panelDeep   = UIColor(hex: 0x1B1416)
-    static let panelBorder = Toon.ink
     static let cream       = UIColor(hex: 0xFFF1D6)
     static let track       = UIColor(hex: 0x4A3D41)
     static let ink         = Toon.ink
@@ -27,7 +26,6 @@ enum Theme {
     /// Corner radius of the control strip panel.
     static let stripCornerRadius: CGFloat = 18
 
-    static let cornerRadius: CGFloat = 10
     static let gutter: CGFloat = 8
     /// Preferred control-strip heights. `PluginView.sceneLayout` uses
     /// `stripHeightWide` only when the container is wide AND short (inner

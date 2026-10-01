@@ -380,7 +380,7 @@ final class RenderUISnapshot: XCTestCase {
 
     /// Renders only `rect` (in `view`'s own coordinate space) of a laid-out
     /// view, at 1x scale so the crop math stays simple. Used below to zoom
-    /// in on the stage zone — at full-UI scale the step arrows are too
+    /// in on the scene — at full-UI scale the step arrows are too
     /// small in a screenshot to actually judge their look.
     private func crop(_ view: UIView, to rect: CGRect) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
