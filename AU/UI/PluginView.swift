@@ -52,15 +52,18 @@ struct ZoneLayout: Equatable {
 /// dragged. This version anchors the handle to `controls.minY`, the edge
 /// that actually travels; see `handleFrame(for:)`.
 ///
-/// The strip gets `Theme.stripHeight` when open and there's room. When
-/// there isn't, it shrinks, but never below `Theme.minUsableStripHeight` —
-/// the height below which `ControlPages` can no longer draw an actual
-/// knob — as long as there is at least that much room to give it; only a
-/// truly degenerate host rect (smaller than the floor itself) forces it any
-/// shorter. Closed, the strip is zero-height; only the handle draws. The
-/// scene takes whatever is left, which can be very little at extreme sizes
-/// — an acceptable trade against ever hiding the controls entirely when the
-/// drawer is open. The scene stays playable however short it gets; only
+/// Open, the strip prefers `Theme.stripHeight` (or `Theme.stripHeightWide`
+/// when the inner rect is at least as wide as it is tall — see below) when
+/// there's room. When there isn't, it shrinks, but never below
+/// `Theme.minUsableStripHeight` — the height below which `ControlPages` can
+/// no longer draw an actual knob — as long as there is at least that much
+/// room to give it; only a truly degenerate host rect (smaller than the
+/// floor itself) forces it any shorter. Closed, the strip is zero-height;
+/// only the handle draws. The scene takes whatever is left — an acceptable
+/// trade against ever hiding the controls entirely when the drawer is
+/// open. If that leaves less than `Theme.minSceneHeight`, the scene drops
+/// to `.zero` (and is hidden) until the drawer closes, rather than showing
+/// a sliver; above that it stays playable however short it gets, and only
 /// the character hides once it would be too small to read (that's
 /// `SceneView.characterRect(in:)`'s call, not the layout's).
 ///
@@ -112,11 +115,12 @@ final class PluginView: UIView {
     /// degrades rather than crashing the entry point.
     var presetStore: PresetStoring?
 
-    /// Header ⓘ button that opens `AboutView`. Visually a small glyph, but
-    /// sized to the full 44pt HIG minimum in both dimensions (see
-    /// `layoutSubviews`) — a button's own frame already IS its hit area, so
-    /// a single `UIButton` gets a big tap target for free.
+    /// Header ⓘ button that opens `AboutView`. Visually a 36pt dark sticker
+    /// disc (`infoDisc`), but sized to the full 44pt HIG minimum in both
+    /// dimensions (see `layoutSubviews`) — a button's own frame already IS
+    /// its hit area, so a single `UIButton` gets a big tap target for free.
     private let infoButton = UIButton(type: .system)
+    private let infoDisc = UIView()
     private var aboutView: AboutView?
     private var moreAppsView: MoreAppsView?
     private var characterDropdownView: CharacterDropdownView?
@@ -124,9 +128,8 @@ final class PluginView: UIView {
     /// Minimum tap target per Apple's HIG.
     static let infoButtonSize: CGFloat = 44
 
-    /// The quiet, centred "‹ Monk ›" label replacing the old edge arrows,
-    /// the tap-the-art picker, and the filled-pill control that followed it
-    /// — see that type's own doc comment. Lives in the header row
+    /// The centred "(‹) Monk ⌄ (›)" header control — see that type's own
+    /// doc comment. Lives in the header row
     /// (`characterSelectorFrame`), not beside the character art, so it
     /// survives a scene too short to show the character.
     let characterSelector = CharacterSelector()
@@ -137,16 +140,18 @@ final class PluginView: UIView {
     private(set) var drawerOpen = true
 
     /// The actual tap target for opening/closing the drawer. Deliberately
-    /// much larger than the visible pill (`drawerHandleBar`) it contains: a
-    /// tap target has to clear Apple's 44pt HIG minimum in both dimensions,
-    /// which a thin bar alone cannot. This view stays transparent; only
-    /// `drawerHandleBar` (and the chevron inside it) draws anything.
-    private let drawerHandle = UIView()
+    /// much larger than the visible pill (`drawerHandleBar`): a tap target
+    /// has to clear Apple's 44pt HIG minimum in both dimensions, which a
+    /// small pill alone cannot. This view stays transparent; only
+    /// `drawerHandleBar` (and the chevron inside it) draws anything. The
+    /// pill straddles the strip's top edge, so its lower half pokes out
+    /// below this view's frame; `HandleHitView` counts touches there too.
+    private let drawerHandle = HandleHitView()
 
-    /// The small visible pill inside `drawerHandle`. Non-interactive — the
-    /// tap gesture lives on `drawerHandle` itself — this view exists only
-    /// so there's something to look at where the much-larger invisible hit
-    /// region actually is.
+    /// The small visible cream capsule. Non-interactive — the tap gesture
+    /// lives on `drawerHandle` itself — this view exists only so there's
+    /// something to look at where the much-larger invisible hit region
+    /// actually is. Positioned by `handlePillFrame`.
     private let drawerHandleBar = UIView()
 
     /// A chevron, not a featureless dash: the fact that a control can
@@ -165,8 +170,8 @@ final class PluginView: UIView {
     /// grows to this size.
     static let drawerHitSize = CGSize(width: 60, height: 44)
 
-    /// The visible pill's own size, centred inside `drawerHitSize`.
-    private static let handlePillSize = CGSize(width: 44, height: 20)
+    /// The visible capsule's own size.
+    static let handlePillSize = CGSize(width: 52, height: 22)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -185,6 +190,19 @@ final class PluginView: UIView {
         installInfoButton()
         installCharacterSelector()
         sceneView.character = stage.character
+        applyPalette(stage.character.palette)
+    }
+
+    /// Recolours the chrome for a character: sets the shared `Theme.accent`
+    /// and has every view that reads it redraw (knob arcs, the selected
+    /// tab, the selector's chevron, the touch marker). Runs on every
+    /// character change — arrows, dropdown, or a programmatic restore —
+    /// via `stage.onCharacterChanged`, and once at init.
+    func applyPalette(_ p: Palette) {
+        Theme.accent = p.accent
+        controls.applyPalette()
+        characterSelector.applyPalette()
+        pad.accent = p.accent
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -198,14 +216,14 @@ final class PluginView: UIView {
             UITapGestureRecognizer(target: self, action: #selector(toggleDrawer)))
         addSubview(drawerHandle)
 
-        drawerHandleBar.backgroundColor = Theme.panel
+        drawerHandleBar.backgroundColor = Theme.cream
         drawerHandleBar.layer.cornerRadius = Self.handlePillSize.height / 2
-        drawerHandleBar.layer.borderWidth = 1
-        drawerHandleBar.layer.borderColor = Theme.panelBorder.cgColor
+        drawerHandleBar.layer.borderWidth = Theme.outline
+        drawerHandleBar.layer.borderColor = Theme.ink.cgColor
         drawerHandleBar.isUserInteractionEnabled = false
         drawerHandle.addSubview(drawerHandleBar)
 
-        drawerHandleChevron.tintColor = Theme.textDim
+        drawerHandleChevron.tintColor = Theme.ink
         drawerHandleChevron.contentMode = .center
         drawerHandleChevron.isUserInteractionEnabled = false
         drawerHandleBar.addSubview(drawerHandleChevron)
@@ -224,7 +242,7 @@ final class PluginView: UIView {
     /// pull-down/pull-up sheets signal direction.
     private func updateDrawerChevron() {
         let symbolName = drawerOpen ? "chevron.down" : "chevron.up"
-        let config = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
+        let config = UIImage.SymbolConfiguration(pointSize: 11, weight: .heavy)
         drawerHandleChevron.image = UIImage(systemName: symbolName, withConfiguration: config)
     }
 
@@ -237,8 +255,14 @@ final class PluginView: UIView {
         // came up completely blank, title and all. `info.circle` is exactly
         // the mark this button represents anyway, and (unlike a Unicode
         // character) is guaranteed to render.
-        infoButton.setImage(UIImage(systemName: "info.circle"), for: .normal)
+        let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .heavy)
+        infoButton.setImage(UIImage(systemName: "info", withConfiguration: config), for: .normal)
         infoButton.tintColor = Theme.textDim
+        infoDisc.isUserInteractionEnabled = false
+        infoDisc.backgroundColor = Theme.panel
+        infoDisc.layer.borderColor = Theme.ink.cgColor
+        infoDisc.layer.borderWidth = Theme.outline
+        infoButton.insertSubview(infoDisc, at: 0)
         infoButton.accessibilityLabel = NSLocalizedString("about.info", comment: "Open the about screen")
         infoButton.addTarget(self, action: #selector(showAbout), for: .touchUpInside)
         addSubview(infoButton)
@@ -294,10 +318,12 @@ final class PluginView: UIView {
         // Keeps the name label in sync with EVERY route `stage.character`
         // can change through, not just the two this view itself triggers —
         // see `CharacterView.onCharacterChanged`'s doc comment.
-        // Also re-dresses the scene (backdrop + touch-marker accent).
+        // Also re-dresses the scene (backdrop + touch-marker accent) and
+        // recolours the chrome.
         stage.onCharacterChanged = { [weak self] character in
             self?.characterSelector.characterName = character.displayName
             self?.sceneView.character = character
+            self?.applyPalette(character.palette)
         }
     }
 
@@ -536,6 +562,19 @@ final class PluginView: UIView {
                height: drawerHitSize.height)
     }
 
+    /// The visible drawer capsule, in this view's coordinates: centred on
+    /// the strip, straddling its top edge (its upper half over the gutter
+    /// between scene and strip, its lower half over the strip's top margin,
+    /// which `ControlPages.topClearance` keeps free of tabs and knobs).
+    /// Never drops into the bottom safe area, so with the drawer closed it
+    /// sits just above the bottom edge.
+    static func handlePillFrame(controls: CGRect, safeBottom: CGFloat) -> CGRect {
+        let size = handlePillSize
+        let maxY = min(controls.minY - 2 + size.height / 2, safeBottom)
+        return CGRect(x: controls.midX - size.width / 2, y: maxY - size.height,
+                      width: size.width, height: size.height)
+    }
+
     /// The scene takes the full inner width from below the header row to
     /// the strip's top gutter, in both orientations; only the strip's
     /// preferred height differs (see `Theme.stripHeight`/`stripHeightWide`).
@@ -577,10 +616,10 @@ final class PluginView: UIView {
         controls.frame = l.controls
 
         drawerHandle.frame = l.handle
-        drawerHandleBar.frame = CGRect(
-            x: (l.handle.width - Self.handlePillSize.width) / 2,
-            y: (l.handle.height - Self.handlePillSize.height) / 2,
-            width: Self.handlePillSize.width, height: Self.handlePillSize.height)
+        let pill = Self.handlePillFrame(controls: l.controls,
+                                        safeBottom: bounds.maxY - safeAreaInsets.bottom)
+        drawerHandleBar.frame = pill.offsetBy(dx: -l.handle.minX, dy: -l.handle.minY)
+        drawerHandle.extraHitRect = drawerHandleBar.frame
         drawerHandleChevron.frame = drawerHandleBar.bounds
         bringSubviewToFront(drawerHandle)
 
@@ -608,6 +647,12 @@ final class PluginView: UIView {
         // is brought to the front too: neither should ever lose a touch to
         // a zone that happens to be drawn on top.
         infoButton.frame = l.infoButton
+        let disc = CharacterSelector.arrowDiscSize
+        infoDisc.frame = CGRect(x: (l.infoButton.width - disc) / 2, y: (l.infoButton.height - disc) / 2,
+                                width: disc, height: disc)
+        infoDisc.layer.cornerRadius = disc / 2
+        infoButton.layoutIfNeeded()
+        infoButton.sendSubviewToBack(infoDisc)
         bringSubviewToFront(infoButton)
 
         if let aboutView {
@@ -622,5 +667,16 @@ final class PluginView: UIView {
             characterDropdownView.frame = bounds
             bringSubviewToFront(characterDropdownView)
         }
+    }
+}
+
+/// The drawer handle's hit view: its own frame (the 44pt target above the
+/// strip) plus `extraHitRect`, the part of the visible capsule that hangs
+/// below that frame over the strip's top edge.
+private final class HandleHitView: UIView {
+    var extraHitRect: CGRect = .zero
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        super.point(inside: point, with: event) || extraHitRect.contains(point)
     }
 }

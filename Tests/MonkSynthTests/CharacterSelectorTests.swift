@@ -207,8 +207,8 @@ final class CharacterSelectorTests: XCTestCase {
         }
     }
 
-    /// The visual shrink (small type, thin glyphs, no pill) must not shrink
-    /// the touch targets underneath it — same "small glyph, big hit region"
+    /// The visible discs and glyphs are smaller than the buttons; that must
+    /// not shrink the touch targets underneath them — same "small glyph, big hit region"
     /// pattern already used by `PluginView.infoButton` and the drawer
     /// handle. Checks the glyph/label itself renders far smaller than its
     /// own tap target, at the roomiest width the selector is ever given.
@@ -224,22 +224,24 @@ final class CharacterSelectorTests: XCTestCase {
         }
     }
 
-    // MARK: - Subtle, not a widget
+    // MARK: - Sticker header
 
-    /// The whole point of this revision: no filled capsule, no border, and
-    /// the name reads in `Theme.textDim` rather than `Theme.textPrimary` —
-    /// a quiet label sitting on the app background, not a chunky control.
+    /// The selector view itself stays transparent — the round arrow discs
+    /// and the name sit directly on `Theme.background`, with no pill around
+    /// the whole group.
     func testSelectorHasNoBackgroundOrBorder() {
         let selector = makeSelector()
         XCTAssertEqual(selector.backgroundColor, .clear)
         XCTAssertEqual(selector.layer.borderWidth, 0)
     }
 
-    func testNameLabelUsesTheDimTextColorNotThePrimaryOne() throws {
+    /// The name is the header's title: heavy rounded type in the primary
+    /// text colour.
+    func testNameLabelUsesThePrimaryTextColourInDisplayType() throws {
         let selector = makeSelector()
         let label = try nameLabel(in: selector)
-        XCTAssertEqual(label.textColor, Theme.textDim)
-        XCTAssertNotEqual(label.textColor, Theme.textPrimary)
+        XCTAssertEqual(label.textColor, Theme.textPrimary)
+        XCTAssertEqual(label.font, Theme.display(22))
     }
 
     // MARK: - Long names (a future roster will exceed "Monk")

@@ -1,25 +1,20 @@
 import UIKit
 
-/// A quiet, centred label replacing the old edge arrows, the tap-the-art
-/// grid picker, and (as of this revision) the filled-pill "‹ Monk ⌄ ›"
-/// control that followed it:
+/// The header's character control:
 ///
 /// ```
-///    ‹   Monk   ›
+///    (‹)   Monk ⌄   (›)
 /// ```
 ///
-/// No background, no border, no chevron — reported as "silly", reading as a
-/// chunky widget when the character name is a minor, ambient readout, not
-/// the main event. Now it's just glyphs and text sitting directly on
-/// `Theme.background`, in `Theme.textDim`, small type. Tapping the NAME
-/// itself is the entire "open the list" affordance; there is no separate
-/// chevron mark.
+/// Two round sticker buttons (cream, ink outline, hard ink shadow) step to
+/// the previous/next character, wrapping; between them the character's name
+/// in heavy rounded type with a small `Theme.accent` chevron after it.
+/// Tapping the name opens `CharacterDropdownView`; the chevron is drawn on
+/// the name control's layer, not a separate tap target.
 ///
 /// The current character's NAME is shown as text (never its art — that was
 /// the old picker's whole problem at AUM-strip sizes, see
-/// `CharacterDropdownView`'s doc comment). `‹`/`›` step to the
-/// previous/next character, wrapping; tapping the name opens
-/// `CharacterDropdownView`.
+/// `CharacterDropdownView`'s doc comment).
 ///
 /// `CharacterSelector` owns no character-stepping or voice-loading logic of
 /// its own — it only relays user intent through three closures.
@@ -33,10 +28,9 @@ import UIKit
 ///
 /// Lives in `PluginView`'s header row, centred (see
 /// `PluginView.characterSelectorFrame(bounds:safeArea:infoButton:handle:)`),
-/// not beside the character art — unlike the arrows it replaces, that means
-/// it never disappears just because the stage collapsed at a short host
-/// rect. That's deliberate: the task this shipped for called it out by name
-/// as "a real gain, not an accident".
+/// not beside the character art, so it is there at every host size —
+/// including the AUM strip with the drawer open, where the scene is dropped
+/// altogether.
 ///
 /// A future roster will have names longer than "Monk" ("Opera Singer",
 /// "Fire Fighter"). `nameLabel` truncates (`.byTruncatingTail`) rather than
@@ -66,18 +60,35 @@ final class CharacterSelector: UIView {
             guard oldValue != characterName else { return }
             nameLabel.text = characterName
             nameControl.accessibilityValue = characterName
+            setNeedsLayout()
         }
     }
+
+    /// The colour of the chevron after the name — `Theme.accent` as of the
+    /// last `applyPalette()`.
+    private(set) var chevronColor: UIColor = Theme.accent
 
     private let leftButton = UIButton(type: .system)
     private let rightButton = UIButton(type: .system)
     private let nameControl = AdjustableControl()
     private let nameLabel = UILabel()
+    /// The round sticker faces behind the arrow glyphs. Non-interactive
+    /// subviews at the back of each button, so the buttons' own frames stay
+    /// the (larger) tap targets.
+    private let leftDisc = UIView()
+    private let rightDisc = UIView()
+    /// The accent chevron after the name, drawn on `nameControl`'s layer.
+    private let chevron = CAShapeLayer()
+
+    /// Diameter of the visible arrow buttons.
+    static let arrowDiscSize: CGFloat = 36
+    private static let chevronSize = CGSize(width: 11, height: 7)
+    private static let chevronGap: CGFloat = 5
 
     /// Ideal width for each arrow button when there's room for it. Matches
     /// the old `PluginView.arrowHitSize` this view replaces. The visible
-    /// glyph drawn inside that width is much smaller (see the thin, small
-    /// `arrowConfig` below) — same "small glyph, big hit region" pattern as
+    /// sticker disc drawn inside that width is smaller (`arrowDiscSize`) —
+    /// same "small glyph, big hit region" pattern as
     /// `PluginView.infoButton` and the drawer handle.
     private static let idealArrowWidth: CGFloat = 44
     /// The floor an arrow's width shrinks to — never below this — when the
@@ -94,22 +105,26 @@ final class CharacterSelector: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        // No pill, no border: just the glyphs and the name sitting directly
-        // on whatever's behind this view (`Theme.background`, in practice).
-        // Reported feedback was that the filled capsule this view used to
-        // draw read as "silly" — an over-designed control for something
-        // that's meant to recede, not announce itself.
         backgroundColor = .clear
 
-        // Thin, small, dim: a quiet mark rather than a button. The tap
+        // Small heavy ink glyphs on round cream sticker faces. The tap
         // target underneath (`leftButton`/`rightButton`'s own frame, set in
         // `layoutSubviews`) stays at `idealArrowWidth`/height regardless —
-        // only the visible glyph shrinks.
-        let arrowConfig = UIImage.SymbolConfiguration(pointSize: 11, weight: .light)
+        // only the visible disc is smaller.
+        let arrowConfig = UIImage.SymbolConfiguration(pointSize: 13, weight: .heavy)
         leftButton.setImage(UIImage(systemName: "chevron.left", withConfiguration: arrowConfig), for: .normal)
         rightButton.setImage(UIImage(systemName: "chevron.right", withConfiguration: arrowConfig), for: .normal)
-        for button in [leftButton, rightButton] {
-            button.tintColor = Theme.textDim
+        for (button, disc) in [(leftButton, leftDisc), (rightButton, rightDisc)] {
+            button.tintColor = Theme.ink
+            disc.isUserInteractionEnabled = false
+            disc.backgroundColor = Theme.cream
+            disc.layer.borderColor = Theme.ink.cgColor
+            disc.layer.borderWidth = Theme.outline
+            disc.layer.shadowColor = Theme.ink.cgColor
+            disc.layer.shadowOffset = CGSize(width: 0, height: 3)
+            disc.layer.shadowOpacity = 1
+            disc.layer.shadowRadius = 0
+            button.insertSubview(disc, at: 0)
             addSubview(button)
         }
         leftButton.accessibilityLabel = NSLocalizedString(
@@ -119,20 +134,35 @@ final class CharacterSelector: UIView {
         leftButton.addTarget(self, action: #selector(stepBackwardTapped), for: .touchUpInside)
         rightButton.addTarget(self, action: #selector(stepForwardTapped), for: .touchUpInside)
 
-        nameLabel.font = Theme.label(12, weight: .regular)
-        nameLabel.textColor = Theme.textDim
+        nameLabel.font = Theme.display(22)
+        nameLabel.textColor = Theme.textPrimary
         nameLabel.textAlignment = .center
         nameLabel.numberOfLines = 1
-        // Truncates rather than shrinks: a future roster will have names
-        // longer than "Monk" ("Opera Singer", "Fire Fighter"), and this
-        // view is handed a width computed purely from layout geometry (see
+        // Shrinks a little, then truncates: this view is handed a width
+        // computed purely from layout geometry (see
         // `PluginView.characterSelectorFrame`) that never grows to
-        // accommodate a longer string — an ellipsis at the clamped width
-        // reads better in a label this quiet than shrinking the font to
-        // the point of illegibility.
+        // accommodate a longer string. At the AUM strip that width is too
+        // narrow for even "Monk" at 22pt, so the name steps down toward
+        // 11pt before it ellipsizes.
+        nameLabel.adjustsFontSizeToFitWidth = true
+        nameLabel.minimumScaleFactor = 0.5
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.isUserInteractionEnabled = false
         nameControl.addSubview(nameLabel)
+
+        chevron.fillColor = nil
+        chevron.lineWidth = 3
+        chevron.lineCap = .round
+        chevron.lineJoin = .round
+        chevron.strokeColor = chevronColor.cgColor
+        let cs = Self.chevronSize
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 1.5, y: 1.5))
+        path.addLine(to: CGPoint(x: cs.width / 2, y: cs.height - 1.5))
+        path.addLine(to: CGPoint(x: cs.width - 1.5, y: 1.5))
+        chevron.path = path.cgPath
+        chevron.bounds = CGRect(origin: .zero, size: cs)
+        nameControl.layer.addSublayer(chevron)
 
         // A single adjustable accessibility element, per the task: the name
         // as the VALUE, previous/next as the ADJUST actions (a VoiceOver
@@ -156,6 +186,12 @@ final class CharacterSelector: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// Re-tints the chevron after the name with `Theme.accent`.
+    func applyPalette() {
+        chevronColor = Theme.accent
+        chevron.strokeColor = chevronColor.cgColor
+    }
 
     @objc private func stepBackwardTapped() { onStepBackward?() }
     @objc private func stepForwardTapped() { onStepForward?() }
@@ -182,10 +218,31 @@ final class CharacterSelector: UIView {
         nameControl.frame = CGRect(x: arrowW, y: 0, width: nameW, height: bounds.height)
         rightButton.frame = CGRect(x: total - arrowW, y: 0, width: arrowW, height: bounds.height)
 
-        // No chevron to carve room for any more — the label gets the whole
-        // name control's width, minus a hair of breathing room on each side.
-        let labelW = max(0, nameControl.bounds.width - 4)
-        nameLabel.frame = CGRect(x: 2, y: 0, width: labelW, height: nameControl.bounds.height)
+        let disc = min(Self.arrowDiscSize, arrowW - 4, bounds.height - 4)
+        for (button, view) in [(leftButton, leftDisc), (rightButton, rightDisc)] {
+            view.frame = CGRect(x: (button.bounds.width - disc) / 2, y: (button.bounds.height - disc) / 2 - 1.5,
+                                width: disc, height: disc)
+            view.layer.cornerRadius = disc / 2
+            // UIButton adds its image view lazily (at the back) during its
+            // own layout; lay it out first so the disc can go behind it.
+            button.layoutIfNeeded()
+            button.sendSubviewToBack(view)
+        }
+
+        // The name and its chevron are centred as one group; the name
+        // truncates to whatever is left once the chevron has its room.
+        let room = Self.chevronSize.width + Self.chevronGap
+        let available = max(0, nameControl.bounds.width - 4 - room)
+        let textW = ceil(nameLabel.sizeThatFits(CGSize(width: .greatestFiniteMagnitude,
+                                                         height: nameControl.bounds.height)).width)
+        let labelW = min(textW, available)
+        let x = max(2, (nameControl.bounds.width - labelW - room) / 2)
+        nameLabel.frame = CGRect(x: x, y: 0, width: labelW, height: nameControl.bounds.height)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        chevron.position = CGPoint(x: nameLabel.frame.maxX + Self.chevronGap + Self.chevronSize.width / 2,
+                                   y: nameControl.bounds.midY + 1)
+        CATransaction.commit()
     }
 }
 

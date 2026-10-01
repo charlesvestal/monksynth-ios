@@ -28,7 +28,12 @@ final class ControlPages: UIView {
     var valueProvider: ((Param) -> Float)?
 
     private(set) var pageIndex = 0
+    /// The segmented bar: one ink-outlined capsule (`tabTrack`) holding the
+    /// five buttons in `tabBar`. The selected button is filled with
+    /// `Theme.accent` and outlined in ink; the rest are transparent.
+    private let tabTrack = UIView()
     private let tabBar = UIStackView()
+    private var tabButtons: [UIButton] = []
     private let knobRow = UIStackView()
     private(set) var knobs: [KnobView] = []
 
@@ -38,20 +43,55 @@ final class ControlPages: UIView {
     /// live `arrangedSubviews` so a leak in `knobRow` itself is visible.
     var visibleKnobViews: [UIView] { knobRow.arrangedSubviews }
 
+    /// The segmented tab bar's frame, in this view's coordinates.
+    var tabBarFrame: CGRect { tabTrack.frame }
+
+    /// The button for `pageIndex`.
+    var selectedTabButton: UIButton? { tabButtons.first { $0.tag == pageIndex } }
+
+    /// Tabs and knobs start this far below the strip's top edge: the drawer
+    /// handle's pill straddles that edge (see `PluginView.handlePillFrame`)
+    /// and must never sit over a tab or a dial.
+    static let topClearance: CGFloat = 12
+
+    /// Space between the strip's outer edge and its content (the 3pt ink
+    /// outline plus breathing room).
+    private static let inset: CGFloat = 8
+
+    /// The tabs become a column on the left once the strip is this many
+    /// times wider than tall — iPhone landscape, iPad, and the AUM strip —
+    /// so the knobs get the strip's whole height instead of sharing it with
+    /// a tab row.
+    static let sideTabsAspect: CGFloat = 3.5
+    private static let sideTabsWidth: CGFloat = 72
+    private static let maxKnobCellWidth: CGFloat = 110
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        tabBar.axis = .horizontal; tabBar.distribution = .fillEqually; tabBar.spacing = 3
+        backgroundColor = Theme.panel
+        layer.borderColor = Theme.ink.cgColor
+        layer.borderWidth = Theme.outline
+
+        tabTrack.backgroundColor = Theme.panelDeep
+        tabTrack.layer.borderColor = Theme.ink.cgColor
+        tabTrack.layer.borderWidth = Theme.outline
+        tabBar.distribution = .fillEqually
+        tabBar.spacing = 0
         knobRow.axis = .horizontal; knobRow.distribution = .fillEqually; knobRow.spacing = 6
-        addSubview(tabBar); addSubview(knobRow)
+        tabTrack.addSubview(tabBar)
+        addSubview(tabTrack); addSubview(knobRow)
 
         for (i, page) in Self.pages.enumerated() {
-            let b = UIButton(type: .system)
+            let b = UIButton(type: .custom)
             b.setTitle(page.title, for: .normal)
-            b.titleLabel?.font = Theme.label(9)
+            b.titleLabel?.font = Theme.display(11)
+            b.titleLabel?.adjustsFontSizeToFitWidth = true
+            b.titleLabel?.minimumScaleFactor = 0.7
             b.tag = i
-            b.layer.cornerRadius = 5
+            b.layer.borderColor = Theme.ink.cgColor
             b.addTarget(self, action: #selector(selectPage(_:)), for: .touchUpInside)
             tabBar.addArrangedSubview(b)
+            tabButtons.append(b)
         }
         showPage(0)
     }
@@ -69,16 +109,39 @@ final class ControlPages: UIView {
         knobs.first { $0.param == param }
     }
 
+    /// Re-reads `Theme.accent` after a character change: the selected tab's
+    /// fill and every knob's value arc.
+    func applyPalette() {
+        colourTabs(animated: false)
+        knobs.forEach { $0.setNeedsDisplay() }
+    }
+
+    /// Fills the selected tab with the accent. Crossfades when the user
+    /// switches page on screen; instant under Reduce Motion or off-screen.
+    private func colourTabs(animated: Bool) {
+        let apply = {
+            for b in self.tabButtons {
+                let selected = b.tag == self.pageIndex
+                b.backgroundColor = selected ? Theme.accent : .clear
+                b.layer.borderWidth = selected ? Theme.outline : 0
+                b.setTitleColor(selected ? Theme.ink : Theme.textDim, for: .normal)
+            }
+        }
+        if animated && window != nil && !UIAccessibility.isReduceMotionEnabled {
+            UIView.transition(with: tabTrack, duration: 0.18, options: [.transitionCrossDissolve, .allowUserInteraction],
+                              animations: apply)
+        } else {
+            apply()
+        }
+    }
+
     /// Not private: exercised directly from tests (page switching leak,
     /// `valueProvider` seeding) since synthesizing a `UIButton` tap isn't
     /// necessary to prove the underlying logic works.
     func showPage(_ index: Int) {
+        let animated = index != pageIndex
         pageIndex = index
-        for (i, view) in tabBar.arrangedSubviews.enumerated() {
-            guard let b = view as? UIButton else { continue }
-            b.backgroundColor = i == index ? Theme.accent : Theme.panel
-            b.setTitleColor(i == index ? Theme.background : Theme.textDim, for: .normal)
-        }
+        colourTabs(animated: animated)
 
         // Explicitly remove every arranged subview rather than relying on
         // `removeFromSuperview()` alone to also detach it from
@@ -98,14 +161,47 @@ final class ControlPages: UIView {
             knobRow.addArrangedSubview(k)
             return k
         }
+        setNeedsLayout()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let tabH: CGFloat = 20
-        tabBar.frame = CGRect(x: 4, y: 0, width: bounds.width - 8, height: tabH)
-        knobRow.frame = CGRect(x: 4, y: tabH + 4,
-                               width: bounds.width - 8,
-                               height: max(0, bounds.height - tabH - 8))
+        layer.cornerRadius = min(Theme.stripCornerRadius, bounds.height / 2)
+        let p = Self.inset
+        let top = Self.topClearance
+        let o = Theme.outline
+        if bounds.width >= bounds.height * Self.sideTabsAspect {
+            // Side column: the tabs sit left of the knobs, clear of the
+            // handle pill at the centre of the top edge, so they can use the
+            // strip's full inner height.
+            let colH = max(0, bounds.height - 12)
+            tabTrack.frame = CGRect(x: p, y: 6, width: Self.sideTabsWidth, height: colH)
+            tabTrack.layer.cornerRadius = 14
+            tabBar.axis = .vertical
+            // On a long strip the knobs stay a group (at most
+            // `maxKnobCellWidth` each) centred in the space beside the tabs,
+            // rather than spreading to the far ends.
+            let x = p + Self.sideTabsWidth + p
+            let room = max(0, bounds.width - x - p)
+            let n = CGFloat(max(1, knobs.count))
+            let w = min(room, n * Self.maxKnobCellWidth + (n - 1) * knobRow.spacing)
+            knobRow.frame = CGRect(x: x + (room - w) / 2, y: top, width: w,
+                                   height: max(0, bounds.height - top - p))
+        } else {
+            let tabH: CGFloat = bounds.height >= 120 ? 30 : 26
+            tabTrack.frame = CGRect(x: p, y: top, width: max(0, bounds.width - 2 * p), height: tabH)
+            tabTrack.layer.cornerRadius = tabH / 2
+            tabBar.axis = .horizontal
+            let y = top + tabH + 6
+            knobRow.frame = CGRect(x: p, y: y, width: max(0, bounds.width - 2 * p),
+                                   height: max(0, bounds.height - y - p))
+        }
+        tabBar.frame = tabTrack.bounds.insetBy(dx: o, dy: o)
+        tabBar.layoutIfNeeded()
+        let font = Theme.display(tabBar.axis == .vertical ? 9 : 11)
+        for b in tabButtons {
+            b.titleLabel?.font = font
+            b.layer.cornerRadius = min(b.bounds.width, b.bounds.height) / 2
+        }
     }
 }

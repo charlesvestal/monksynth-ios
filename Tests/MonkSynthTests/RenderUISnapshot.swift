@@ -65,9 +65,10 @@ final class RenderUISnapshot: XCTestCase {
     /// judged at the size a finger actually meets them.
     func testWriteKnobCloseup() throws {
         let sizes: [(String, CGSize)] = [
-            ("strip row 375x92",  CGSize(width: 375, height: 92)),
-            ("wide row 844x92",   CGSize(width: 844, height: 92)),
-            ("narrow row 320x92", CGSize(width: 320, height: 92)),
+            ("AUM strip 359x96 (side tabs)",       CGSize(width: 359, height: 96)),
+            ("iPhone portrait 374x132",           CGSize(width: 374, height: 132)),
+            ("iPhone landscape 828x96 (side tabs)", CGSize(width: 828, height: 96)),
+            ("iPhone SE portrait 304x132",        CGSize(width: 304, height: 132)),
         ]
         let gap: CGFloat = 14
         let sheet = CGSize(width: sizes.map(\.1.width).max()! + gap * 2,
@@ -380,13 +381,14 @@ final class RenderUISnapshot: XCTestCase {
     /// Close-up of the header row (character selector + info button) at a
     /// spread of sizes, including 375×180 — the AUM strip, the specific
     /// size the task calls out by name as the one the old edge arrows
-    /// failed at (they vanished entirely once the stage collapsed there).
+    /// failed at (they vanished entirely there; with the drawer open that
+    /// size now has no scene at all, only the header and the strip).
     /// Rendered at full-UI scale the header is too small in a screenshot to
     /// judge legibility/collision, so this crops in. Required visual check:
-    /// confirm the selector reads as a quiet, centred label — no pill, no
-    /// border, subtle/dim text, thin small arrows — and that nothing
-    /// collides with the info button, at every size, not just the roomy
-    /// ones. See `testWriteCharacterSelectorLongNameCloseup` for the same
+    /// round cream arrow buttons with ink outlines and hard shadows, the
+    /// name in heavy rounded type with an accent chevron, a dark round info
+    /// button — and nothing colliding with the info button, at every size,
+    /// not just the roomy ones. See `testWriteCharacterSelectorLongNameCloseup` for the same
     /// check with a name well beyond today's roster.
     func testWriteCharacterSelectorCloseup() throws {
         let sizes: [(String, CGSize)] = [
