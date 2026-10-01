@@ -545,6 +545,10 @@ final class PluginView: UIView {
     /// `inner.height` directly, before this reserve is applied, so the
     /// control strip's own floor (`Theme.minUsableStripHeight`) holds
     /// regardless of the header.
+    ///
+    /// A scene shorter than `Theme.minSceneHeight` becomes `.zero` (and
+    /// `layoutSubviews` hides it): the pad is simply unavailable until the
+    /// drawer is closed, rather than drawn as a few-point sliver.
     private static func sceneLayout(inner: CGRect, gutter g: CGFloat, drawerOpen: Bool) -> ZoneLayout {
         let isWide = inner.width >= inner.height
         let stripH = drawerOpen
@@ -554,16 +558,22 @@ final class PluginView: UIView {
         let headerReserve = headerHeight + g
         let sceneH = max(0, inner.height - stripH - (stripH > 0 ? g : 0) - headerReserve)
         let controls = CGRect(x: inner.minX, y: inner.maxY - stripH, width: inner.width, height: stripH)
-        return ZoneLayout(scene: CGRect(x: inner.minX, y: inner.minY + headerReserve, width: inner.width, height: sceneH),
-                          controls: controls, handle: handleFrame(for: controls))
+        let scene = sceneH < Theme.minSceneHeight
+            ? .zero
+            : CGRect(x: inner.minX, y: inner.minY + headerReserve, width: inner.width, height: sceneH)
+        return ZoneLayout(scene: scene, controls: controls, handle: handleFrame(for: controls))
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let l = Self.layout(in: bounds, drawerOpen: drawerOpen, safeArea: safeAreaInsets)
         // `SceneView` lays out its own backdrop, character and pad (and
-        // detaches the character when the scene is too short for it).
+        // detaches the character when the scene is too short for it). An
+        // empty scene (see `sceneLayout`) is hidden outright; its zero frame
+        // also makes `SceneView` detach the character, stopping its display
+        // link.
         sceneView.frame = l.scene
+        sceneView.isHidden = l.scene.isEmpty
         controls.frame = l.controls
 
         drawerHandle.frame = l.handle

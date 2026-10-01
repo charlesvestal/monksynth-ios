@@ -29,6 +29,12 @@ enum Theme {
     /// that function's doc comment.
     static let minUsableStripHeight: CGFloat = 78
 
+    /// Below this the scene is a sliver that reads as a glitch, not a pad:
+    /// `PluginView.sceneLayout` drops it to `.zero` (and `PluginView` hides
+    /// it) instead. Only the AUM strip with the drawer open gets there;
+    /// closing the drawer gives the scene back.
+    static let minSceneHeight: CGFloat = 32
+
     /// SF Rounded heavy — names, tabs, scene labels.
     static func display(_ size: CGFloat) -> UIFont {
         let base = UIFont.systemFont(ofSize: size, weight: .heavy)

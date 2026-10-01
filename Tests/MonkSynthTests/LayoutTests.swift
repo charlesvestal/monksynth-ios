@@ -37,15 +37,25 @@ final class LayoutTests: XCTestCase {
     /// so the strip prefers `Theme.stripHeightWide`, and the available
     /// height (164pt after gutters) comfortably clears that plus a gutter,
     /// so the strip gets its full preferred height rather than merely the
-    /// floor. The scene gets whatever is left below the header — very
-    /// little here, which is accepted now that the alternative would be
-    /// hiding the strip instead.
+    /// floor. That leaves less than `Theme.minSceneHeight` for the scene, so
+    /// it is dropped (see `testAUMStripDropsTheSliverSceneUntilTheDrawerCloses`)
+    /// — accepted, since the alternative would be hiding the strip instead.
     func testAUMStripKeepsControlsAtFullHeight() {
         let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 375, height: 180))
 
         XCTAssertEqual(l.controls.height, Theme.stripHeightWide, accuracy: 0.5,
                         "an AUM-strip host rect has room for the strip's full preferred height")
         XCTAssertGreaterThanOrEqual(l.scene.height, 0)
+    }
+
+    /// With the drawer open the AUM strip leaves only a few points for the
+    /// scene; rather than a sliver that reads as a glitch, the scene goes
+    /// away until the drawer is closed, which gives it a usable height.
+    func testAUMStripDropsTheSliverSceneUntilTheDrawerCloses() {
+        let bounds = CGRect(x: 0, y: 0, width: 375, height: 180)
+        XCTAssertEqual(PluginView.layout(in: bounds, drawerOpen: true).scene, .zero)
+        XCTAssertGreaterThanOrEqual(PluginView.layout(in: bounds, drawerOpen: false).scene.height,
+                                    Theme.minSceneHeight)
     }
 
     // MARK: - No negative or NaN frames, anywhere
