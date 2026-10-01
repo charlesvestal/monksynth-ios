@@ -72,18 +72,29 @@ final class RenderContext {
     private static func xyHz(_ v: Float) -> Float { 130.81 * powf(2.0, v) }
 
     /// Push any changed shadow values into the DSP. Only diffs are applied.
+    ///
+    /// The pad's note-on goes LAST. A tap writes pitch, vowel and note-on
+    /// together, so they almost always land in the same block — and in
+    /// address order note-on (16) comes before vowel (17) and pitch (18).
+    /// Applied in that order the note started at the previous tap's pitch
+    /// and glided to the new one.
     private func applyChangedParameters(_ s: OpaquePointer) {
-        for i in 0..<paramCount {
-            let addr = ParameterAddress(UInt32(i))
-            let v = param_shadow_get(shadow, addr)
-            // Drop non-finite values rather than feeding them to the DSP. A NaN
-            // would also defeat the diff below (NaN != NaN), so it would be
-            // re-applied every block while poisoning voice and delay state.
-            if !v.isFinite { continue }
-            if v == lastValues[i] { continue }
-            lastValues[i] = v
-            apply(s, addr, v)
+        for i in 0..<paramCount where i != Int(kParamXYNoteOn.rawValue) {
+            applyIfChanged(s, ParameterAddress(UInt32(i)))
         }
+        applyIfChanged(s, kParamXYNoteOn)
+    }
+
+    private func applyIfChanged(_ s: OpaquePointer, _ addr: ParameterAddress) {
+        let i = Int(addr.rawValue)
+        let v = param_shadow_get(shadow, addr)
+        // Drop non-finite values rather than feeding them to the DSP. A NaN
+        // would also defeat the diff below (NaN != NaN), so it would be
+        // re-applied every block while poisoning voice and delay state.
+        if !v.isFinite { return }
+        if v == lastValues[i] { return }
+        lastValues[i] = v
+        apply(s, addr, v)
     }
 
     private func apply(_ s: OpaquePointer, _ addr: ParameterAddress, _ v: Float) {
