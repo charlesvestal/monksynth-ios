@@ -13,8 +13,7 @@ enum CharacterThumbnail {
             // in a 300-unit stage (see `Toon.inStage`). Show a 280-unit
             // window of it, with 20 units of headroom above the head, so
             // every row reads as "face plus a little scene" rather than a
-            // chin-to-forehead close-up — see
-            // `CharacterDropdownViewTests.testThumbnailsReadAsHeadAndShoulders`.
+            // chin-to-forehead close-up.
             let figure = side * (300.0 / 280.0)
             let stage = CGRect(x: (side - figure) / 2, y: figure * (20.0 / 300.0), width: figure, height: figure)
             character.drawBackdrop(in: rect, stage: stage)
