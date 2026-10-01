@@ -204,11 +204,19 @@ enum Toon {
             guard i < chars.count else { return nil }
             let c = chars[i]
             if c.isLetter { i += 1; return .command(c) }
+            // Anything that isn't a number start (digit, sign or decimal
+            // point) is unparseable: stop instead of looping with `i`
+            // stuck, which would hang path()'s caller forever.
+            guard c.isNumber || c == "-" || c == "+" || c == "." else { return nil }
             return .number(scanNumber())
         }
 
+        /// Reads a number, or leaves an unexpected command token for the
+        /// caller to see on its next read instead of silently discarding it.
         mutating func number() -> CGFloat {
-            if case .number(let n)? = nextCommandOrNumber() { return n }
+            guard let t = nextCommandOrNumber() else { return 0 }
+            if case .number(let n) = t { return n }
+            pending = t
             return 0
         }
 

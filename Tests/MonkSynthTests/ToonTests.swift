@@ -29,6 +29,20 @@ final class ToonTests: XCTestCase {
         XCTAssertEqual(b.maxY, 5, accuracy: 1e-9)
     }
 
+    func testUnparseableTrailingCharacterStopsInsteadOfHanging() {
+        let b = Toon.path("M0 0 L10 0 )").bounds
+        XCTAssertEqual(b.minX, 0, accuracy: 1e-9)
+        XCTAssertEqual(b.maxX, 10, accuracy: 1e-9)
+        XCTAssertEqual(b.minY, 0, accuracy: 1e-9)
+        XCTAssertEqual(b.maxY, 0, accuracy: 1e-9)
+    }
+
+    func testTrailingCommandWithNoCoordinatesDoesNotEatTheNextCommand() {
+        let b = Toon.path("M0 0 L10 10 L Z").bounds
+        XCTAssertEqual(b.maxX, 10, accuracy: 1e-9)
+        XCTAssertEqual(b.maxY, 10, accuracy: 1e-9)
+    }
+
     func testHexColour() {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(hex: 0x2B1D1A).getRed(&r, green: &g, blue: &b, alpha: &a)
