@@ -127,9 +127,26 @@ enum Toon {
 
     // MARK: - SVG path parsing
 
+    /// Parsed paths keyed by their d-string: characters redraw the same
+    /// strings every frame, so parsing each once is enough. NSCache is
+    /// thread-safe and drops entries under memory pressure.
+    private static let pathCache = NSCache<NSString, UIBezierPath>()
+
     /// Parses the absolute SVG path subset gen.mjs emits: M L H V C Q Z, and
-    /// A for circular arcs (rx == ry, no rotation).
+    /// A for circular arcs (rx == ry, no rotation). Returns a fresh copy on
+    /// every call — callers set `lineWidth`, caps and joins on the result,
+    /// which must not leak into the cached geometry.
     static func path(_ d: String) -> UIBezierPath {
+        let key = d as NSString
+        if let cached = pathCache.object(forKey: key) {
+            return cached.copy() as! UIBezierPath
+        }
+        let parsed = parse(d)
+        pathCache.setObject(parsed.copy() as! UIBezierPath, forKey: key)
+        return parsed
+    }
+
+    private static func parse(_ d: String) -> UIBezierPath {
         var scanner = PathScanner(d)
         let p = UIBezierPath()
         var current = CGPoint.zero
