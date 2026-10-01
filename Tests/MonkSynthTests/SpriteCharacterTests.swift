@@ -163,9 +163,13 @@ final class SpriteCharacterTests: XCTestCase {
         }
     }
 
-    // MARK: - Blink swaps the eye frame
+    // MARK: - Blink is a no-op for the monk's meditating eyes
 
-    func testBlinkingSwapsTheEyeFrame() {
+    /// The fixture (and the fallback below) render through `MonkCharacter`,
+    /// whose eyes are drawn closed in meditation regardless of `blinking` —
+    /// see `MonkCharacter.drawToonFace`. So, unlike a sprite with real open/
+    /// closed art, `blinking` must NOT change the rendered pixels here.
+    func testBlinkingDoesNotChangeTheMonksClosedEyes() {
         let sprite = SpriteCharacterFixture.make()
         XCTAssertTrue(sprite.isArtLoaded)
 
@@ -175,14 +179,14 @@ final class SpriteCharacterTests: XCTestCase {
         let open = renderer.image { _ in sprite.drawEyes(in: stage, blinking: false) }
         let closed = renderer.image { _ in sprite.drawEyes(in: stage, blinking: true) }
 
-        XCTAssertNotEqual(open.pngData(), closed.pngData(),
-                           "drawEyes(blinking: true) must render different pixels than drawEyes(blinking: false)")
+        XCTAssertEqual(open.pngData(), closed.pngData(),
+                        "the monk's eyes are closed in meditation, blink or not")
     }
 
-    /// The fallback path swaps too — `SpriteCharacter` with unusable art
-    /// still delegates `blinking` through to `MonkCharacter.drawEyes`,
-    /// rather than the fallback freezing on one fixed frame.
-    func testBlinkingStillSwapsUnderFallback() {
+    /// The fallback path behaves the same way — `SpriteCharacter` with
+    /// unusable art delegates `blinking` through to `MonkCharacter.drawEyes`,
+    /// which is likewise unaffected by it.
+    func testBlinkingDoesNotChangeTheFallbacksClosedEyes() {
         let manifest = SpriteManifest(id: "broken", displayName: "Broken",
                                        bodyImageName: "missing-body",
                                        eyeOpenImageName: "missing-eye-open",
@@ -196,7 +200,7 @@ final class SpriteCharacterTests: XCTestCase {
         let renderer = UIGraphicsImageRenderer(size: stage.size)
         let open = renderer.image { _ in sprite.drawEyes(in: stage, blinking: false) }
         let closed = renderer.image { _ in sprite.drawEyes(in: stage, blinking: true) }
-        XCTAssertNotEqual(open.pngData(), closed.pngData())
+        XCTAssertEqual(open.pngData(), closed.pngData())
     }
 
     // MARK: - Missing/corrupt art degrades gracefully
