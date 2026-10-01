@@ -31,7 +31,7 @@ struct FireFighterCharacter: ToonCharacter {
         Toon.shape(Toon.path("M70 92 C66 70 110 64 150 64 C190 64 234 70 230 92 C200 98 100 98 70 92 Z"), fill: UIColor(hex: 0xD8372D))
         Toon.shape(Toon.path("M96 82 C96 30 204 30 204 82 Z"), fill: UIColor(hex: 0xE2433A))
         Toon.shape(Toon.path("M136 40 L164 40 L168 76 L132 76 Z"), fill: UIColor(hex: 0xF6CF4A), lineWidth: Toon.medium)
-        Toon.shape(Toon.circle(150, 58, 7), fill: UIColor(hex: 0xD8372D), lineWidth: 3)
+        Toon.shape(Toon.circle(150, 58, 7), fill: UIColor(hex: 0xD8372D), lineWidth: 3, shaded: false)
     }
 
     func drawToonFace(_ e: Expression) {
