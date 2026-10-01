@@ -117,8 +117,8 @@ enum Toon {
         highlight(x + look.x - r * 0.2, y + look.y - r * 0.22, r * 0.18)
     }
 
-    static func eyeClosed(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat) {
-        stroke(path("M\(x - w) \(y) Q\(x) \(y + w * 0.75) \(x + w) \(y)"), width: medium)
+    static func eyeClosed(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, color: UIColor = ink) {
+        stroke(path("M\(x - w) \(y) Q\(x) \(y + w * 0.75) \(x + w) \(y)"), width: medium, color: color)
     }
 
     static func cheek(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat = 11, color: UIColor = UIColor(hex: 0xF28B9B)) {

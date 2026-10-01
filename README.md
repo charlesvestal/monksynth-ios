@@ -15,11 +15,13 @@ requested to make a donation at [savetibet.org](https://www.savetibet.org).
 
 - **AUv3 instrument** (`aumu` / `Mnks` / `Vstl`) that loads in AUM, GarageBand,
   Logic and other iOS hosts, plus a **standalone app** that embeds it.
-- An **XY performance pad** — drag for pitch (X) and vowel (Y). The engine is
+- A **playable scene** — the character sings on its own drawn stage, and the
+  whole scene is the XY pad: drag for pitch (X) and vowel (Y). The engine is
   monophonic with a 16-deep note stack, so overlapping notes retune rather than
   retrigger, and releasing the top note falls back to the one still held.
-- **Twelve characters**, one preset each. The character's mouth animates with
-  the vowel parameter, and choosing a character loads its voice.
+- **Twelve characters**, one preset each, each with its own scene and accent
+  colour. The character's mouth animates with the vowel parameter, and
+  choosing a character loads its voice.
 - **User presets** — save a patch with a name and the current character's face.
   Stored in a shared App Group container, so the standalone app and the AUv3
   extension see one bank.
@@ -42,7 +44,7 @@ Above it:
 | `AU/RenderContext.swift` | realtime-safe MIDI + parameter → DSP translation |
 | `AU/ParameterShadow.{h,c}` | lock-free `_Atomic float` array the render thread reads |
 | `AU/MonkSynthAU.swift` | `AUAudioUnit`: parameter tree, `fullState`, presets |
-| `AU/UI/` | responsive editor, XY pad, characters, knobs |
+| `AU/UI/` | responsive editor, scenes and XY pad, drawn characters, knobs |
 | `Host/` | standalone app: `AVAudioEngine`, CoreMIDI, Bluetooth MIDI |
 
 The render block does no allocation, no locking and no logging, and never

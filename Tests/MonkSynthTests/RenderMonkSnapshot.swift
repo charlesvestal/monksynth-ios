@@ -6,7 +6,8 @@
 //
 // Writes /tmp/monk_sheet.png (vowel sweep), /tmp/monk_aspect.png (extreme
 // aspect ratios, to confirm the rig letterboxes rather than distorting), and
-// /tmp/characters.png (every registered character across the vowel sweep).
+// /tmp/characters.png (every registered character in its scene across the
+// vowel sweep, loud, and a blink).
 import UIKit
 import XCTest
 @testable import MonkSynth
@@ -59,11 +60,19 @@ final class RenderMonkSnapshot: XCTestCase {
     /// silhouette". Required by the characters task; look at the output
     /// with the Read tool, don't just check it wrote bytes.
     func testWriteAllCharactersSweep() throws {
-        let cell = CGSize(width: 140, height: 160)
-        let vowels: [Float] = [0.0, 0.25, 0.5, 0.75, 1.0]
+        // A little wider than tall, and the figure placed the way SceneView
+        // places it (SceneView.characterRect), so props sit where they do on
+        // stage rather than colliding with a figure stretched edge to edge.
+        let cell = CGSize(width: 180, height: 160)
+        // Five vowels OO→EE at a normal level, then the same AH loud (brows
+        // up, mouth wider), then a blink. Blinking belongs to CharacterView's
+        // idle animator, so the blink cell calls the character directly.
+        enum Pose { case sing(Float, Float, String), blink }
+        let poses: [Pose] = [0.0, 0.25, 0.5, 0.75, 1.0].map { .sing($0, 0.5, "v=\($0)") }
+            + [.sing(0.5, 1.0, "loud"), .blink]
         let labelH: CGFloat = 16
 
-        let cols = vowels.count
+        let cols = poses.count
         let rows = CharacterRegistry.all.count
         let sheet = CGSize(width: cell.width * CGFloat(cols),
                            height: (cell.height + labelH) * CGFloat(rows) + labelH)
@@ -79,23 +88,37 @@ final class RenderMonkSnapshot: XCTestCase {
                     withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
                                      .foregroundColor: Theme.textPrimary])
 
-                for (col, v) in vowels.enumerated() {
-                    let view = CharacterView(frame: CGRect(origin: .zero, size: cell))
-                    view.backgroundColor = .clear
-                    view.character = character
-                    view.vowel = v
-                    view.amplitude = 0.8
-                    view.noteActive = true
+                for (col, pose) in poses.enumerated() {
                     ctx.cgContext.saveGState()
                     ctx.cgContext.translateBy(x: cell.width * CGFloat(col), y: rowY)
                     let cellRect = CGRect(origin: .zero, size: cell)
-                    let side = min(cellRect.width, cellRect.height)
-                    let stageRect = CGRect(x: cellRect.midX - side / 2, y: cellRect.midY - side / 2, width: side, height: side)
+                    let stageRect = SceneView.characterRect(in: cellRect)
                     character.drawBackdrop(in: cellRect, stage: stageRect)
-                    view.layer.render(in: ctx.cgContext)
+                    let label: String
+                    switch pose {
+                    case let .sing(v, amp, name):
+                        label = name
+                        let view = CharacterView(frame: CGRect(origin: .zero, size: stageRect.size))
+                        view.backgroundColor = .clear
+                        view.character = character
+                        view.vowel = v
+                        view.amplitude = amp
+                        view.noteActive = true
+                        ctx.cgContext.saveGState()
+                        ctx.cgContext.translateBy(x: stageRect.minX, y: stageRect.minY)
+                        view.layer.render(in: ctx.cgContext)
+                        ctx.cgContext.restoreGState()
+                    case .blink:
+                        label = "blink"
+                        character.drawBody(in: stageRect)
+                        character.drawFace(in: stageRect,
+                                           expression: Expression(blinking: true, loudness: 0, vowel: 0.5))
+                        character.drawMouth(in: stageRect, vowel: 0.5, amplitudeBoost: 1)
+                        character.drawOverMouth(in: stageRect)
+                    }
                     ctx.cgContext.restoreGState()
 
-                    ("v=\(v)" as NSString).draw(
+                    (label as NSString).draw(
                         at: CGPoint(x: cell.width * CGFloat(col) + 4, y: rowY + cell.height - 14),
                         withAttributes: [.font: UIFont.systemFont(ofSize: 9),
                                          .foregroundColor: Theme.textDim])

@@ -232,6 +232,23 @@ image name or a bad export doesn't crash the app or leave a blank stage —
 it just quietly shows the monk instead, which is your signal that
 something in that character's asset set didn't resolve.
 
+## Drawn characters
+
+The twelve built-in characters are drawn in code, not images. Each is a
+`ToonCharacter` (`AU/UI/ToonCharacter.swift`): it draws its body and face
+with the `Toon` kit (`AU/UI/Toon.swift`) in a 300×300 "stage unit" space,
+names where its mouth sits (`mouthStyle`), and draws its own scene
+(`drawBackdrop`). The mouth itself is shared (`AU/UI/ToonMouth.swift`).
+
+The shapes were designed in `docs/mockups/stage-redesign/gen.mjs`, which
+renders the same path data as SVG — edit a character there first
+(`node gen.mjs` writes `out/`), then copy the numbers across; `Toon.path`
+reads the same path syntax.
+
+`CharacterArtTests` keeps every drawn character honest: one connected figure
+(nothing floating), nothing clipped at the stage edge, and a mouth at least
+0.11 of the stage tall at AH and 0.14 wide at EE.
+
 ## A concrete example
 
 You don't have to take any of the above on faith — there's a real,
