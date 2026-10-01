@@ -240,3 +240,23 @@ These supersede the sections above where they differ:
   clipped to the coat.
 - **Old Man's** side tufts sit behind the head; **Little Girl's** hair ties
   are round, at the buns.
+
+## As built (2026-10-01)
+
+Where the implementation settled differently from the text above:
+
+- `StageView` shipped as **`SceneView`** (with `BackdropView`); `PluginView`
+  keeps `stage` (the `CharacterView`) and `pad` (the `XYPadView`) as its
+  subviews' names. The scene is hidden entirely below
+  `Theme.minSceneHeight` (32pt) — at the AUM strip with the drawer open.
+- The art kit uses plain width constants (`Toon.bold/medium/fine`) and
+  `Toon.shape/stroke/fill` instead of `Toon.line(_:_:)` / `Toon.Frame`;
+  framing is enforced by `CharacterArtTests` (one connected figure, nothing
+  touching the top or side edges, mouth size floors).
+- `Palette` has `accent`, `skyTop`, `skyBottom`, `ground` only; shadows are
+  derived from fills and the ink is `Toon.ink`.
+- The accent is **per view**, never global: several plugin instances share
+  one extension process.
+- The "touch to sing" hint appears without a fade.
+- Strip: 132pt preferred, 96pt when the container is wide and under 500pt
+  tall; tabs become a side column when the strip is ≥ 3.5× as wide as tall.
