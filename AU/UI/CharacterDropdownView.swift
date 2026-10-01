@@ -177,8 +177,8 @@ final class CharacterDropdownView: UIView {
         closeConfig.cornerStyle = .medium
         closeConfig.background.strokeColor = Theme.ink
         closeConfig.background.strokeWidth = Theme.outline
+        closeConfig.titleTextAttributesTransformer = Theme.displayTitleTransformer(13)
         closeButton.configuration = closeConfig
-        closeButton.titleLabel?.font = Theme.display(13)
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         panel.addSubview(closeButton)
     }
@@ -533,8 +533,8 @@ private final class CharacterSaveRow: UIView {
         saveConfig.cornerStyle = .medium
         saveConfig.background.strokeColor = Theme.ink
         saveConfig.background.strokeWidth = Theme.outline
+        saveConfig.titleTextAttributesTransformer = Theme.displayTitleTransformer(13)
         saveButton.configuration = saveConfig
-        saveButton.titleLabel?.font = Theme.display(13)
         saveButton.titleLabel?.adjustsFontSizeToFitWidth = true
         saveButton.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
         addSubview(saveButton)

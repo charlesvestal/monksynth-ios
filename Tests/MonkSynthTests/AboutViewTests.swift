@@ -103,4 +103,32 @@ final class AboutViewTests: XCTestCase {
         XCTAssertFalse(source.contains("UIApplication"),
             "AboutView.swift must never reference UIApplication directly — an AUv3 extension has none; route through onOpenURL instead")
     }
+
+    // MARK: - Close button font
+
+    /// `closeButton` is built from `UIButton.Configuration`, which
+    /// recomputes the title's text attributes on every configuration
+    /// update (a tap, a trait change, `updateConfiguration()`) — a font set
+    /// only via `titleLabel?.font` is silently stomped back to the system
+    /// font the next time that happens. `Theme.displayTitleTransformer`
+    /// closes over the font so it survives recomputation instead; this
+    /// proves it.
+    func testCloseButtonTitleFontStaysRoundedAfterConfigurationUpdate() throws {
+        let view = makeAboutView()
+        let title = NSLocalizedString("about.close", comment: "")
+        // `closeButton` is built from `UIButton.Configuration`, whose title
+        // lives in `configuration.title` — the legacy `title(for:)` storage
+        // `button(titled:in:)` matches on returns nil once a configuration
+        // is assigned, so this is matched separately.
+        let matches = allSubviews(of: view).compactMap { $0 as? UIButton }
+            .filter { $0.configuration?.title == title }
+        XCTAssertEqual(matches.count, 1, "expected exactly one close UIButton, found \(matches.count)")
+        let button = try XCTUnwrap(matches.first)
+
+        button.setNeedsUpdateConfiguration()
+        button.updateConfiguration()
+
+        let font = try XCTUnwrap(button.titleLabel?.font)
+        XCTAssertTrue(font.fontName.lowercased().contains("rounded"), font.fontName)
+    }
 }

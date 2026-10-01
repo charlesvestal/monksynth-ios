@@ -155,8 +155,8 @@ final class AboutView: UIView {
         closeConfig.cornerStyle = .medium
         closeConfig.background.strokeColor = Theme.ink
         closeConfig.background.strokeWidth = Theme.outline
+        closeConfig.titleTextAttributesTransformer = Theme.displayTitleTransformer(13)
         closeButton.configuration = closeConfig
-        closeButton.titleLabel?.font = Theme.display(13)
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         panel.addSubview(closeButton)
     }

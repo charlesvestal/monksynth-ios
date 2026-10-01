@@ -59,6 +59,20 @@ enum Theme {
     /// SF Rounded — captions.
     static func label(_ size: CGFloat, weight: UIFont.Weight = .semibold) -> UIFont { rounded(size, weight) }
 
+    /// For a `UIButton` driven by `UIButton.Configuration`: setting
+    /// `titleLabel?.font` directly only sticks until the next time the
+    /// configuration recomputes the title's attributes (any state change —
+    /// a tap, trait change, `updateConfiguration()` — stomps it back to the
+    /// system font). This is the configuration-safe way to keep a button's
+    /// title in `display` every time that happens.
+    static func displayTitleTransformer(_ size: CGFloat) -> UIConfigurationTextAttributesTransformer {
+        UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = display(size)
+            return outgoing
+        }
+    }
+
     private static func rounded(_ size: CGFloat, _ weight: UIFont.Weight) -> UIFont {
         let base = UIFont.systemFont(ofSize: size, weight: weight)
         guard let d = base.fontDescriptor.withDesign(.rounded) else { return base }
