@@ -9,11 +9,14 @@ enum CharacterThumbnail {
         format.opaque = true
         return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
             let rect = CGRect(x: 0, y: 0, width: side, height: side)
-            // Crop to head and shoulders: draw the figure larger than the
-            // tile and shift it down so the head lands near the tile's
-            // centre instead of the full body being squeezed in.
-            let figure = side * 1.5
-            let stage = CGRect(x: (side - figure) / 2, y: side - figure * 0.88, width: figure, height: figure)
+            // Crop to head and shoulders: a character's own geometry lives
+            // in a 300-unit stage (see `Toon.inStage`). Show a 280-unit
+            // window of it, with 20 units of headroom above the head, so
+            // every row reads as "face plus a little scene" rather than a
+            // chin-to-forehead close-up — see
+            // `CharacterDropdownViewTests.testThumbnailsReadAsHeadAndShoulders`.
+            let figure = side * (300.0 / 280.0)
+            let stage = CGRect(x: (side - figure) / 2, y: figure * (20.0 / 300.0), width: figure, height: figure)
             character.drawBackdrop(in: rect, stage: stage)
             character.drawBody(in: stage)
             character.drawFace(in: stage, expression: .rest)

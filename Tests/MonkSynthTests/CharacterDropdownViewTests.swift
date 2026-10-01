@@ -555,4 +555,38 @@ final class CharacterDropdownViewTests: XCTestCase {
             XCTAssertEqual(px[3], 255, "\(c.id) thumbnail corner is transparent")
         }
     }
+
+    // MARK: - Close/Save button font
+
+    private func allButtons(in view: UIView) -> [UIButton] {
+        view.subviews.compactMap { $0 as? UIButton } + view.subviews.flatMap { allButtons(in: $0) }
+    }
+
+    /// `closeButton` and `CharacterSaveRow`'s Save button are both built
+    /// from `UIButton.Configuration`, which recomputes the title's text
+    /// attributes on every configuration update (a tap, a trait change,
+    /// `updateConfiguration()`) — a font set only via `titleLabel?.font` is
+    /// silently stomped back to the system font the next time that
+    /// happens. `Theme.displayTitleTransformer` closes over the font so it
+    /// survives recomputation instead; this proves it for both buttons.
+    func testCloseAndSaveButtonTitleFontsStayRoundedAfterConfigurationUpdate() throws {
+        let store = FakePresetStore()
+        let dropdown = makeDropdown(store: store)
+        let closeTitle = NSLocalizedString("about.close", comment: "")
+        let saveTitle = NSLocalizedString("presets.save", comment: "")
+
+        // A `UIButton.Configuration`-driven button's title lives in
+        // `configuration.title`, not the legacy `title(for:)` storage (that
+        // returns nil once a configuration is assigned) — match on that.
+        let buttons = allButtons(in: dropdown)
+        let closeButton = try XCTUnwrap(buttons.first { $0.configuration?.title == closeTitle })
+        let saveButton = try XCTUnwrap(buttons.first { $0.configuration?.title == saveTitle })
+
+        for button in [closeButton, saveButton] {
+            button.setNeedsUpdateConfiguration()
+            button.updateConfiguration()
+            let font = try XCTUnwrap(button.titleLabel?.font)
+            XCTAssertTrue(font.fontName.lowercased().contains("rounded"), font.fontName)
+        }
+    }
 }
