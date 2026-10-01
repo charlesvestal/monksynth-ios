@@ -87,6 +87,21 @@ protocol Character {
     /// below), so `CharacterVoiceTable.voice(for:)` is what loads for them,
     /// exactly as before this type existed.
     var savedParameters: [Param: AUValue]? { get }
+
+    /// The character's colours — its scene and the chrome's accent.
+    var palette: Palette { get }
+
+    /// Eyes, brows, cheeks — everything that reacts to `expression`. Drawn
+    /// after `drawBody`, before the mouth. The default calls `drawEyes`, so
+    /// image-backed characters keep working unchanged.
+    func drawFace(in stage: CGRect, expression: Expression)
+
+    /// Anything that must sit ON the mouth (a moustache, whiskers). Default: nothing.
+    func drawOverMouth(in stage: CGRect)
+
+    /// The scene behind the character. `rect` is the whole (non-square)
+    /// scene; `stage` is where the character's square sits inside it.
+    func drawBackdrop(in rect: CGRect, stage: CGRect)
 }
 
 extension Character {
@@ -96,6 +111,15 @@ extension Character {
     /// Default for every built-in character: no saved sound of its own —
     /// selecting it should load `CharacterVoiceTable.voice(for:)` instead.
     var savedParameters: [Param: AUValue]? { nil }
+
+    var palette: Palette { .neutral }
+    func drawFace(in stage: CGRect, expression: Expression) {
+        drawEyes(in: stage, blinking: expression.blinking)
+    }
+    func drawOverMouth(in stage: CGRect) {}
+    func drawBackdrop(in rect: CGRect, stage: CGRect) {
+        Backdrop.plain(in: rect, stage: stage, palette: palette)
+    }
 }
 
 extension Character {

@@ -58,6 +58,10 @@ struct UserCharacter: Character {
     func drawMouth(in stage: CGRect, vowel: Float, amplitudeBoost: CGFloat) {
         face.drawMouth(in: stage, vowel: vowel, amplitudeBoost: amplitudeBoost)
     }
+    var palette: Palette { face.palette }
+    func drawFace(in stage: CGRect, expression: Expression) { face.drawFace(in: stage, expression: expression) }
+    func drawOverMouth(in stage: CGRect) { face.drawOverMouth(in: stage) }
+    func drawBackdrop(in rect: CGRect, stage: CGRect) { face.drawBackdrop(in: rect, stage: stage) }
 
     /// The saved sound — selecting this character applies THIS, never
     /// `CharacterVoiceTable.voice(for:)` (which would stomp the saved patch
