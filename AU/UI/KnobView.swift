@@ -111,59 +111,69 @@ final class KnobView: UIView {
     }
 
     /// Height reserved beneath the dial for the name and value lines.
-    static let captionHeight: CGFloat = 24
+    static let captionHeight: CGFloat = 26
 
     /// Diameter the dial will actually be drawn at, for the current bounds.
     /// Exposed so tests can confirm the captions never squeeze it away.
     var dialSide: CGFloat { min(bounds.width, bounds.height - Self.captionHeight) }
     private static let nameFontSize: CGFloat = 8
-    private static let valueFontSize: CGFloat = 9
+    private static let valueFontSize: CGFloat = 11
 
+    /// A sticker dial: a ring (dark track, `Theme.accent` value arc) with an
+    /// ink rim and a hard ink shadow straight down, around a cream face with
+    /// an ink outline and an ink pointer bar.
     override func draw(_ rect: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
         // Reserve room for two caption lines (name + value) and keep the dial
         // a true circle — the smaller of the two axes, never stretched to fit.
         let side = min(rect.width, rect.height - Self.captionHeight)
         guard side > 4 else { return }
-        let dial = CGRect(x: rect.midX - side / 2, y: rect.minY, width: side, height: side)
+        let border: CGFloat = side >= 30 ? Theme.outline : 2
+        let s = side - border                       // leave room for the drop shadow
+        let c = CGPoint(x: rect.midX, y: rect.minY + s / 2)
+        let outerR = s / 2
+        let ringW = max(3, s * 0.15)
+        // Sweeps 270° clockwise from the 7:30 position.
+        let start = CGFloat(135) * .pi / 180
+        let angle = start + CGFloat(270 * Double(value)) * .pi / 180
 
-        Theme.panel.setFill(); UIBezierPath(ovalIn: dial).fill()
-        Theme.panelBorder.setStroke()
-        let ring = UIBezierPath(ovalIn: dial.insetBy(dx: 1, dy: 1))
-        ring.lineWidth = 1.5; ring.stroke()
+        Toon.fill(Toon.circle(c.x, c.y + border, outerR), Theme.ink)
+        Toon.fill(Toon.circle(c.x, c.y, outerR), Theme.track)
+        if value > 0.001 {
+            let lit = UIBezierPath(arcCenter: c, radius: outerR - border - ringW / 2,
+                                   startAngle: start, endAngle: angle, clockwise: true)
+            lit.lineWidth = ringW + 1
+            lit.lineCapStyle = .butt
+            Theme.accent.setStroke()
+            lit.stroke()
+        }
+        Toon.stroke(Toon.circle(c.x, c.y, outerR - border / 2), width: border)
 
-        // Indicator sweeps 270°, from -225° to +45°.
-        let angle = CGFloat(-225 + 270 * Double(value)) * .pi / 180
-        let r = side / 2 - 4
-        let c = CGPoint(x: dial.midX, y: dial.midY)
-        ctx.setStrokeColor(Theme.accent.cgColor)
-        ctx.setLineWidth(2.5)
-        ctx.setLineCap(.round)
-        ctx.move(to: CGPoint(x: c.x + cos(angle) * r * 0.35,
-                             y: c.y + sin(angle) * r * 0.35))
-        ctx.addLine(to: CGPoint(x: c.x + cos(angle) * r, y: c.y + sin(angle) * r))
-        ctx.strokePath()
+        let faceR = outerR - border - ringW - border / 2
+        Toon.shape(Toon.circle(c.x, c.y, faceR), fill: Theme.cream, lineWidth: border, shaded: false)
+        let pointer = UIBezierPath()
+        pointer.move(to: CGPoint(x: c.x + cos(angle) * faceR * 0.12, y: c.y + sin(angle) * faceR * 0.12))
+        pointer.addLine(to: CGPoint(x: c.x + cos(angle) * faceR * 0.72, y: c.y + sin(angle) * faceR * 0.72))
+        Toon.stroke(pointer, width: max(2.5, s * 0.075))
 
         // Two caption lines: the parameter NAME (so you can tell the knobs
         // apart — the whole row was previously unlabelled) then its value.
         // The name is truncated to the cell width rather than overlapping its
         // neighbours, since "Voice Spread" is far wider than a small dial.
-        func centred(_ s: String, _ font: UIFont, _ colour: UIColor, _ y: CGFloat) {
-            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: colour]
+        func centred(_ s: String, _ font: UIFont, _ colour: UIColor, _ y: CGFloat, kern: CGFloat = 0) {
             let para = NSMutableParagraphStyle()
             para.alignment = .center
             para.lineBreakMode = .byTruncatingTail
-            var a = attrs
-            a[.paragraphStyle] = para
+            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: colour,
+                                                        .paragraphStyle: para, .kern: kern]
             (s as NSString).draw(in: CGRect(x: rect.minX, y: y,
                                             width: rect.width, height: font.lineHeight + 1),
-                                 withAttributes: a)
+                                 withAttributes: attrs)
         }
 
-        let nameFont = Theme.label(Self.nameFontSize, weight: .semibold)
-        let valueFont = Theme.label(Self.valueFontSize)
-        centred(param.name.uppercased(), nameFont, Theme.textDim, dial.maxY + 2)
-        centred(param.formatted(value), valueFont, Theme.textPrimary,
-                dial.maxY + 2 + nameFont.lineHeight)
+        let nameFont = Theme.label(Self.nameFontSize, weight: .heavy)
+        let valueFont = Theme.display(Self.valueFontSize)
+        let captionTop = rect.minY + side + 2
+        centred(param.name.uppercased(), nameFont, Theme.textDim, captionTop, kern: 0.6)
+        centred(param.formatted(value), valueFont, Theme.textPrimary, captionTop + nameFont.lineHeight)
     }
 }

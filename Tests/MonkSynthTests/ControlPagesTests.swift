@@ -122,7 +122,7 @@ final class ControlPagesTests: XCTestCase {
 
         let pad = XYPadView(frame: .zero)
         XCTAssertEqual(pad.contentMode, .redraw,
-                       "XYPadView must redraw on resize or the crosshair skews")
+                       "XYPadView must redraw on resize or the ticks, vowel scale and touch marker skew")
 
         let character = CharacterView(frame: .zero)
         XCTAssertEqual(character.contentMode, .redraw)
@@ -149,5 +149,45 @@ final class ControlPagesTests: XCTestCase {
         XCTAssertGreaterThan(knob.dialSide, 8,
                              "captions must not squeeze the dial out of existence")
         XCTAssertFalse(knob.param.name.isEmpty, "the caption needs a name to draw")
+    }
+
+    // MARK: - Tab bar
+
+    func testTabsSitInAColumnWhenTheStripIsWideAndShort() {
+        let pages = ControlPages(frame: CGRect(x: 0, y: 0, width: 812, height: 96))
+        pages.layoutIfNeeded()
+        XCTAssertGreaterThan(pages.tabBarFrame.height, pages.tabBarFrame.width)
+        let tall = ControlPages(frame: CGRect(x: 0, y: 0, width: 374, height: 132))
+        tall.layoutIfNeeded()
+        XCTAssertGreaterThan(tall.tabBarFrame.width, tall.tabBarFrame.height)
+    }
+
+    func testOnlyTheSelectedTabIsFilledWithTheAccent() {
+        let pages = ControlPages(frame: CGRect(x: 0, y: 0, width: 374, height: 132))
+        pages.showPage(3)
+        XCTAssertEqual(pages.selectedTabButton?.tag, 3)
+        XCTAssertEqual(pages.selectedTabButton?.backgroundColor, Theme.accent)
+    }
+
+    /// Every tab and every knob dial stays inside the strip, clear of the
+    /// drawer handle's straddling pill at the top edge, at each strip size
+    /// a host produces.
+    func testTabsAndKnobsFitInsideTheStripAtEveryStripSize() {
+        for size in [CGSize(width: 359, height: 96), CGSize(width: 374, height: 132),
+                     CGSize(width: 828, height: 96), CGSize(width: 1008, height: 96),
+                     CGSize(width: 304, height: 132)] {
+            let pages = ControlPages(frame: CGRect(origin: .zero, size: size))
+            pages.layoutIfNeeded()
+            let inner = pages.bounds.insetBy(dx: Theme.outline, dy: Theme.outline)
+            let handleZone = CGRect(x: pages.bounds.midX - 30, y: 0, width: 60, height: ControlPages.topClearance)
+            XCTAssertTrue(inner.contains(pages.tabBarFrame), "\(size): \(pages.tabBarFrame)")
+            XCTAssertFalse(pages.tabBarFrame.intersects(handleZone), "\(size): \(pages.tabBarFrame)")
+            for k in pages.knobs {
+                let f = k.convert(k.bounds, to: pages)
+                XCTAssertTrue(inner.contains(f), "\(size): knob \(f)")
+                XCTAssertGreaterThanOrEqual(f.minY, ControlPages.topClearance, "\(size)")
+                XCTAssertGreaterThan(k.dialSide, 24, "\(size): dial too small")
+            }
+        }
     }
 }

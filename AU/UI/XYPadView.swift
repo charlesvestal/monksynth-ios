@@ -129,16 +129,19 @@ final class XYPadView: UIView {
             p.move(to: CGPoint(x: x, y: rect.maxY - 4)); p.addLine(to: CGPoint(x: x, y: rect.maxY - h))
             Toon.stroke(p, width: 2, color: UIColor.white.withAlphaComponent(0.75))
         }
-        // Vowel scale up the right edge, OO at the bottom.
+        // Vowel scale up the right edge, OO at the bottom: ink type on small
+        // cream pills, so the labels read on every sky, light or dark.
         if rect.height >= 90 {
-            let font = Theme.display(11)
+            let font = Theme.display(10)
             for (i, v) in ["OO", "OH", "AH", "EH", "EE"].enumerated() {
                 let y = 14 + (rect.height - 50) * (1 - CGFloat(i) / 4)
-                let s = NSAttributedString(string: v, attributes: [
-                    .font: font, .foregroundColor: UIColor.white.withAlphaComponent(0.85),
-                    .strokeColor: ink, .strokeWidth: -3])
+                let s = NSAttributedString(string: v, attributes: [.font: font, .foregroundColor: ink])
                 let size = s.size()
-                s.draw(at: CGPoint(x: rect.maxX - 8 - size.width, y: y))
+                let pill = CGRect(x: rect.maxX - 8 - size.width - 12, y: y - 1,
+                                  width: size.width + 12, height: size.height + 4)
+                Toon.shape(UIBezierPath(roundedRect: pill, cornerRadius: pill.height / 2),
+                           fill: Theme.cream, lineWidth: 2, shaded: false)
+                s.draw(at: CGPoint(x: pill.minX + 6, y: pill.minY + 2))
             }
         }
         if showsHint && !isPlaying && rect.height >= 90 {

@@ -148,7 +148,7 @@ extension Character {
         let mouth = UIBezierPath(ovalIn: CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h))
         Theme.background.setFill()
         mouth.fill()
-        Theme.robeShadow.withAlphaComponent(0.5).setStroke()
+        Toon.ink.withAlphaComponent(0.5).setStroke()
         mouth.lineWidth = stage.width * 0.008
         mouth.stroke()
     }

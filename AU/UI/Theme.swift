@@ -1,18 +1,30 @@
 import UIKit
 
-/// Shared colors and metrics for every UI file (Tasks 8, 9, 10, 11). Kept as
-/// static constants rather than an asset catalog so the values are visible
-/// in one place and trivially referenced from drawing code.
+/// Shared colours, type and metrics for every UI file. Kept as static
+/// constants rather than an asset catalog so the values are visible in one
+/// place and trivially referenced from drawing code. Panels stay
+/// dark-neutral so the scene carries the colour; only `accent` follows the
+/// character.
 enum Theme {
-    static let background   = UIColor(red: 0.082, green: 0.086, blue: 0.102, alpha: 1)
-    static let panel        = UIColor(red: 0.118, green: 0.125, blue: 0.157, alpha: 1)
-    static let panelBorder  = UIColor(red: 0.180, green: 0.188, blue: 0.220, alpha: 1)
-    static let accent       = UIColor(red: 0.788, green: 0.635, blue: 0.153, alpha: 1)
-    static let textPrimary  = UIColor(white: 0.92, alpha: 1)
-    static let textDim      = UIColor(red: 0.424, green: 0.435, blue: 0.482, alpha: 1)
-    static let skin         = UIColor(red: 0.847, green: 0.706, blue: 0.549, alpha: 1)
-    static let robe         = UIColor(red: 0.549, green: 0.184, blue: 0.122, alpha: 1)
-    static let robeShadow   = UIColor(red: 0.227, green: 0.239, blue: 0.278, alpha: 1)
+    static let background  = UIColor(hex: 0x1D1719)
+    static let panel       = UIColor(hex: 0x2A2225)
+    static let panelDeep   = UIColor(hex: 0x1B1416)
+    static let panelBorder = Toon.ink
+    static let cream       = UIColor(hex: 0xFFF1D6)
+    static let track       = UIColor(hex: 0x4A3D41)
+    static let ink         = Toon.ink
+    static let textPrimary = UIColor(hex: 0xFFF4E6)
+    static let textDim     = UIColor(hex: 0xC2B1A8)
+    /// The loaded character's accent (the monk's until one is chosen); set
+    /// by `PluginView.applyPalette` on every character change. Knob arcs,
+    /// the selected tab, the selector's chevron and the touch marker read it.
+    static var accent = UIColor(hex: 0xF0A020)
+
+    /// Width of every chrome outline (knob rims, tab track, header buttons,
+    /// strip panel, drawer handle).
+    static let outline: CGFloat = 3
+    /// Corner radius of the control strip panel.
+    static let stripCornerRadius: CGFloat = 18
 
     static let cornerRadius: CGFloat = 10
     static let gutter: CGFloat = 8
@@ -35,15 +47,16 @@ enum Theme {
     /// closing the drawer gives the scene back.
     static let minSceneHeight: CGFloat = 32
 
-    /// SF Rounded heavy — names, tabs, scene labels.
-    static func display(_ size: CGFloat) -> UIFont {
-        let base = UIFont.systemFont(ofSize: size, weight: .heavy)
+    /// SF Rounded heavy — names, tabs, values, scene labels.
+    static func display(_ size: CGFloat) -> UIFont { rounded(size, .heavy) }
+
+    /// SF Rounded — captions.
+    static func label(_ size: CGFloat, weight: UIFont.Weight = .semibold) -> UIFont { rounded(size, weight) }
+
+    private static func rounded(_ size: CGFloat, _ weight: UIFont.Weight) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
         guard let d = base.fontDescriptor.withDesign(.rounded) else { return base }
         return UIFont(descriptor: d, size: size)
-    }
-
-    static func label(_ size: CGFloat, weight: UIFont.Weight = .semibold) -> UIFont {
-        .systemFont(ofSize: size, weight: weight)
     }
 }
 
@@ -51,7 +64,7 @@ extension UIColor {
     /// Returns a copy of this colour with hue shifted and saturation /
     /// brightness scaled in HSB space. Originally `MonkCharacter`-only (to
     /// derive the robe's saffron trim and fold-shadow tones from
-    /// `Theme.robe` without hand-picking separate constants that could drift
+    /// a base robe colour without hand-picking separate constants that could drift
     /// out of sync with it); promoted here so every `Character` can derive
     /// its own tonal variants from a single base colour the same way.
     func adjusted(hueShift: CGFloat = 0, saturationScale: CGFloat = 1, brightnessScale: CGFloat = 1) -> UIColor {

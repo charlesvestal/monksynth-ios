@@ -26,6 +26,7 @@ final class LayoutTests: XCTestCase {
         for size in [CGSize(width: 390, height: 844), CGSize(width: 844, height: 390), CGSize(width: 1024, height: 768)] {
             let l = PluginView.layout(in: CGRect(origin: .zero, size: size))
             XCTAssertEqual(l.scene.width, size.width - 2 * Theme.gutter, accuracy: 0.5, "\(size)")
+            XCTAssertEqual(l.controls.width, size.width - 2 * Theme.gutter, accuracy: 0.5, "\(size)")
             XCTAssertGreaterThanOrEqual(l.scene.minY, l.infoButton.maxY, "\(size)")
             XCTAssertLessThanOrEqual(l.scene.maxY, l.controls.minY - Theme.gutter + 0.5, "\(size)")
         }
