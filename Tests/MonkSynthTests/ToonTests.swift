@@ -7,6 +7,18 @@ final class ToonTests: XCTestCase {
         XCTAssertEqual(Toon.path("M0 0 L10 0 L10 10 Z").bounds, CGRect(x: 0, y: 0, width: 10, height: 10))
     }
 
+    /// `path` memoises parsed geometry, but callers set `lineWidth` and caps
+    /// on what it returns, so each call must hand back its own copy.
+    func testRepeatedParsesReturnEqualGeometryInDistinctObjects() {
+        let d = "M0 0 C0 -10 20 -10 20 0 L20 10 Z"
+        let a = Toon.path(d)
+        a.lineWidth = 9
+        let b = Toon.path(d)
+        XCTAssertFalse(a === b)
+        XCTAssertEqual(a.cgPath, b.cgPath)
+        XCTAssertNotEqual(b.lineWidth, 9)
+    }
+
     func testCubic() {
         XCTAssertLessThan(Toon.path("M0 0 C0 -10 20 -10 20 0").bounds.minY, -5)
     }
