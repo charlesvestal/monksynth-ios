@@ -88,6 +88,10 @@ final class RenderMonkSnapshot: XCTestCase {
                     view.noteActive = true
                     ctx.cgContext.saveGState()
                     ctx.cgContext.translateBy(x: cell.width * CGFloat(col), y: rowY)
+                    let cellRect = CGRect(origin: .zero, size: cell)
+                    let side = min(cellRect.width, cellRect.height)
+                    let stageRect = CGRect(x: cellRect.midX - side / 2, y: cellRect.midY - side / 2, width: side, height: side)
+                    character.drawBackdrop(in: cellRect, stage: stageRect)
                     view.layer.render(in: ctx.cgContext)
                     ctx.cgContext.restoreGState()
 

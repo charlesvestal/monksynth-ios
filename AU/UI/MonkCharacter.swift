@@ -40,4 +40,20 @@ struct MonkCharacter: ToonCharacter {
         Toon.cheek(108, 146)
         Toon.cheek(192, 146)
     }
+
+    /// Himalayan terrace: distant mountains, a low sun, prayer flags strung overhead.
+    func drawBackdrop(in rect: CGRect, stage: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
+        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
+        let gy = (H * 0.72).rounded(), R = W * 0.88, L = W * 0.12, cx = W / 2
+        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
+        Backdrop.sun(R - W * 0.06, gy - H * 0.3, min(30, H * 0.08), u: u)
+        Backdrop.mountain(L + 20, gy, H / 300, u: u)
+        Backdrop.mountain(R, gy, H / 380, u: u)
+        Backdrop.mountain(cx + W * 0.3, gy, H / 460, u: u)
+        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
+        Backdrop.flags(-10, W + 10, H * 0.08, u: u)
+        ctx.restoreGState()
+    }
 }

@@ -53,4 +53,19 @@ struct PunkCharacter: ToonCharacter {
         Toon.stroke(Toon.path("M146 150 Q150 156 156 150"), width: Toon.fine)
         Toon.stroke(Toon.circle(160, 154, 5), width: 3, color: UIColor(hex: 0xD9DDE3))
     }
+
+    /// A dive-bar stage: coloured spotlights either side, an amp stacked on each end.
+    func drawBackdrop(in rect: CGRect, stage: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
+        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
+        let gy = (H * 0.72).rounded(), L = W * 0.12, R = W * 0.88
+        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
+        Backdrop.spot(L + 30, W, gy, color: UIColor(hex: 0xFF4FD8), u: u)
+        Backdrop.spot(R - 30, W, gy, color: UIColor(hex: 0x7DFF3A), u: u)
+        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
+        Backdrop.amp(L, gy + 2, H / 300, u: u)
+        Backdrop.amp(R, gy + 2, H / 300, u: u)
+        ctx.restoreGState()
+    }
 }

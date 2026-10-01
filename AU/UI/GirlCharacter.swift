@@ -39,4 +39,18 @@ struct GirlCharacter: ToonCharacter {
         Toon.cheek(106, 156, 13)
         Toon.cheek(194, 156, 13)
     }
+
+    /// A sunny park: a tree on the left, a kite drifting on the right.
+    func drawBackdrop(in rect: CGRect, stage: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
+        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
+        let gy = (H * 0.72).rounded(), cx = W / 2, L = W * 0.12, R = W * 0.88
+        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
+        Backdrop.cloud(cx - W * 0.2, H * 0.18, 0.6, u: u)
+        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
+        Backdrop.tree(L + 6, gy + 6, H / 330, u: u)
+        Backdrop.kite(R - 6, H * 0.2, 0.8, u: u)
+        ctx.restoreGState()
+    }
 }

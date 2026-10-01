@@ -52,4 +52,17 @@ struct FireFighterCharacter: ToonCharacter {
         Toon.shape(Toon.path("M118 166 C128 156 144 158 150 164 C156 158 172 156 182 166 C170 172 158 170 150 166 C142 170 130 172 118 166 Z"),
                    fill: UIColor(hex: 0x7A3D22), lineWidth: Toon.fine)
     }
+
+    /// A brick firehouse wall with a hydrant standing at the curb.
+    func drawBackdrop(in rect: CGRect, stage: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
+        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
+        let gy = (H * 0.72).rounded(), R = W * 0.88
+        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
+        Backdrop.bricks(W, gy, u: u)
+        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
+        Backdrop.hydrant(R - 10, gy + 14, H / 300, u: u)
+        ctx.restoreGState()
+    }
 }
