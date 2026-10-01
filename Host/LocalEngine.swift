@@ -1,5 +1,6 @@
 import AVFoundation
 import os
+import UIKit
 
 /// Standalone audio path. Uses the same `RenderContext` as the AUv3 so the
 /// standalone and the plugin cannot drift apart: the UI, the parameter
@@ -20,10 +21,20 @@ final class LocalEngine {
         }
     }
 
-    private let engine = AVAudioEngine()
+    /// Replaced wholesale after a media-services reset, when the old one is dead.
+    private var engine = AVAudioEngine()
     private let shadow = param_shadow_new()!
     private let context: RenderContext
     private var sourceNode: AVAudioSourceNode?
+
+    /// True between `start()` and `stop()`: the user wants sound. iOS stops
+    /// the engine on its own — an interruption (call, Siri, alarm, another
+    /// app taking the session), a route or format change, a media-services
+    /// reset — and every one of those is likely over a long background. While
+    /// this is set, each of them brings the engine back; before, the app
+    /// stayed silent until it was killed.
+    private var wantsRunning = false
+    private var observers: [NSObjectProtocol] = []
 
     // MIDI note on/off cannot call straight into `RenderContext.noteOn`/
     // `noteOff` off the render thread — see `NoteEventQueue`'s doc comment.
@@ -40,7 +51,10 @@ final class LocalEngine {
         wheelTargets.reserveCapacity(2)
     }
 
-    deinit { param_shadow_free(shadow) }
+    deinit {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        param_shadow_free(shadow)
+    }
 
     // MARK: - Parameters (any thread — the shadow is lock-free)
 
@@ -76,13 +90,41 @@ final class LocalEngine {
     // MARK: - Lifecycle
 
     func start() throws {
+        wantsRunning = true
+        installObservers()
+        try activateSession()
+        try buildGraph()
+        try engine.start()
+    }
+
+    func stop() {
+        wantsRunning = false
+        engine.stop()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    var isRunning: Bool { engine.isRunning }
+
+    private func activateSession() throws {
         let session = AVAudioSession.sharedInstance()
         // .playback + .mixWithOthers: a synth with no input, able to run
         // alongside AUM. An input-capable category would demand a microphone
         // usage string and prompt the user for no reason.
         try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
         try session.setActive(true)
+    }
 
+    /// (Re)builds the source node for the current hardware format and a fresh
+    /// DSP engine at that rate. Called only while `engine` is stopped, so the
+    /// render thread is not running. `createEngine` clears `RenderContext`'s
+    /// diff cache, so every parameter in the shadow is re-applied on the
+    /// first render — nothing the user set is lost.
+    private func buildGraph() throws {
+        if let old = sourceNode {
+            engine.detach(old)
+            sourceNode = nil
+        }
+        let session = AVAudioSession.sharedInstance()
         // `engine.outputNode.inputFormat(forBus:)` reflects the *engine's*
         // internal processing format for that bus, not the raw hardware
         // ASBD — AVAudioEngine nodes always talk to each other in canonical
@@ -109,7 +151,6 @@ final class LocalEngine {
         }
 
         context.createEngine(sampleRate: sampleRate)
-
         let ctx = context
         let events = noteEvents
         let node = AVAudioSourceNode(format: format) { _, _, frameCount, audioBufferList in
@@ -137,15 +178,71 @@ final class LocalEngine {
         sourceNode = node
         engine.attach(node)
         engine.connect(node, to: engine.mainMixerNode, format: format)
-        try engine.start()
     }
 
-    func stop() {
+    // MARK: - Recovery (main thread)
+
+    /// Brings sound back after the system stopped it. `rebuild` re-reads the
+    /// hardware format (a route change can change the sample rate);
+    /// `newEngine` replaces the engine outright (after a media-services reset
+    /// the old one is unusable).
+    private func recover(rebuild: Bool, newEngine: Bool = false) {
+        guard wantsRunning else { return }
         engine.stop()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if newEngine {
+            sourceNode = nil
+            engine = AVAudioEngine()
+        }
+        do {
+            try activateSession()
+            if rebuild || sourceNode == nil { try buildGraph() }
+            try engine.start()
+        } catch {
+            Self.log.error("audio recovery failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
+
+    private func installObservers() {
+        guard observers.isEmpty else { return }
+        let nc = NotificationCenter.default
+        let session = AVAudioSession.sharedInstance()
+        observers = [
+            nc.addObserver(forName: AVAudioSession.interruptionNotification, object: session, queue: .main) { [weak self] note in
+                // A synth sits silent until played, so resuming is always
+                // right — no need to honour `.shouldResume`.
+                guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                      AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
+                self?.recover(rebuild: false)
+            },
+            nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: session, queue: .main) { [weak self] _ in
+                self?.recover(rebuild: true, newEngine: true)
+            },
+            // Posted by whichever engine is current, so match on identity.
+            nc.addObserver(forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main) { [weak self] note in
+                guard let self, (note.object as AnyObject?) === self.engine else { return }
+                self.recover(rebuild: true)
+            },
+            // The catch-all: anything that stopped the engine while we were
+            // away and didn't announce itself.
+            nc.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self, !self.engine.isRunning else { return }
+                self.recover(rebuild: false)
+            },
+        ]
+    }
+
+    private static let log = Logger(subsystem: "com.vestal.monksynth", category: "audio")
 
     // MARK: - Testing seam
+
+    /// Stops the engine the way the system does — without the user asking —
+    /// so tests can check that each recovery path brings it back.
+    func simulateSystemStop() { engine.stop() }
+
+    /// Posts the configuration-change notification as the current engine.
+    func postConfigurationChangeForTesting() {
+        NotificationCenter.default.post(name: .AVAudioEngineConfigurationChange, object: engine)
+    }
 
     /// Lets tests capture actually-rendered audio via `AVAudioEngine`'s tap
     /// API without exposing the whole `AVAudioEngine` to production code —
