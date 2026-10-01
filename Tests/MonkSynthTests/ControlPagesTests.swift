@@ -164,9 +164,14 @@ final class ControlPagesTests: XCTestCase {
 
     func testOnlyTheSelectedTabIsFilledWithTheAccent() {
         let pages = ControlPages(frame: CGRect(x: 0, y: 0, width: 374, height: 132))
+        pages.accent = .green
         pages.showPage(3)
         XCTAssertEqual(pages.selectedTabButton?.tag, 3)
-        XCTAssertEqual(pages.selectedTabButton?.backgroundColor, Theme.accent)
+        XCTAssertEqual(pages.selectedTabButton?.backgroundColor, .green)
+        for b in pages.tabButtonsForTesting where b.tag != 3 {
+            XCTAssertEqual(b.backgroundColor, .clear)
+        }
+        XCTAssertTrue(pages.knobs.allSatisfy { $0.accent == .green })
     }
 
     /// Every tab and every knob dial stays inside the strip, clear of the

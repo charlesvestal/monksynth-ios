@@ -15,10 +15,11 @@ enum Theme {
     static let ink         = Toon.ink
     static let textPrimary = UIColor(hex: 0xFFF4E6)
     static let textDim     = UIColor(hex: 0xC2B1A8)
-    /// The loaded character's accent (the monk's until one is chosen); set
-    /// by `PluginView.applyPalette` on every character change. Knob arcs,
-    /// the selected tab, the selector's chevron and the touch marker read it.
-    static var accent = UIColor(hex: 0xF0A020)
+    /// The monk's accent: only the starting value of each view's own
+    /// `accent`. The live accent is per `PluginView` (set by its
+    /// `applyPalette(_:)`), never global — an AUv3 extension hosts several
+    /// plugin instances in one process, each with its own character.
+    static let defaultAccent = UIColor(hex: 0xF0A020)
 
     /// Width of every chrome outline (knob rims, tab track, header buttons,
     /// strip panel, drawer handle).
@@ -28,8 +29,13 @@ enum Theme {
 
     static let cornerRadius: CGFloat = 10
     static let gutter: CGFloat = 8
-    /// Preferred control-strip heights: taller in portrait (two rows: tabs
-    /// over full-size knobs), shorter when wide (tabs become a side column).
+    /// Preferred control-strip heights. `PluginView.sceneLayout` uses
+    /// `stripHeightWide` only when the container is wide AND short (inner
+    /// width ≥ height and height < 500, e.g. iPhone landscape or the AUM
+    /// strip), so the scene keeps its height; otherwise `stripHeight`.
+    /// Independently, `ControlPages` puts its tabs in a side column whenever
+    /// the strip is at least `ControlPages.sideTabsAspect` (3.5×) wider than
+    /// tall, and a top row otherwise.
     static let stripHeight: CGFloat = 132
     static let stripHeightWide: CGFloat = 96
 

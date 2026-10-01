@@ -32,6 +32,15 @@ final class LayoutTests: XCTestCase {
         }
     }
 
+    /// A wide but tall container (iPad landscape) keeps the tall strip:
+    /// only wide AND short containers trade strip height for scene height.
+    func testIPadLandscapeGetsTheTallStrip() {
+        let l = PluginView.layout(in: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        XCTAssertEqual(l.controls.height, Theme.stripHeight, accuracy: 0.5)
+        let phone = PluginView.layout(in: CGRect(x: 0, y: 0, width: 844, height: 390))
+        XCTAssertEqual(phone.controls.height, Theme.stripHeightWide, accuracy: 0.5)
+    }
+
     // MARK: - Short host rect (AUM-style strip)
 
     /// The exact size AUM hands this view for a compact strip. It's wide,

@@ -53,7 +53,7 @@ struct ZoneLayout: Equatable {
 /// that actually travels; see `handleFrame(for:)`.
 ///
 /// Open, the strip prefers `Theme.stripHeight` (or `Theme.stripHeightWide`
-/// when the inner rect is at least as wide as it is tall — see below) when
+/// when the inner rect is wide and short — see below) when
 /// there's room. When there isn't, it shrinks, but never below
 /// `Theme.minUsableStripHeight` — the height below which `ControlPages` can
 /// no longer draw an actual knob — as long as there is at least that much
@@ -67,8 +67,8 @@ struct ZoneLayout: Equatable {
 /// the character hides once it would be too small to read (that's
 /// `SceneView.characterRect(in:)`'s call, not the layout's).
 ///
-/// The strip's preferred height is chosen by aspect ratio
-/// (`inner.width >= inner.height` → `Theme.stripHeightWide`, otherwise
+/// The strip's preferred height is chosen by shape (inner rect wide AND
+/// shorter than 500pt → `Theme.stripHeightWide`, otherwise
 /// `Theme.stripHeight`), not device idiom, because an AUv3 host can hand
 /// this view any rect at all — AUM in particular can give a wide, short
 /// strip on an iPhone.
@@ -193,15 +193,20 @@ final class PluginView: UIView {
         applyPalette(stage.character.palette)
     }
 
-    /// Recolours the chrome for a character: sets the shared `Theme.accent`
-    /// and has every view that reads it redraw (knob arcs, the selected
-    /// tab, the selector's chevron, the touch marker). Runs on every
-    /// character change — arrows, dropdown, or a programmatic restore —
-    /// via `stage.onCharacterChanged`, and once at init.
+    /// This instance's character accent. Per view, never global: an AUv3
+    /// extension hosts several plugin instances in one process, and each
+    /// one's chrome follows its own character.
+    private(set) var accent: UIColor = Theme.defaultAccent
+
+    /// Recolours the chrome for a character: knob arcs and the selected tab
+    /// (`controls`), the selector's chevron, the touch marker, and any
+    /// overlay opened afterwards. Runs on every character change — arrows,
+    /// dropdown, or a programmatic restore — via
+    /// `stage.onCharacterChanged`, and once at init.
     func applyPalette(_ p: Palette) {
-        Theme.accent = p.accent
-        controls.applyPalette()
-        characterSelector.applyPalette()
+        accent = p.accent
+        controls.accent = p.accent
+        characterSelector.applyPalette(accent: p.accent)
         pad.accent = p.accent
     }
 
@@ -270,7 +275,7 @@ final class PluginView: UIView {
 
     @objc private func showAbout() {
         guard aboutView == nil else { return }
-        let a = AboutView(frame: bounds)
+        let a = AboutView(frame: bounds, accent: accent)
         a.showsBluetoothButton = showsBluetoothOption
         a.onClose = { [weak self] in self?.hideAbout() }
         a.onOpenURL = { [weak self] url in self?.onOpenURL?(url) }
@@ -291,7 +296,7 @@ final class PluginView: UIView {
 
     private func showMoreApps() {
         guard moreAppsView == nil else { return }
-        let m = MoreAppsView(frame: bounds)
+        let m = MoreAppsView(frame: bounds, accent: accent)
         m.onClose = { [weak self] in self?.hideMoreApps() }
         m.onOpenURL = { [weak self] url in self?.onOpenURL?(url) }
         addSubview(m)
@@ -355,7 +360,8 @@ final class PluginView: UIView {
 
     private func showCharacterDropdown() {
         guard characterDropdownView == nil else { return }
-        let dropdown = CharacterDropdownView(frame: bounds, current: stage.character, store: presetStore)
+        let dropdown = CharacterDropdownView(frame: bounds, current: stage.character, store: presetStore,
+                                             accent: accent)
         dropdown.onClose = { [weak self] in self?.hideCharacterDropdown() }
         dropdown.onSelect = { [weak self] character in
             self?.stage.select(character)
@@ -589,10 +595,13 @@ final class PluginView: UIView {
     /// `layoutSubviews` hides it): the pad is simply unavailable until the
     /// drawer is closed, rather than drawn as a few-point sliver.
     private static func sceneLayout(inner: CGRect, gutter g: CGFloat, drawerOpen: Bool) -> ZoneLayout {
-        let isWide = inner.width >= inner.height
+        // The short strip only when the container is wide AND short (iPhone
+        // landscape, the AUM strip): there the scene needs the height. A
+        // wide but tall container (iPad landscape) keeps the tall strip.
+        let wideAndShort = inner.width >= inner.height && inner.height < 500
         let stripH = drawerOpen
             ? controlStripHeight(available: inner.height, gutter: g,
-                                 preferred: isWide ? Theme.stripHeightWide : Theme.stripHeight)
+                                 preferred: wideAndShort ? Theme.stripHeightWide : Theme.stripHeight)
             : 0
         let headerReserve = headerHeight + g
         let sceneH = max(0, inner.height - stripH - (stripH > 0 ? g : 0) - headerReserve)

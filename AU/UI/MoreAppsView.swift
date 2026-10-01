@@ -127,7 +127,15 @@ final class MoreAppsView: UIView {
     private static let closeButtonGap: CGFloat = 12
     private static let maxPanelWidth: CGFloat = 360
 
-    override init(frame: CGRect) {
+    /// The owning `PluginView`'s character accent, for links.
+    private let accent: UIColor
+
+    convenience override init(frame: CGRect) {
+        self.init(frame: frame, accent: Theme.defaultAccent)
+    }
+
+    init(frame: CGRect, accent: UIColor) {
+        self.accent = accent
         super.init(frame: frame)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)
 
@@ -171,7 +179,7 @@ final class MoreAppsView: UIView {
             for: .normal)
         developerButton.titleLabel?.font = Theme.label(12)
         developerButton.titleLabel?.numberOfLines = 0
-        developerButton.setTitleColor(Theme.accent, for: .normal)
+        developerButton.setTitleColor(accent, for: .normal)
         developerButton.contentHorizontalAlignment = .leading
         developerButton.addTarget(self, action: #selector(openDeveloperPage), for: .touchUpInside)
         stack.addArrangedSubview(developerButton)

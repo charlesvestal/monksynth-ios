@@ -60,7 +60,15 @@ final class AboutView: UIView {
     private static let closeButtonGap: CGFloat = 12
     private static let maxPanelWidth: CGFloat = 360
 
-    override init(frame: CGRect) {
+    /// The owning `PluginView`'s character accent, for links.
+    private let accent: UIColor
+
+    convenience override init(frame: CGRect) {
+        self.init(frame: frame, accent: Theme.defaultAccent)
+    }
+
+    init(frame: CGRect, accent: UIColor) {
+        self.accent = accent
         super.init(frame: frame)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)
 
@@ -117,7 +125,7 @@ final class AboutView: UIView {
         source.setTitle(NSLocalizedString("about.source", comment: "Link to upstream source repository"),
                          for: .normal)
         source.titleLabel?.font = Theme.label(12)
-        source.setTitleColor(Theme.accent, for: .normal)
+        source.setTitleColor(accent, for: .normal)
         source.contentHorizontalAlignment = .leading
         source.addTarget(self, action: #selector(openSource), for: .touchUpInside)
         stack.addArrangedSubview(source)
@@ -125,7 +133,7 @@ final class AboutView: UIView {
         bluetoothButton.setTitle(NSLocalizedString("about.bluetooth", comment: "Open Bluetooth MIDI pairing"),
                                   for: .normal)
         bluetoothButton.titleLabel?.font = Theme.label(12)
-        bluetoothButton.setTitleColor(Theme.accent, for: .normal)
+        bluetoothButton.setTitleColor(accent, for: .normal)
         bluetoothButton.contentHorizontalAlignment = .leading
         bluetoothButton.isHidden = true
         bluetoothButton.addTarget(self, action: #selector(openBluetooth), for: .touchUpInside)
@@ -135,7 +143,7 @@ final class AboutView: UIView {
         moreApps.setTitle(NSLocalizedString("about.moreApps", comment: "Link to the More Apps screen"),
                            for: .normal)
         moreApps.titleLabel?.font = Theme.label(12)
-        moreApps.setTitleColor(Theme.accent, for: .normal)
+        moreApps.setTitleColor(accent, for: .normal)
         moreApps.contentHorizontalAlignment = .leading
         moreApps.addTarget(self, action: #selector(openMoreApps), for: .touchUpInside)
         stack.addArrangedSubview(moreApps)
@@ -169,7 +177,7 @@ final class AboutView: UIView {
         let b = UIButton(type: .system)
         b.setTitle(title, for: .normal)
         b.titleLabel?.font = Theme.label(12)
-        b.setTitleColor(Theme.accent, for: .normal)
+        b.setTitleColor(accent, for: .normal)
         b.contentHorizontalAlignment = .leading
         b.addTarget(self, action: action, for: .touchUpInside)
         stack.addArrangedSubview(b)

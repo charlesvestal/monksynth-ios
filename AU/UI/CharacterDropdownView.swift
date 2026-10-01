@@ -79,7 +79,10 @@ final class CharacterDropdownView: UIView {
     private let savedSection = UIStackView()
     private let closeButton = UIButton(type: .system)
 
-    private let saveRow = CharacterSaveRow()
+    private let saveRow: CharacterSaveRow
+    /// The owning `PluginView`'s character accent: current-row outline,
+    /// checkmark and Save button.
+    private let accent: UIColor
     private let feedbackLabel = UILabel()
 
     private static let panelPadding: CGFloat = 16
@@ -102,9 +105,12 @@ final class CharacterDropdownView: UIView {
         return CharacterRegistry.all + UserCharacter.all(from: store)
     }
 
-    init(frame: CGRect, current: Character, store: PresetStoring?) {
+    init(frame: CGRect, current: Character, store: PresetStoring?,
+         accent: UIColor = Theme.defaultAccent) {
         self.current = current
         self.store = store
+        self.accent = accent
+        self.saveRow = CharacterSaveRow(accent: accent)
         super.init(frame: frame)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)
 
@@ -148,7 +154,7 @@ final class CharacterDropdownView: UIView {
         stack.addArrangedSubview(builtInRows)
         for character in CharacterRegistry.all {
             let row = CharacterDropdownRow(character: character, isCurrent: character.id == current.id,
-                                            kind: .builtIn, showsDelete: false)
+                                            kind: .builtIn, showsDelete: false, accent: accent)
             row.onTap = { [weak self] in self?.onSelect?(character) }
             builtInRows.addArrangedSubview(row)
         }
@@ -213,7 +219,7 @@ final class CharacterDropdownView: UIView {
         let showsDelete = store?.supportsUserPresets ?? false
         for user in userCharacters {
             let row = CharacterDropdownRow(character: user, isCurrent: user.id == current.id,
-                                            kind: .user, showsDelete: showsDelete)
+                                            kind: .user, showsDelete: showsDelete, accent: accent)
             row.onTap = { [weak self] in self?.onSelect?(user) }
             row.onDelete = { [weak self] in
                 guard let self else { return }
@@ -371,12 +377,12 @@ private final class CharacterDropdownRow: UIControl {
         }
     }
 
-    init(character: Character, isCurrent: Bool, kind: Kind, showsDelete: Bool) {
+    init(character: Character, isCurrent: Bool, kind: Kind, showsDelete: Bool, accent: UIColor) {
         super.init(frame: .zero)
         backgroundColor = isCurrent ? Theme.panelBorder : Theme.panel
         layer.cornerRadius = 8
         layer.borderWidth = isCurrent ? 2 : 1
-        layer.borderColor = (isCurrent ? Theme.accent : Theme.panelBorder).cgColor
+        layer.borderColor = (isCurrent ? accent : Theme.panelBorder).cgColor
 
         // The badge (plus the saved section's own header above its first
         // row — see `CharacterDropdownView.refreshSavedSection`) is what
@@ -411,7 +417,7 @@ private final class CharacterDropdownRow: UIControl {
         addSubview(nameLabel)
 
         checkmark.image = UIImage(systemName: "checkmark")
-        checkmark.tintColor = Theme.accent
+        checkmark.tintColor = accent
         checkmark.isHidden = !isCurrent
         checkmark.isUserInteractionEnabled = false
         checkmark.isAccessibilityElement = false
@@ -489,8 +495,8 @@ private final class CharacterSaveRow: UIView {
     static let height: CGFloat = 44
     private static let saveButtonWidth: CGFloat = 92
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init(accent: UIColor) {
+        super.init(frame: .zero)
 
         nameField.placeholder = NSLocalizedString(
             "presets.namePlaceholder", comment: "Placeholder text in the new-preset name field")
@@ -505,7 +511,7 @@ private final class CharacterSaveRow: UIView {
         var saveConfig = UIButton.Configuration.filled()
         saveConfig.title = NSLocalizedString(
             "presets.save", comment: "Button that saves the current patch as a new user preset")
-        saveConfig.baseBackgroundColor = Theme.accent
+        saveConfig.baseBackgroundColor = accent
         saveConfig.baseForegroundColor = Theme.background
         saveConfig.cornerStyle = .medium
         saveButton.configuration = saveConfig
