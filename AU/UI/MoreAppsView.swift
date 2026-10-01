@@ -147,9 +147,9 @@ final class MoreAppsView: UIView {
         addGestureRecognizer(tap)
 
         panel.backgroundColor = Theme.panel
-        panel.layer.cornerRadius = Theme.cornerRadius
-        panel.layer.borderWidth = 1
-        panel.layer.borderColor = Theme.panelBorder.cgColor
+        panel.layer.cornerRadius = Theme.stripCornerRadius
+        panel.layer.borderWidth = Theme.outline
+        panel.layer.borderColor = Theme.ink.cgColor
         panel.clipsToBounds = true
         addSubview(panel)
 
@@ -163,7 +163,7 @@ final class MoreAppsView: UIView {
 
         let title = UILabel()
         title.text = NSLocalizedString("moreapps.title", comment: "More Apps screen title")
-        title.font = Theme.label(18, weight: .bold)
+        title.font = Theme.display(18)
         title.textColor = Theme.textPrimary
         title.numberOfLines = 0
         stack.addArrangedSubview(title)
@@ -186,11 +186,13 @@ final class MoreAppsView: UIView {
 
         var closeConfig = UIButton.Configuration.filled()
         closeConfig.title = NSLocalizedString("about.close", comment: "Dismiss the about screen")
-        closeConfig.baseBackgroundColor = Theme.panelBorder
-        closeConfig.baseForegroundColor = Theme.textPrimary
+        closeConfig.baseBackgroundColor = Theme.cream
+        closeConfig.baseForegroundColor = Theme.ink
         closeConfig.cornerStyle = .medium
+        closeConfig.background.strokeColor = Theme.ink
+        closeConfig.background.strokeWidth = Theme.outline
         closeButton.configuration = closeConfig
-        closeButton.titleLabel?.font = Theme.label(13, weight: .semibold)
+        closeButton.titleLabel?.font = Theme.display(13)
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         panel.addSubview(closeButton)
 
@@ -307,8 +309,8 @@ private final class MoreAppsRow: UIControl {
         super.init(frame: .zero)
         backgroundColor = Theme.panel
         layer.cornerRadius = 8
-        layer.borderWidth = 1
-        layer.borderColor = Theme.panelBorder.cgColor
+        layer.borderWidth = Theme.outline
+        layer.borderColor = Theme.ink.cgColor
 
         nameLabel.text = entry.name
         nameLabel.font = Theme.label(13, weight: .semibold)

@@ -85,9 +85,9 @@ final class AboutView: UIView {
         addGestureRecognizer(tap)
 
         panel.backgroundColor = Theme.panel
-        panel.layer.cornerRadius = Theme.cornerRadius
-        panel.layer.borderWidth = 1
-        panel.layer.borderColor = Theme.panelBorder.cgColor
+        panel.layer.cornerRadius = Theme.stripCornerRadius
+        panel.layer.borderWidth = Theme.outline
+        panel.layer.borderColor = Theme.ink.cgColor
         panel.clipsToBounds = true
         addSubview(panel)
 
@@ -105,7 +105,7 @@ final class AboutView: UIView {
         scrollView.addSubview(stack)
 
         addLabel(NSLocalizedString("about.title", comment: "About screen title"),
-                 font: Theme.label(18, weight: .bold), color: Theme.textPrimary)
+                 font: Theme.display(18), color: Theme.textPrimary)
         addLabel(NSLocalizedString("about.tagline", comment: "About screen one-line description"),
                  font: Theme.label(12), color: Theme.textPrimary)
         addLabel(NSLocalizedString("about.credit", comment: "Credit to Jonathan Taylor"),
@@ -150,11 +150,13 @@ final class AboutView: UIView {
 
         var closeConfig = UIButton.Configuration.filled()
         closeConfig.title = NSLocalizedString("about.close", comment: "Dismiss the about screen")
-        closeConfig.baseBackgroundColor = Theme.panelBorder
-        closeConfig.baseForegroundColor = Theme.textPrimary
+        closeConfig.baseBackgroundColor = Theme.cream
+        closeConfig.baseForegroundColor = Theme.ink
         closeConfig.cornerStyle = .medium
+        closeConfig.background.strokeColor = Theme.ink
+        closeConfig.background.strokeWidth = Theme.outline
         closeButton.configuration = closeConfig
-        closeButton.titleLabel?.font = Theme.label(13, weight: .semibold)
+        closeButton.titleLabel?.font = Theme.display(13)
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         panel.addSubview(closeButton)
     }
