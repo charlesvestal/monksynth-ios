@@ -33,7 +33,9 @@ struct CowCharacter: ToonCharacter {
 
     func drawToonFace(_ e: Expression) {
         if e.blinking {
-            Toon.eyeClosed(118, 104, 13)
+            // The left eye sits on the dark patch: an ink lid would vanish
+            // into it and the blink would read as a wink.
+            Toon.eyeClosed(118, 104, 13, color: Self.coat)
             Toon.eyeClosed(182, 104, 13)
         } else {
             Toon.eyeOpen(118, 102, 15)

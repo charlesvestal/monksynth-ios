@@ -22,8 +22,17 @@ final class RenderUISnapshot: XCTestCase {
         ("iPad 1024x768",          CGSize(width: 1024, height: 768)),
     ]
 
-    private func render(_ size: CGSize) -> UIImage {
+    /// `showHint` clears the "scene touched" flag for this view only (the
+    /// XYPad tests set it in the shared test-host defaults), so the sheet can
+    /// show the first-touch hint without leaving the defaults changed.
+    private func render(_ size: CGSize, character: Character, showHint: Bool) -> UIImage {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: XYPadView.hintDismissedKey)
+        if showHint { defaults.removeObject(forKey: XYPadView.hintDismissedKey) }
         let view = PluginView(frame: CGRect(origin: .zero, size: size))
+        if showHint { defaults.set(saved, forKey: XYPadView.hintDismissedKey) }
+        // Fires onCharacterChanged → the scene and the palette follow.
+        view.stage.character = character
         // Force a full layout+display pass, as a real host would.
         view.setNeedsLayout()
         view.layoutIfNeeded()
@@ -31,29 +40,33 @@ final class RenderUISnapshot: XCTestCase {
         return r.image { ctx in view.layer.render(in: ctx.cgContext) }
     }
 
+    /// Every host size, once per sample character (monk, fish, punk: a warm
+    /// sky, an underwater one, a dark one). One row per size, one column per
+    /// character; the monk column also shows the first-touch hint.
     func testWriteSizeSheet() throws {
+        let characters: [Character] = [MonkCharacter(), FishCharacter(), PunkCharacter()]
         let pad: CGFloat = 16
         let label: CGFloat = 18
-        let cols = 2
-        let rows = (Self.sizes.count + cols - 1) / cols
         let colW = Self.sizes.map(\.1.width).max()! + pad
-        let rowH = Self.sizes.map(\.1.height).max()! + pad + label
 
-        let sheet = CGSize(width: colW * CGFloat(cols) + pad,
-                           height: rowH * CGFloat(rows) + pad)
+        let sheet = CGSize(width: colW * CGFloat(characters.count) + pad,
+                           height: Self.sizes.reduce(pad) { $0 + $1.1.height + pad + label })
         let renderer = UIGraphicsImageRenderer(size: sheet)
         let image = renderer.image { ctx in
             UIColor(white: 0.06, alpha: 1).setFill()
             ctx.fill(CGRect(origin: .zero, size: sheet))
-            for (i, entry) in Self.sizes.enumerated() {
-                let (name, size) = entry
-                let x = pad + CGFloat(i % cols) * colW
-                let y = pad + CGFloat(i / cols) * rowH
-                render(size).draw(at: CGPoint(x: x, y: y + label))
-                (name as NSString).draw(
-                    at: CGPoint(x: x, y: y),
-                    withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
-                                     .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+            var y = pad
+            for (name, size) in Self.sizes {
+                for (col, character) in characters.enumerated() {
+                    let x = pad + CGFloat(col) * colW
+                    render(size, character: character, showHint: col == 0)
+                        .draw(at: CGPoint(x: x, y: y + label))
+                    ("\(name) — \(character.displayName)" as NSString).draw(
+                        at: CGPoint(x: x, y: y),
+                        withAttributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                                         .foregroundColor: UIColor(white: 0.75, alpha: 1)])
+                }
+                y += size.height + pad + label
             }
         }
         let data = try XCTUnwrap(image.pngData())

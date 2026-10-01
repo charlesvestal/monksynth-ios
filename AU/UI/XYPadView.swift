@@ -145,11 +145,17 @@ final class XYPadView: UIView {
             }
         }
         if showsHint && !isPlaying && rect.height >= 90 {
-            let s = NSAttributedString(string: NSLocalizedString("pad.hint", comment: "first-touch hint"),
-                                       attributes: [.font: Theme.display(15), .foregroundColor: UIColor.white,
-                                                    .strokeColor: ink, .strokeWidth: -4])
-            let size = s.size()
-            s.draw(at: CGPoint(x: rect.midX - size.width / 2, y: rect.minY + 12))
+            // Sticker lettering: a thick ink outline drawn first, white fill
+            // over it, so the hint reads over any sky and over scene props
+            // (a single-pass negative strokeWidth gives only a hairline).
+            let text = NSLocalizedString("pad.hint", comment: "first-touch hint")
+            let font = Theme.display(15)
+            let outline = NSAttributedString(string: text, attributes: [.font: font, .strokeColor: ink, .strokeWidth: 24])
+            let fill = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.white])
+            let size = fill.size()
+            let origin = CGPoint(x: rect.midX - size.width / 2, y: rect.minY + 12)
+            outline.draw(at: origin)
+            fill.draw(at: origin)
         }
         guard isPlaying else { return }
         let c = CGPoint(x: rect.minX + CGFloat(pitch) * rect.width, y: rect.minY + CGFloat(1 - vowel) * rect.height)
