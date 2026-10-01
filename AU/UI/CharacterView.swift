@@ -257,10 +257,21 @@ final class CharacterView: UIView {
         character.drawBody(in: stage)
 
         let pose = currentPose
-        character.drawEyes(in: stage, blinking: pose.blinking)
         // Quantised, not continuous: the mouth advances in discrete frames the
         // way the original sprite sheet did. See `quantisedVowel`.
-        drawMouth(in: stage, vowel: Self.quantisedVowel(pose.vowel))
+        let vowel = Self.quantisedVowel(pose.vowel)
+        character.drawFace(in: stage, expression: Expression(blinking: pose.blinking,
+                                                             loudness: steppedLoudness,
+                                                             vowel: vowel))
+        drawMouth(in: stage, vowel: vowel)
+        character.drawOverMouth(in: stage)
+    }
+
+    /// Loudness in four steps — the mouth swell and the brows move in
+    /// frames, never glide (see `quantisedVowel`).
+    private var steppedLoudness: CGFloat {
+        let ampSteps: Float = 4
+        return CGFloat((min(max(amplitude, 0), 1) * ampSteps).rounded() / ampSteps)
     }
 
     /// Computes the stepped amplitude swell and hands off to
@@ -275,9 +286,6 @@ final class CharacterView: UIView {
         // Step the amplitude swell too. A continuously-scaling mouth would
         // reintroduce exactly the glide that quantising the vowel removes —
         // the whole point is that the character moves in frames.
-        let ampSteps: Float = 4
-        let amp = (min(max(amplitude, 0), 1) * ampSteps).rounded() / ampSteps
-        let ampBoost = 1 + CGFloat(amp) * 0.35
-        character.drawMouth(in: stage, vowel: vowel, amplitudeBoost: ampBoost)
+        character.drawMouth(in: stage, vowel: vowel, amplitudeBoost: 1 + steppedLoudness * 0.35)
     }
 }
