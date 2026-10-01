@@ -1,3 +1,4 @@
+import UIKit
 import AVFoundation
 import XCTest
 @testable import MonkSynth
@@ -83,6 +84,66 @@ final class LocalEngineTests: XCTestCase {
         }
         XCTAssertGreaterThan(maxAbs, 0.01,
             "expected audible output after an XY-pad-style note-on, got max sample magnitude \(maxAbs)")
+    }
+
+    // MARK: - Coming back after the system stops the engine
+    //
+    // iOS stops an AVAudioEngine on an interruption (call, Siri, alarm,
+    // another app taking the session), on a route/format change, and when
+    // media services reset — all likely over a long background. Each must
+    // bring the sound back on its own; before, the app stayed silent until
+    // it was killed.
+
+    func testInterruptionEndedRestartsTheEngine() throws {
+        let engine = LocalEngine()
+        try engine.start()
+        defer { engine.stop() }
+        engine.simulateSystemStop()
+        XCTAssertFalse(engine.isRunning, "precondition")
+
+        NotificationCenter.default.post(
+            name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(),
+            userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.ended.rawValue])
+        XCTAssertTrue(engine.isRunning)
+        XCTAssertGreaterThan(captureMaxAbsSample(from: engine) { engine.noteOn(60, velocity: 0.9) }, 0.01)
+    }
+
+    func testConfigurationChangeRestartsTheEngine() throws {
+        let engine = LocalEngine()
+        try engine.start()
+        defer { engine.stop() }
+        engine.simulateSystemStop()
+        engine.postConfigurationChangeForTesting()
+        XCTAssertTrue(engine.isRunning)
+        XCTAssertGreaterThan(captureMaxAbsSample(from: engine) { engine.noteOn(60, velocity: 0.9) }, 0.01)
+    }
+
+    func testMediaServicesResetRebuildsAndRestarts() throws {
+        let engine = LocalEngine()
+        try engine.start()
+        defer { engine.stop() }
+        engine.simulateSystemStop()
+        NotificationCenter.default.post(name: AVAudioSession.mediaServicesWereResetNotification,
+                                        object: AVAudioSession.sharedInstance())
+        XCTAssertTrue(engine.isRunning)
+        XCTAssertGreaterThan(captureMaxAbsSample(from: engine) { engine.noteOn(60, velocity: 0.9) }, 0.01)
+    }
+
+    func testReturningToTheForegroundRestartsAStoppedEngine() throws {
+        let engine = LocalEngine()
+        try engine.start()
+        defer { engine.stop() }
+        engine.simulateSystemStop()
+        NotificationCenter.default.post(name: UIApplication.willEnterForegroundNotification, object: nil)
+        XCTAssertTrue(engine.isRunning)
+    }
+
+    func testAnExplicitStopIsNotUndoneByTheForeground() throws {
+        let engine = LocalEngine()
+        try engine.start()
+        engine.stop()
+        NotificationCenter.default.post(name: UIApplication.willEnterForegroundNotification, object: nil)
+        XCTAssertFalse(engine.isRunning)
     }
 
     /// `noteOn`/`noteOff` are called from CoreMIDI's own thread in
