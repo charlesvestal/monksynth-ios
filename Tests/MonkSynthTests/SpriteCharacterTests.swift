@@ -163,13 +163,13 @@ final class SpriteCharacterTests: XCTestCase {
         }
     }
 
-    // MARK: - Blink is a no-op for the monk's meditating eyes
+    // MARK: - Blink swaps the eye frame
 
-    /// The fixture (and the fallback below) render through `MonkCharacter`,
-    /// whose eyes are drawn closed in meditation regardless of `blinking` —
-    /// see `MonkCharacter.drawToonFace`. So, unlike a sprite with real open/
-    /// closed art, `blinking` must NOT change the rendered pixels here.
-    func testBlinkingDoesNotChangeTheMonksClosedEyes() {
+    /// The fixture's eye frames come from `FishCharacter` (see
+    /// `SpriteCharacterFixture`'s header comment: the monk's own eyes are
+    /// always closed in meditation, which would make this test vacuous),
+    /// so a loaded sprite's rendered pixels genuinely differ blinking vs not.
+    func testBlinkingSwapsTheEyeFrame() {
         let sprite = SpriteCharacterFixture.make()
         XCTAssertTrue(sprite.isArtLoaded)
 
@@ -179,14 +179,17 @@ final class SpriteCharacterTests: XCTestCase {
         let open = renderer.image { _ in sprite.drawEyes(in: stage, blinking: false) }
         let closed = renderer.image { _ in sprite.drawEyes(in: stage, blinking: true) }
 
-        XCTAssertEqual(open.pngData(), closed.pngData(),
-                        "the monk's eyes are closed in meditation, blink or not")
+        XCTAssertNotEqual(open.pngData(), closed.pngData(),
+                           "drawEyes(blinking: true) must render different pixels than drawEyes(blinking: false)")
     }
 
-    /// The fallback path behaves the same way — `SpriteCharacter` with
-    /// unusable art delegates `blinking` through to `MonkCharacter.drawEyes`,
-    /// which is likewise unaffected by it.
-    func testBlinkingDoesNotChangeTheFallbacksClosedEyes() {
+    /// With unusable art, `SpriteCharacter` falls back to `MonkCharacter`
+    /// itself (`SpriteCharacter.fallback`) — whose eyes are always closed
+    /// regardless of `blinking` (see `MonkCharacter.drawToonFace`), so the
+    /// real guarantee to test isn't "blink changes something" but that the
+    /// fallback renders pixel-identically to `MonkCharacter` directly, for
+    /// either blink state.
+    func testFallbackEyesRenderIdenticallyToMonkCharacter() {
         let manifest = SpriteManifest(id: "broken", displayName: "Broken",
                                        bodyImageName: "missing-body",
                                        eyeOpenImageName: "missing-eye-open",
@@ -198,9 +201,12 @@ final class SpriteCharacterTests: XCTestCase {
 
         let stage = CGRect(origin: .zero, size: CGSize(width: 300, height: 300))
         let renderer = UIGraphicsImageRenderer(size: stage.size)
-        let open = renderer.image { _ in sprite.drawEyes(in: stage, blinking: false) }
-        let closed = renderer.image { _ in sprite.drawEyes(in: stage, blinking: true) }
-        XCTAssertEqual(open.pngData(), closed.pngData())
+        for blinking in [false, true] {
+            let spriteEyes = renderer.image { _ in sprite.drawEyes(in: stage, blinking: blinking) }
+            let monkEyes = renderer.image { _ in MonkCharacter().drawEyes(in: stage, blinking: blinking) }
+            XCTAssertEqual(spriteEyes.pngData(), monkEyes.pngData(),
+                            "fallback eyes should be byte-identical to MonkCharacter's, blinking \(blinking)")
+        }
     }
 
     // MARK: - Missing/corrupt art degrades gracefully
