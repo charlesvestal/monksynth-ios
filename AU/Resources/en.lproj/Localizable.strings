@@ -3,6 +3,7 @@
 
 /* Accessibility label for the XY performance pad. */
 "pad.label" = "Performance pad. Drag horizontally for pitch, vertically for vowel.";
+"pad.hint" = "touch to sing";
 
 /* Accessibility label for the character selector's ‹ arrow button that
    steps to the previous character. */
