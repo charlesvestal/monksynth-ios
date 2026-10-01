@@ -379,6 +379,12 @@ void monk_voice_note_on(MonkVoice *v, float pitch_hz, float velocity) {
     v->target_pitch = monk_hz_to_note(pitch_hz);
     if (!was_active) {
         v->current_pitch = v->target_pitch;
+        /* The vowel ramp only advances while the voice is processing, so a
+         * vowel set while silent leaves current_vowel frozen at the last note's
+         * value; without this the new note sings that old formant and morphs
+         * across. Start where the pitch starts: on target. */
+        v->current_vowel = v->target_vowel;
+        v->vowel_ramp_ticks = 0;
         v->grain_dirty = true;
         /* Don't clear the overlap buffer — it drains naturally (each sample
          * is zeroed after being read). Clearing it on retrigger causes a pop
