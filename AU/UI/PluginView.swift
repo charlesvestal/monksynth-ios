@@ -120,7 +120,7 @@ final class PluginView: UIView {
     /// dimensions (see `layoutSubviews`) — a button's own frame already IS
     /// its hit area, so a single `UIButton` gets a big tap target for free.
     private let infoButton = UIButton(type: .system)
-    private let infoDisc = UIView()
+    private let infoDisc = StickerShapeView(fill: Theme.panel)
     private var aboutView: AboutView?
     private var moreAppsView: MoreAppsView?
     private var characterDropdownView: CharacterDropdownView?
@@ -152,7 +152,7 @@ final class PluginView: UIView {
     /// lives on `drawerHandle` itself — this view exists only so there's
     /// something to look at where the much-larger invisible hit region
     /// actually is. Positioned by `handlePillFrame`.
-    private let drawerHandleBar = UIView()
+    private let drawerHandleBar = StickerShapeView(fill: Theme.cream)
 
     /// A chevron, not a featureless dash: the fact that a control can
     /// move only shows up once you've already found it and dragged it, but
@@ -221,11 +221,6 @@ final class PluginView: UIView {
             UITapGestureRecognizer(target: self, action: #selector(toggleDrawer)))
         addSubview(drawerHandle)
 
-        drawerHandleBar.backgroundColor = Theme.cream
-        drawerHandleBar.layer.cornerRadius = Self.handlePillSize.height / 2
-        drawerHandleBar.layer.borderWidth = Theme.outline
-        drawerHandleBar.layer.borderColor = Theme.ink.cgColor
-        drawerHandleBar.isUserInteractionEnabled = false
         drawerHandle.addSubview(drawerHandleBar)
 
         drawerHandleChevron.tintColor = Theme.ink
@@ -263,10 +258,6 @@ final class PluginView: UIView {
         let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .heavy)
         infoButton.setImage(UIImage(systemName: "info", withConfiguration: config), for: .normal)
         infoButton.tintColor = Theme.textDim
-        infoDisc.isUserInteractionEnabled = false
-        infoDisc.backgroundColor = Theme.panel
-        infoDisc.layer.borderColor = Theme.ink.cgColor
-        infoDisc.layer.borderWidth = Theme.outline
         infoButton.insertSubview(infoDisc, at: 0)
         infoButton.accessibilityLabel = NSLocalizedString("about.info", comment: "Open the about screen")
         infoButton.addTarget(self, action: #selector(showAbout), for: .touchUpInside)
@@ -659,7 +650,6 @@ final class PluginView: UIView {
         let disc = CharacterSelector.arrowDiscSize
         infoDisc.frame = CGRect(x: (l.infoButton.width - disc) / 2, y: (l.infoButton.height - disc) / 2,
                                 width: disc, height: disc)
-        infoDisc.layer.cornerRadius = disc / 2
         infoButton.layoutIfNeeded()
         infoButton.sendSubviewToBack(infoDisc)
         bringSubviewToFront(infoButton)

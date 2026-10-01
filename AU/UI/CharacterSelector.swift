@@ -75,8 +75,8 @@ final class CharacterSelector: UIView {
     /// The round sticker faces behind the arrow glyphs. Non-interactive
     /// subviews at the back of each button, so the buttons' own frames stay
     /// the (larger) tap targets.
-    private let leftDisc = UIView()
-    private let rightDisc = UIView()
+    private let leftDisc = StickerShapeView(fill: Theme.cream, dropShadow: true)
+    private let rightDisc = StickerShapeView(fill: Theme.cream, dropShadow: true)
     /// The accent chevron after the name, drawn on `nameControl`'s layer.
     private let chevron = CAShapeLayer()
 
@@ -116,14 +116,6 @@ final class CharacterSelector: UIView {
         rightButton.setImage(UIImage(systemName: "chevron.right", withConfiguration: arrowConfig), for: .normal)
         for (button, disc) in [(leftButton, leftDisc), (rightButton, rightDisc)] {
             button.tintColor = Theme.ink
-            disc.isUserInteractionEnabled = false
-            disc.backgroundColor = Theme.cream
-            disc.layer.borderColor = Theme.ink.cgColor
-            disc.layer.borderWidth = Theme.outline
-            disc.layer.shadowColor = Theme.ink.cgColor
-            disc.layer.shadowOffset = CGSize(width: 0, height: 3)
-            disc.layer.shadowOpacity = 1
-            disc.layer.shadowRadius = 0
             button.insertSubview(disc, at: 0)
             addSubview(button)
         }
@@ -222,7 +214,6 @@ final class CharacterSelector: UIView {
         for (button, view) in [(leftButton, leftDisc), (rightButton, rightDisc)] {
             view.frame = CGRect(x: (button.bounds.width - disc) / 2, y: (button.bounds.height - disc) / 2 - 1.5,
                                 width: disc, height: disc)
-            view.layer.cornerRadius = disc / 2
             // UIButton adds its image view lazily (at the back) during its
             // own layout; lay it out first so the disc can go behind it.
             button.layoutIfNeeded()
