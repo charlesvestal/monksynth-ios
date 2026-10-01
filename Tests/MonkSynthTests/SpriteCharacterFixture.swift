@@ -2,10 +2,17 @@ import UIKit
 @testable import MonkSynth
 
 /// Generates a real, working `SpriteCharacter` at test time by rendering
-/// `MonkCharacter`'s own drawing code into a body image, two eye-state
-/// overlays, and a set of mouth frame images — proof that the sprite path
-/// is genuinely exercised, not theoretical, without needing any hand-drawn
-/// art. Everything is built as in-memory `UIImage`s via
+/// `MonkCharacter`'s own drawing code into a body image and a set of mouth
+/// frame images — proof that the sprite path is genuinely exercised, not
+/// theoretical, without needing any hand-drawn art. The two eye-state
+/// overlays are rendered from `FishCharacter` instead: the monk's eyes are
+/// always closed in meditation (`MonkCharacter.drawToonFace` ignores
+/// `blinking`), which would make the open/closed frames identical and
+/// leave `SpriteCharacter`'s blink → eye-frame swap untested; the fish's
+/// `drawToonFace` genuinely draws different eyes for open vs. closed. Mixing
+/// sources like this is fine — `SpriteCharacter` treats body/eyes/mouth as
+/// independent image layers, so nothing here depends on them coming from the
+/// same character. Everything is built as in-memory `UIImage`s via
 /// `DictionaryImageLoader`; nothing touches disk or an asset catalog.
 ///
 /// Deliberately NOT added to `CharacterRegistry.all` (see that type's doc
@@ -85,11 +92,13 @@ enum SpriteCharacterFixture {
         }
     }
 
+    /// Rendered from `FishCharacter`, not the monk — see this file's header
+    /// comment for why.
     private static func renderEyes(blinking: Bool) -> UIImage {
         let stage = CGRect(origin: .zero, size: bodyCanvas)
         let renderer = UIGraphicsImageRenderer(size: bodyCanvas)
         return renderer.image { _ in
-            MonkCharacter().drawEyes(in: stage, blinking: blinking)
+            FishCharacter().drawEyes(in: stage, blinking: blinking)
         }
     }
 
