@@ -15,6 +15,16 @@ final class XYPadView: UIView {
     private(set) var isPlaying = false
     private var activeTouch: UITouch?
 
+    /// The touch marker — two white ripple rings around an accent dot with
+    /// an ink edge — on its own small layer. Touch begin/move only moves
+    /// this layer: the pad covers the whole scene, so repainting it at touch
+    /// rate would redraw a full-scene bitmap for a 64pt mark. Hidden while
+    /// no note is playing.
+    let touchMarker = CALayer()
+    private let markerDot = CAShapeLayer()
+    /// Outer ring radius 30 + half its 3pt stroke, rounded up.
+    private static let markerSize: CGFloat = 64
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
@@ -22,11 +32,53 @@ final class XYPadView: UIView {
         backgroundColor = .clear
         // See KnobView: without .redraw, a host resizing the AUv3 view scales
         // the stale drawing instead of re-running draw(_:), skewing the
-        // ticks, vowel scale and touch marker.
+        // ticks and vowel scale.
         contentMode = .redraw
         isAccessibilityElement = true
         accessibilityLabel = NSLocalizedString("pad.label", comment: "XY pad")
         accessibilityTraits = .allowsDirectInteraction
+        installTouchMarker()
+    }
+
+    private func installTouchMarker() {
+        let size = Self.markerSize
+        touchMarker.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+        touchMarker.isHidden = true
+        let c = size / 2
+        let rings: [(radius: CGFloat, alpha: CGFloat)] = [(30, 0.45), (20, 0.8)]
+        for ring in rings {
+            let l = CAShapeLayer()
+            l.path = Toon.circle(c, c, ring.radius).cgPath
+            l.fillColor = nil
+            l.strokeColor = UIColor.white.withAlphaComponent(ring.alpha).cgColor
+            l.lineWidth = 3
+            touchMarker.addSublayer(l)
+        }
+        markerDot.path = Toon.circle(c, c, 10).cgPath
+        markerDot.fillColor = accent.cgColor
+        markerDot.strokeColor = Toon.ink.cgColor
+        markerDot.lineWidth = 4
+        touchMarker.addSublayer(markerDot)
+        layer.addSublayer(touchMarker)
+    }
+
+    /// Shows the marker at the current (pitch, vowel), or hides it when no
+    /// note is playing. Implicit animations are off so it tracks the finger
+    /// instead of easing after it.
+    private func updateTouchMarker() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        touchMarker.isHidden = !isPlaying
+        if isPlaying {
+            touchMarker.position = CGPoint(x: bounds.minX + CGFloat(pitch) * bounds.width,
+                                           y: bounds.minY + CGFloat(1 - vowel) * bounds.height)
+        }
+        CATransaction.commit()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateTouchMarker()
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -66,9 +118,10 @@ final class XYPadView: UIView {
             if showsHint {
                 showsHint = false
                 UserDefaults.standard.set(true, forKey: Self.hintDismissedKey)
+                setNeedsDisplay()
             }
         }
-        setNeedsDisplay()
+        updateTouchMarker()
     }
 
     func moveTouch(at point: CGPoint, in size: CGSize) {
@@ -76,13 +129,13 @@ final class XYPadView: UIView {
         pitch = p; vowel = v
         onParameterChange?(.xyPitchTarget, p)
         onParameterChange?(.xyVowel, v)
-        setNeedsDisplay()
+        updateTouchMarker()
     }
 
     func endTouch() {
         isPlaying = false
         onParameterChange?(.xyNoteOn, 0.0)
-        setNeedsDisplay()
+        updateTouchMarker()
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -107,7 +160,14 @@ final class XYPadView: UIView {
 
     /// The touch marker's dot colour — the current character's accent, set
     /// by `SceneView` on character change.
-    var accent: UIColor = Theme.defaultAccent { didSet { setNeedsDisplay() } }
+    var accent: UIColor = Theme.defaultAccent {
+        didSet {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            markerDot.fillColor = accent.cgColor
+            CATransaction.commit()
+        }
+    }
 
     /// UserDefaults key: set once the scene has been touched; until then a
     /// small "touch to sing" hint shows (the scene no longer looks like a pad).
@@ -115,8 +175,9 @@ final class XYPadView: UIView {
     private var showsHint = !UserDefaults.standard.bool(forKey: XYPadView.hintDismissedKey)
 
     /// Transparent overlay over the scene: pitch ticks along the bottom, a
-    /// vowel scale up the right edge, the first-touch hint, and — while
-    /// touching — ripple rings around an accent dot. No box, no crosshair.
+    /// vowel scale up the right edge, and the first-touch hint. No box, no
+    /// crosshair. The touch marker is `touchMarker`, not drawn here, so this
+    /// reruns only on a resize (`contentMode = .redraw`) or hint dismissal.
     override func draw(_ rect: CGRect) {
         let rect = bounds
         guard rect.width > 0, rect.height > 0 else { return }
@@ -144,7 +205,7 @@ final class XYPadView: UIView {
                 s.draw(at: CGPoint(x: pill.minX + 6, y: pill.minY + 2))
             }
         }
-        if showsHint && !isPlaying && rect.height >= 90 {
+        if showsHint && rect.height >= 90 {
             // Sticker lettering: a thick ink outline drawn first, white fill
             // over it, so the hint reads over any sky and over scene props
             // (a single-pass negative strokeWidth gives only a hairline).
@@ -157,10 +218,5 @@ final class XYPadView: UIView {
             outline.draw(at: origin)
             fill.draw(at: origin)
         }
-        guard isPlaying else { return }
-        let c = CGPoint(x: rect.minX + CGFloat(pitch) * rect.width, y: rect.minY + CGFloat(1 - vowel) * rect.height)
-        Toon.stroke(Toon.circle(c.x, c.y, 30), width: 3, color: UIColor.white.withAlphaComponent(0.45))
-        Toon.stroke(Toon.circle(c.x, c.y, 20), width: 3, color: UIColor.white.withAlphaComponent(0.8))
-        Toon.shape(Toon.circle(c.x, c.y, 10), fill: accent, lineWidth: 4, shaded: false)
     }
 }
