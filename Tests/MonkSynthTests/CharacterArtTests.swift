@@ -9,11 +9,15 @@ final class CharacterArtTests: XCTestCase {
 
     static var toons: [ToonCharacter] { CharacterRegistry.all.compactMap { $0 as? ToonCharacter } }
 
-    /// Task 3 expects these six; Task 4 changes this to all twelve.
-    static let expectedToonIDs: Set<String> = ["monk", "fish", "unicorn", "girl", "oldman", "cow"]
+    static let expectedToonIDs: Set<String> = ["monk", "fish", "unicorn", "girl", "oldman", "cow",
+                                               "firefighter", "punk", "dog", "pizza", "ghost", "cat"]
 
     func testExpectedCharactersAreToons() {
         XCTAssertTrue(Self.expectedToonIDs.isSubset(of: Set(Self.toons.map(\.id))))
+    }
+
+    func testEveryRegisteredCharacterIsAToon() {
+        XCTAssertEqual(Self.toons.count, CharacterRegistry.all.count)
     }
 
     /// Renders the figure alone and returns an alpha mask (true = opaque).
