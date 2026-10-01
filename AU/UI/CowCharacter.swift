@@ -43,15 +43,12 @@ struct CowCharacter: ToonCharacter {
 
     /// A pasture: a red barn behind, a split-rail fence running along the right.
     func drawBackdrop(in rect: CGRect, stage: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
-        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
-        let gy = (H * 0.72).rounded(), cx = W / 2, L = W * 0.12, R = W * 0.88
-        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
-        Backdrop.cloud(cx + W * 0.25, H * 0.2, 0.6, u: u)
-        Backdrop.barn(L + 20, gy, H / 330, u: u)
-        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
-        Backdrop.fence(R - 110, W + 10, gy + 4, u: u)
-        ctx.restoreGState()
+        Backdrop.scene(in: rect, stage: stage, palette: palette) { W, H, u in
+            let gy = (H * 0.72).rounded(), cx = W / 2, L = W * 0.12, R = W * 0.88
+            Backdrop.cloud(cx + W * 0.25, H * 0.2, 0.6, u: u)
+            Backdrop.barn(L + 20, gy, H / 330, u: u)
+            Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: self.palette.ground, u: u)
+            Backdrop.fence(R - 110, W + 10, gy + 4, u: u)
+        }
     }
 }

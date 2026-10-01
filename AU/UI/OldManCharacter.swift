@@ -46,15 +46,12 @@ struct OldManCharacter: ToonCharacter {
 
     /// A wallpapered room: striped wall, a night window, a floor lamp.
     func drawBackdrop(in rect: CGRect, stage: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
-        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
-        let gy = (H * 0.72).rounded(), L = W * 0.12, R = W * 0.88
-        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
-        Backdrop.stripes(W, gy, u: u)
-        Backdrop.window(L + 34, gy - H * 0.2, min(90, W * 0.2), H * 0.32, u: u)
-        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
-        Backdrop.lamp(R - 6, gy + 4, H / 300, u: u)
-        ctx.restoreGState()
+        Backdrop.scene(in: rect, stage: stage, palette: palette) { W, H, u in
+            let gy = (H * 0.72).rounded(), L = W * 0.12, R = W * 0.88
+            Backdrop.stripes(W, gy, u: u)
+            Backdrop.window(L + 34, gy - H * 0.2, min(90, W * 0.2), H * 0.32, u: u)
+            Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: self.palette.ground, u: u)
+            Backdrop.lamp(R - 6, gy + 4, H / 300, u: u)
+        }
     }
 }

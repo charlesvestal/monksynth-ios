@@ -44,15 +44,12 @@ struct DogCharacter: ToonCharacter {
 
     /// A backyard: a cloud drifting, a doghouse on the right, a bone on the left.
     func drawBackdrop(in rect: CGRect, stage: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
-        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
-        let gy = (H * 0.72).rounded(), L = W * 0.12, R = W * 0.88
-        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
-        Backdrop.cloud(L + 20, H * 0.2, 0.6, u: u)
-        Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: palette.ground, u: u)
-        Backdrop.doghouse(R - 16, gy + 6, H / 300, u: u)
-        Backdrop.bone(L + 10, gy + 30, 0.8, u: u)
-        ctx.restoreGState()
+        Backdrop.scene(in: rect, stage: stage, palette: palette) { W, H, u in
+            let gy = (H * 0.72).rounded(), L = W * 0.12, R = W * 0.88
+            Backdrop.cloud(L + 20, H * 0.2, 0.6, u: u)
+            Backdrop.ground(CGRect(x: 0, y: 0, width: W, height: H), y: gy, color: self.palette.ground, u: u)
+            Backdrop.doghouse(R - 16, gy + 6, H / 300, u: u)
+            Backdrop.bone(L + 10, gy + 30, 0.8, u: u)
+        }
     }
 }

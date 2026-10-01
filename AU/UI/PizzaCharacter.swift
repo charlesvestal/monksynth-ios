@@ -49,13 +49,10 @@ struct PizzaCharacter: ToonCharacter {
 
     /// A pizzeria counter: the checkerboard tablecloth doubles as the ground, with a candle lit on the right.
     func drawBackdrop(in rect: CGRect, stage: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        ctx.saveGState(); ctx.clip(to: rect); ctx.translateBy(x: rect.minX, y: rect.minY)
-        let W = rect.width, H = rect.height, u = stage.width / Toon.stageUnits
-        let gy = (H * 0.72).rounded(), R = W * 0.88
-        Backdrop.sky(CGRect(x: 0, y: 0, width: W, height: H), top: palette.skyTop, bottom: palette.skyBottom)
-        Backdrop.checker(W, H, gy, u: u)
-        Backdrop.candle(R - 10, gy + 10, H / 300, u: u)
-        ctx.restoreGState()
+        Backdrop.scene(in: rect, stage: stage, palette: palette) { W, H, u in
+            let gy = (H * 0.72).rounded(), R = W * 0.88
+            Backdrop.checker(W, H, gy, u: u)
+            Backdrop.candle(R - 10, gy + 10, H / 300, u: u)
+        }
     }
 }
