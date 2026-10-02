@@ -99,7 +99,7 @@ final class PitchSnapTests: XCTestCase {
 
     func testTheKnobIsOnThePitchPageNextToTune() {
         let page = ControlPages.pages.first { $0.title == "PITCH" }
-        XCTAssertEqual(page?.params, [.pitchBend, .pitchSnap, .pitchBendRouting, .vibrato, .vibratoRate])
+        XCTAssertEqual(page?.params, [.pitchBend, .pitchSnap, .portTime, .vibrato, .vibratoRate])
         XCTAssertEqual(Param.pitchBend.name, "Tune")
         XCTAssertEqual(Param.pitchSnap.name, "Snap")
         XCTAssertEqual(Param.pitchSnap.formatted(0.5), "50%")

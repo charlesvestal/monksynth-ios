@@ -41,9 +41,9 @@ enum Param: UInt64, CaseIterable {
     /// Host-facing name. Matches upstream's STR16 names so presets read the same.
     var name: String {
         switch self {
-        case .portTime: return "PortTime"
+        case .portTime: return "Glide"
         case .vowel: return "Vowel"
-        case .delay: return "Delay"
+        case .delay: return "Delay Amt"
         case .headSize: return "HeadSize"
         case .vibrato: return "Vibrato"
         case .vibratoRate: return "Vib Rate"
@@ -52,11 +52,11 @@ enum Param: UInt64, CaseIterable {
         case .decay: return "Decay"
         case .sustain: return "Sustain"
         case .release: return "Release"
-        case .unison: return "Unison"
+        case .unison: return "Voices"
         case .unisonDetune: return "Detune"
         case .delayRate: return "Delay Rate"
         case .level: return "Level"
-        case .unisonVoiceSpread: return "Voice Spread"
+        case .unisonVoiceSpread: return "Spread"
         case .xyNoteOn: return "XY Note"
         case .xyVowel: return "XY Vowel"
         case .xyPitchTarget: return "XY Pitch"
@@ -121,7 +121,10 @@ enum Param: UInt64, CaseIterable {
     /// Hidden from the on-screen control pages (still host-automatable).
     var isHiddenFromUI: Bool {
         switch self {
-        case .xyNoteOn, .xyVowel, .xyPitchTarget, .pitchWheelRaw: return true
+        // Pitch-wheel routing stays a parameter (sessions and the wheel's
+        // default Vowel routing keep working) but has no knob: as a control
+        // it read as noise.
+        case .xyNoteOn, .xyVowel, .xyPitchTarget, .pitchWheelRaw, .pitchBendRouting: return true
         default: return false
         }
     }
