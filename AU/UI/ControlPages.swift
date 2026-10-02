@@ -1,7 +1,7 @@
 import UIKit
 
 /// The five-page parameter surface: one tab bar plus a row of knobs per
-/// page, covering all 18 non-hidden parameters (see `Param.isHiddenFromUI`).
+/// page, covering every non-hidden parameter (see `Param.isHiddenFromUI`).
 final class ControlPages: UIView {
 
     struct Page {
@@ -11,11 +11,11 @@ final class ControlPages: UIView {
 
     /// Every non-hidden parameter appears exactly once. Asserted in tests.
     static let pages: [Page] = [
-        Page(title: "MAIN",   params: [.vowel, .headSize, .level, .portTime, .aspiration]),
+        Page(title: "MAIN",   params: [.vowel, .headSize, .aspiration, .level]),
         Page(title: "ENV",    params: [.attack, .decay, .sustain, .release]),
         Page(title: "UNISON", params: [.unison, .unisonDetune, .unisonVoiceSpread]),
         Page(title: "DELAY",  params: [.delay, .delayRate]),
-        Page(title: "PITCH",  params: [.pitchBend, .pitchSnap, .pitchBendRouting, .vibrato, .vibratoRate]),
+        Page(title: "PITCH",  params: [.pitchBend, .pitchSnap, .portTime, .vibrato, .vibratoRate]),
     ]
 
     var onParameterChange: ((Param, Float) -> Void)?
