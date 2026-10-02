@@ -8,7 +8,7 @@ import UIKit
 /// mapping. Sings in a backyard by its doghouse.
 struct DogCharacter: ToonCharacter {
     let id = "dog"
-    let displayName = "Dog"
+    let displayName = "Fipsy"
     let palette = Palette(accent: UIColor(hex: 0xFF7A3D), skyTop: UIColor(hex: 0x9FD6F2),
                           skyBottom: UIColor(hex: 0xE9F6FF), ground: UIColor(hex: 0x8BCF68))
     let mouthStyle = ToonMouth.Style(x: 150, y: 186, scale: 0.72, variant: .muzzle)

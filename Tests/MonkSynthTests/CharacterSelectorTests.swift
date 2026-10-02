@@ -367,13 +367,13 @@ final class CharacterSelectorTests: XCTestCase {
         let view = PluginView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         view.setNeedsLayout(); view.layoutIfNeeded()
         let control = try XCTUnwrap(nameControl(in: view.characterSelector))
-        XCTAssertEqual(control.accessibilityValue, "Monk")
+        XCTAssertEqual(control.accessibilityValue, MonkCharacter().displayName)
 
         arrowButtons(in: view.characterSelector).right.sendActions(for: .touchUpInside)
-        XCTAssertEqual(control.accessibilityValue, "Fish")
+        XCTAssertEqual(control.accessibilityValue, FishCharacter().displayName)
 
         view.stage.character = CowCharacter()   // programmatic, e.g. a restored session
-        XCTAssertEqual(control.accessibilityValue, "Cow")
+        XCTAssertEqual(control.accessibilityValue, CowCharacter().displayName)
     }
 
     // MARK: - Never collides with infoButton, even with a long name

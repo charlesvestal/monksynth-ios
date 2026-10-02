@@ -5,7 +5,7 @@ import UIKit
 /// mouth aperture opens inside of. Sings on a rainbow meadow.
 struct UnicornCharacter: ToonCharacter {
     let id = "unicorn"
-    let displayName = "Unicorn"
+    let displayName = "Philip"
     let palette = Palette(accent: UIColor(hex: 0xB77CF2), skyTop: UIColor(hex: 0xBFE3FF),
                           skyBottom: UIColor(hex: 0xFFE6F4), ground: UIColor(hex: 0x9EDC8B))
     let mouthStyle = ToonMouth.Style(x: 150, y: 190, scale: 0.75, variant: .muzzle)

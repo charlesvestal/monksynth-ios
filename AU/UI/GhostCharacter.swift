@@ -8,7 +8,7 @@ import UIKit
 /// graveyard.
 struct GhostCharacter: ToonCharacter {
     let id = "ghost"
-    let displayName = "Ghost"
+    let displayName = "Marley"
     let palette = Palette(accent: UIColor(hex: 0x9AE6FF), skyTop: UIColor(hex: 0x1C2250),
                           skyBottom: UIColor(hex: 0x3A3F7C), ground: UIColor(hex: 0x2C4A3E))
     let mouthStyle = ToonMouth.Style(x: 150, y: 178, scale: 0.85, variant: .bare)

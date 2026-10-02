@@ -8,7 +8,7 @@ import UIKit
 /// measurement and the full mapping. Sings on a checkered picnic table.
 struct PizzaCharacter: ToonCharacter {
     let id = "pizza"
-    let displayName = "Pizza"
+    let displayName = "Peppo"
     let palette = Palette(accent: UIColor(hex: 0xFF4B3A), skyTop: UIColor(hex: 0xF6E4C4),
                           skyBottom: UIColor(hex: 0xEFD5AA), ground: UIColor(hex: 0xE04B3C))
     let mouthStyle = ToonMouth.Style(x: 150, y: 168, scale: 0.75, variant: .bare)

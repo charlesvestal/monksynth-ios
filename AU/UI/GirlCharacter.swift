@@ -5,7 +5,7 @@ import UIKit
 /// sunny playground.
 struct GirlCharacter: ToonCharacter {
     let id = "girl"
-    let displayName = "Little Girl"
+    let displayName = "Suze"
     let palette = Palette(accent: UIColor(hex: 0xFF5FA2), skyTop: UIColor(hex: 0x8FD3F7),
                           skyBottom: UIColor(hex: 0xE6F7FF), ground: UIColor(hex: 0x7CC96A))
     let mouthStyle = ToonMouth.Style(x: 150, y: 170, scale: 0.7, variant: .lips, lip: UIColor(hex: 0xE2557A))

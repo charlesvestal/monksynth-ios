@@ -8,7 +8,7 @@ import UIKit
 /// mapping. Sings on a windowsill at night.
 struct CatCharacter: ToonCharacter {
     let id = "cat"
-    let displayName = "Cat"
+    let displayName = "Razorface"
     let palette = Palette(accent: UIColor(hex: 0x7EE07E), skyTop: UIColor(hex: 0x2E2546),
                           skyBottom: UIColor(hex: 0x4A3B66), ground: UIColor(hex: 0xC79A6A))
     let mouthStyle = ToonMouth.Style(x: 150, y: 172, scale: 0.6, variant: .muzzle)

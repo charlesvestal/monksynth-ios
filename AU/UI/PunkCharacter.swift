@@ -8,7 +8,7 @@ import UIKit
 /// mapping. Sings on a club stage between the speaker stacks.
 struct PunkCharacter: ToonCharacter {
     let id = "punk"
-    let displayName = "Punk"
+    let displayName = "Snider"
     let palette = Palette(accent: UIColor(hex: 0x7DFF3A), skyTop: UIColor(hex: 0x2A1F44),
                           skyBottom: UIColor(hex: 0x130D20), ground: UIColor(hex: 0x3B2F2B))
     let mouthStyle = ToonMouth.Style(x: 150, y: 180, scale: 0.75, variant: .lips, lip: UIColor(hex: 0x6B3A6A))

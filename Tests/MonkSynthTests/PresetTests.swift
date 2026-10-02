@@ -63,7 +63,7 @@ final class PresetTests: XCTestCase {
         let au = try makeAU()
         let fishIndex = try XCTUnwrap(CharacterRegistry.all.firstIndex(where: { $0.id == "fish" }))
         let preset = try XCTUnwrap(au.factoryPresets?[fishIndex])
-        XCTAssertEqual(preset.name, "Fish")
+        XCTAssertEqual(preset.name, FishCharacter().displayName)
 
         au.currentPreset = preset
 
@@ -87,7 +87,7 @@ final class PresetTests: XCTestCase {
         let au = try makeAU()
         let dogIndex = try XCTUnwrap(CharacterRegistry.all.firstIndex(where: { $0.id == "dog" }))
         let preset = try XCTUnwrap(au.factoryPresets?[dogIndex])
-        XCTAssertEqual(preset.name, "Dog")
+        XCTAssertEqual(preset.name, DogCharacter().displayName)
 
         au.currentPreset = preset
 
@@ -388,7 +388,7 @@ final class PresetTests: XCTestCase {
 
         let catIndex = try XCTUnwrap(CharacterRegistry.all.firstIndex(where: { $0.id == "cat" }))
         let cat = try XCTUnwrap(au.factoryPresets?[catIndex])
-        XCTAssertEqual(cat.name, "Cat")
+        XCTAssertEqual(cat.name, CatCharacter().displayName)
         au.currentPreset = cat
         XCTAssertEqual(au.characterID, "cat")
         let expected = try XCTUnwrap(FactoryVoiceTable.values(for: "cat"))

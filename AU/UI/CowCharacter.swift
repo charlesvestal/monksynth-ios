@@ -6,7 +6,7 @@ import UIKit
 /// inside of. Sings in a pasture.
 struct CowCharacter: ToonCharacter {
     let id = "cow"
-    let displayName = "Cow"
+    let displayName = "Bess"
     let palette = Palette(accent: UIColor(hex: 0x5AA7D8), skyTop: UIColor(hex: 0x9FD6F2),
                           skyBottom: UIColor(hex: 0xE3F4FB), ground: UIColor(hex: 0x86CD66))
     let mouthStyle = ToonMouth.Style(x: 150, y: 196, scale: 0.8, variant: .muzzle)
