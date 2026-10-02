@@ -15,7 +15,7 @@ final class ControlPages: UIView {
         Page(title: "ENV",    params: [.attack, .decay, .sustain, .release]),
         Page(title: "UNISON", params: [.unison, .unisonDetune, .unisonVoiceSpread]),
         Page(title: "DELAY",  params: [.delay, .delayRate]),
-        Page(title: "BEND",   params: [.pitchBend, .pitchBendRouting, .vibrato, .vibratoRate]),
+        Page(title: "PITCH",  params: [.pitchBend, .pitchSnap, .pitchBendRouting, .vibrato, .vibratoRate]),
     ]
 
     var onParameterChange: ((Param, Float) -> Void)?

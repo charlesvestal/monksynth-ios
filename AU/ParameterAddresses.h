@@ -1,5 +1,6 @@
 // Parameter addresses, shared by the C shadow array and Swift.
-// Order and values MUST match upstream cpp/src/plugin_cids.h.
+// Order and values MUST match upstream cpp/src/plugin_cids.h for every address
+// upstream defines; MonkSynth's own additions are appended after them.
 #ifndef PARAMETER_ADDRESSES_H
 #define PARAMETER_ADDRESSES_H
 
@@ -28,7 +29,9 @@ typedef enum {
     kParamPitchBend         = 19,
     kParamPitchBendRouting  = 20,
     kParamPitchWheelRaw     = 21,
-    kParamCount             = 22
+    // MonkSynth-only additions go after upstream's, so its addresses never move.
+    kParamPitchSnap         = 22,
+    kParamCount             = 23
 } ParameterAddress;
 
 #endif

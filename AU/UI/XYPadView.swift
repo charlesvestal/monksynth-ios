@@ -182,10 +182,13 @@ final class XYPadView: UIView {
         let rect = bounds
         guard rect.width > 0, rect.height > 0 else { return }
         let ink = Toon.ink
-        // Pitch ticks along the bottom: 25 marks, octaves tallest.
-        for i in 0...24 {
-            let x = 12 + (rect.width - 24) * CGFloat(i) / 24
-            let h: CGFloat = i % 12 == 0 ? 16 : (i % 2 == 1 ? 7 : 11)
+        // Pitch ticks along the bottom: one per semitone of the pad's octave
+        // (C3 at the left edge, C4 at the right), at the exact x a touch
+        // plays — so a snapped note lands on a tick. Natural notes taller,
+        // like a keyboard. The two C's sit on the edges, under the border.
+        for i in 1...11 {
+            let x = rect.width * CGFloat(i) / 12
+            let h: CGFloat = [1, 3, 6, 8, 10].contains(i) ? 7 : 12
             let p = UIBezierPath()
             p.move(to: CGPoint(x: x, y: rect.maxY - 4)); p.addLine(to: CGPoint(x: x, y: rect.maxY - h))
             Toon.stroke(p, width: 2, color: UIColor.white.withAlphaComponent(0.75))

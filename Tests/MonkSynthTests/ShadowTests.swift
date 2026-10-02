@@ -15,7 +15,7 @@ final class ShadowTests: XCTestCase {
 
     func testTreeHasEveryParameter() throws {
         let au = try makeAU()
-        XCTAssertEqual(au.parameterTree?.allParameters.count, 22)
+        XCTAssertEqual(au.parameterTree?.allParameters.count, Int(kParamCount.rawValue))
     }
 
     func testSettingParameterUpdatesShadow() throws {

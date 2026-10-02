@@ -31,6 +31,7 @@ final class RenderContext {
     private var lastValues: [Float]
     private var xyNoteActive = false
     private var xyPendingPitch: Float = 0.5
+    private var pitchSnap: Float = 0
     private var midiNoteCount: Int32 = 0
 
     /// Published to the UI after each render. Read on the main thread.
@@ -59,6 +60,7 @@ final class RenderContext {
         for i in 0..<paramCount { lastValues[i] = .nan }
         xyNoteActive = false
         xyPendingPitch = 0.5
+        pitchSnap = 0
         midiNoteCount = 0
     }
 
@@ -70,6 +72,9 @@ final class RenderContext {
     // MARK: - Render thread
 
     private static func xyHz(_ v: Float) -> Float { 130.81 * powf(2.0, v) }
+
+    /// The pad's pitch in Hz, after Pitch Snap.
+    private var xyTargetHz: Float { Self.xyHz(PitchSnap.apply(xyPendingPitch, strength: pitchSnap)) }
 
     /// Push any changed shadow values into the DSP. Only diffs are applied.
     ///
@@ -119,11 +124,11 @@ final class RenderContext {
         case kParamXYVowel:           monk_synth_set_vowel(s, v)
         case kParamXYPitchTarget:
             xyPendingPitch = v
-            if xyNoteActive { monk_synth_set_pitch_hz(s, Self.xyHz(v)) }
+            if xyNoteActive { monk_synth_set_pitch_hz(s, xyTargetHz) }
         case kParamXYNoteOn:
             if v > 0.5 {
                 xyNoteActive = true
-                monk_synth_set_pitch_hz(s, Self.xyHz(xyPendingPitch))
+                monk_synth_set_pitch_hz(s, xyTargetHz)
             } else if xyNoteActive {
                 // Gated on xyNoteActive rather than firing on every read of
                 // "currently off": lastValues starts at .nan, so the very
@@ -144,6 +149,10 @@ final class RenderContext {
                 if midiNoteCount > 0 { monk_synth_restore_note_stack(s) }
                 else                 { monk_synth_note_off(s, 60) }
             }
+        case kParamPitchSnap:
+            pitchSnap = v
+            // Retune a held pad note — unless MIDI notes own the pitch.
+            if xyNoteActive && midiNoteCount == 0 { monk_synth_set_pitch_hz(s, xyTargetHz) }
         default: break   // pitchBendRouting / pitchWheelRaw handled in MIDI
         }
     }
@@ -163,7 +172,7 @@ final class RenderContext {
         // Upstream processor.cpp:268-276 — the emptied note stack would trigger
         // release, so re-assert the pad's pitch while it is still held.
         if xyNoteActive && midiNoteCount == 0 {
-            monk_synth_set_pitch_hz(s, Self.xyHz(xyPendingPitch))
+            monk_synth_set_pitch_hz(s, xyTargetHz)
         }
     }
 

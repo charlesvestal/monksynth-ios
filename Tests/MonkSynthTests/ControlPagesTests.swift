@@ -7,15 +7,15 @@ final class ControlPagesTests: XCTestCase {
     // MARK: - Page coverage
 
     /// Derives the expected set from `Param.isHiddenFromUI` rather than
-    /// hardcoding 18 names, so this test fails loudly if `Params.swift`
+    /// hardcoding 19 names, so this test fails loudly if `Params.swift`
     /// grows a new parameter that nobody added to a page.
     func testAllNonHiddenParametersAppearExactlyOnceAcrossPages() {
         let expected = Set(Param.allCases.filter { !$0.isHiddenFromUI })
-        XCTAssertEqual(expected.count, 18, "expected 18 non-hidden parameters, got \(expected.count)")
+        XCTAssertEqual(expected.count, 19, "expected 19 non-hidden parameters, got \(expected.count)")
 
         let flattened = ControlPages.pages.flatMap { $0.params }
-        XCTAssertEqual(flattened.count, 18,
-                        "expected 18 total param slots across all pages, got \(flattened.count)")
+        XCTAssertEqual(flattened.count, 19,
+                        "expected 19 total param slots across all pages, got \(flattened.count)")
 
         let flattenedSet = Set(flattened)
         XCTAssertEqual(flattenedSet.count, flattened.count,
