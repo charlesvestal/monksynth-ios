@@ -243,27 +243,8 @@ public final class AudioUnitViewController: AUViewController, AUAudioUnitFactory
         // CharacterView's own `noteActive` didSet already guards on change,
         // so no need to duplicate that check here.
         pluginView.stage.noteActive = au.uiNoteActive
-        syncKnobsMovedByMIDI(au)
     }
 
-    /// MIDI CCs write the render thread's parameter shadow directly (the
-    /// render block can't touch `AUParameter`), so the tree observer never
-    /// hears about them. Mirror any knob a CC can move whenever its live
-    /// value has changed under it.
-    private func syncKnobsMovedByMIDI(_ au: MonkSynthAU) {
-        for param in Self.midiMappedParams {
-            let v = au.liveValue(of: param)
-            guard let knob = pluginView.controls.knob(for: param),
-                  abs(knob.value - v) > 1e-5 else { continue }
-            pluginView.controls.setValue(v, for: param)
-        }
-    }
-
-    private static let midiMappedParams: [Param] = [1, 5, 7, 12, 13].compactMap { cc in
-        RenderContext.parameter(forCC: cc).flatMap { Param(rawValue: UInt64($0.rawValue)) }
-    }
-
-    func pullAnimationStateForTesting() { pullAnimationState() }
 }
 
 /// Breaks the strong retain `CADisplayLink(target:selector:)` would

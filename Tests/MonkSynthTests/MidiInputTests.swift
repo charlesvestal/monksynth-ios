@@ -135,6 +135,49 @@ final class MidiInputTests: XCTestCase {
         XCTAssertEqual(renderBlock(au, at: t).map(abs).max() ?? 1, 0, accuracy: 1e-6)
     }
 
+    /// A CC must reach the host as an ordinary parameter change, so the host
+    /// records it as automation and its own controls follow.
+    func testACCIsReportedToTheHostAsAParameterChange() throws {
+        let au = try makeAU()
+        defer { au.deallocateRenderResources() }
+        let tree = try XCTUnwrap(au.parameterTree)
+        var heard: [(AUParameterAddress, AUValue)] = []
+        let token = tree.token(byAddingParameterObserver: { address, value in heard.append((address, value)) })
+        defer { tree.removeParameterObserver(token) }
+
+        _ = renderBlock(au, at: 0, events: [(0, (0xB0, 7, 64))])        // Level
+        au.publishMIDIParameterChanges()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))     // observers are delivered async
+
+        XCTAssertEqual(tree.parameter(withAddress: Param.level.rawValue)?.value ?? -1, 64.0 / 127, accuracy: 1e-5)
+        XCTAssertTrue(heard.contains { $0.0 == Param.level.rawValue && abs($0.1 - 64.0 / 127) < 1e-5 },
+                      "the host was not told: \(heard)")
+    }
+
+    /// The pitch wheel too — it is a parameter the host can record and play back.
+    func testThePitchWheelIsReportedToTheHost() throws {
+        let au = try makeAU()
+        defer { au.deallocateRenderResources() }
+        _ = renderBlock(au, at: 0, events: [(0, (0xE0, 0x7F, 0x7F))])  // fully up
+        au.publishMIDIParameterChanges()
+        XCTAssertEqual(au.parameterTree?.parameter(withAddress: Param.pitchWheelRaw.rawValue)?.value ?? -1, 1, accuracy: 1e-4)
+    }
+
+    /// Only what MIDI changed is reported — publishing never re-sends a value
+    /// the host or the UI set itself.
+    func testNothingIsReportedWithoutMIDI() throws {
+        let au = try makeAU()
+        defer { au.deallocateRenderResources() }
+        let tree = try XCTUnwrap(au.parameterTree)
+        var heard = 0
+        let token = tree.token(byAddingParameterObserver: { _, _ in heard += 1 })
+        defer { tree.removeParameterObserver(token) }
+        _ = renderBlock(au, at: 0)
+        au.publishMIDIParameterChanges()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertEqual(heard, 0)
+    }
+
     func testTheModWheelMovesTheVowelKnobInTheEditor() throws {
         let vc = AudioUnitViewController()
         let desc = AudioComponentDescription(componentType: kAudioUnitType_MusicDevice,
@@ -145,7 +188,8 @@ final class MidiInputTests: XCTestCase {
         defer { au.deallocateRenderResources() }
         vc.loadViewIfNeeded()
         _ = renderBlock(au, at: 0, events: [(0, (0xB0, 1, 127))])
-        vc.pullAnimationStateForTesting()
+        au.publishMIDIParameterChanges()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))     // observer is async, then hops to main
         let knob = (vc.view as! PluginView).controls.knob(for: .vowel)
         XCTAssertEqual(knob?.value ?? -1, 1, accuracy: 1e-4)
     }

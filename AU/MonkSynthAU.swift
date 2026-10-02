@@ -103,9 +103,11 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
     public override func allocateRenderResources() throws {
         try super.allocateRenderResources()
         renderContext.createEngine(sampleRate: outputBusses[0].format.sampleRate)
+        startPublishingMIDIParameterChanges()
     }
 
     public override func deallocateRenderResources() {
+        stopPublishingMIDIParameterChanges()
         renderContext.destroyEngine()
         super.deallocateRenderResources()
     }
@@ -166,11 +168,11 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
             ctx.allNotesOff()
         case 0xB0:
             if let addr = RenderContext.parameter(forCC: d1) {
-                param_shadow_set(shadow, addr, Float(d2) / 127.0)
+                param_shadow_set_from_midi(shadow, addr, Float(d2) / 127.0)
             }
         case 0xE0:
             let raw = (Int(d2) << 7) | Int(d1)
-            param_shadow_set(shadow, kParamPitchWheelRaw, Float(raw) / 16383.0)
+            param_shadow_set_from_midi(shadow, kParamPitchWheelRaw, Float(raw) / 16383.0)
         default:
             break
         }
@@ -184,9 +186,37 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
         param_shadow_request_all_notes_off(shadow)
     }
 
-    /// The value the render thread is using right now — including any a MIDI
-    /// CC wrote, which `AUParameter.value` (cached) does not see.
-    func liveValue(of param: Param) -> Float { param_shadow_get(shadow, param.address) }
+    // MARK: - MIDI -> host parameters
+
+    /// MIDI is applied on the render thread straight into the shadow, where
+    /// `AUParameter` (not realtime-safe) can't be touched. This reports each
+    /// parameter MIDI changed to the host as an ordinary value change — so
+    /// the host records it as automation and its own controls follow, and
+    /// the editor's knobs hear it through the same tree observer. Several CCs
+    /// between calls coalesce to the latest value. Main thread.
+    func publishMIDIParameterChanges() {
+        guard let tree = parameterTree else { return }
+        for p in Param.allCases where param_shadow_take_midi_change(shadow, p.address) != 0 {
+            tree.parameter(withAddress: p.rawValue)?
+                .setValue(param_shadow_get(shadow, p.address), originator: nil)
+        }
+    }
+
+    private var midiPublishTimer: DispatchSourceTimer?
+
+    private func startPublishingMIDIParameterChanges() {
+        guard midiPublishTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(16), leeway: .milliseconds(4))
+        timer.setEventHandler { [weak self] in self?.publishMIDIParameterChanges() }
+        timer.resume()
+        midiPublishTimer = timer
+    }
+
+    private func stopPublishingMIDIParameterChanges() {
+        midiPublishTimer?.cancel()
+        midiPublishTimer = nil
+    }
 
     /// Live animation data for the editor. Main-thread reads of render-thread writes.
     var uiVowel: Float     { renderContext.uiVowel.pointee }

@@ -17,4 +17,11 @@ float param_shadow_get(const ParamShadow *s, ParameterAddress a);
 void param_shadow_request_all_notes_off(ParamShadow *s);
 int  param_shadow_take_all_notes_off(ParamShadow *s);
 
+// A value MIDI wrote on the render thread (a CC, the pitch wheel). Marks the
+// address so the main thread can report it to the host as a parameter change
+// — which is what lets a host record CC moves as automation.
+void param_shadow_set_from_midi(ParamShadow *s, ParameterAddress a, float v);
+// 1 if MIDI changed `a` since the last call (and clears the mark).
+int  param_shadow_take_midi_change(ParamShadow *s, ParameterAddress a);
+
 #endif

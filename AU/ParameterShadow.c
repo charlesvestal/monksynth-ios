@@ -5,6 +5,7 @@
 struct ParamShadow {
     _Atomic float values[kParamCount];
     _Atomic int allNotesOffRequested;
+    _Atomic int changedByMIDI[kParamCount];
 };
 
 ParamShadow *param_shadow_new(void) {
@@ -30,4 +31,15 @@ void param_shadow_request_all_notes_off(ParamShadow *s) {
 
 int param_shadow_take_all_notes_off(ParamShadow *s) {
     return s ? atomic_exchange(&s->allNotesOffRequested, 0) : 0;
+}
+
+void param_shadow_set_from_midi(ParamShadow *s, ParameterAddress a, float v) {
+    if (!s || a < 0 || a >= kParamCount) return;
+    atomic_store_explicit(&s->values[a], v, memory_order_relaxed);
+    atomic_store_explicit(&s->changedByMIDI[a], 1, memory_order_release);
+}
+
+int param_shadow_take_midi_change(ParamShadow *s, ParameterAddress a) {
+    if (!s || a < 0 || a >= kParamCount) return 0;
+    return atomic_exchange_explicit(&s->changedByMIDI[a], 0, memory_order_acquire);
 }
