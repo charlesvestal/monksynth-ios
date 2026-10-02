@@ -440,7 +440,9 @@ final class CharacterDropdownViewTests: XCTestCase {
     func testTheSixFactoryVoicedCharactersAppearInTheDropdownEachAsItsOwnFace() {
         let dropdown = makeDropdown()
         let labels = Set(accessibleLabels(in: dropdown))
-        for name in ["Dog", "Ghost", "Fire Fighter", "Punk", "Pizza", "Cat"] {
+        let factoryVoiced: [Character] = [DogCharacter(), GhostCharacter(), FireFighterCharacter(),
+                                          PunkCharacter(), PizzaCharacter(), CatCharacter()]
+        for name in factoryVoiced.map({ $0.displayName }) {
             XCTAssertTrue(labels.contains(name), "\"\(name)\" is missing from the in-app list")
         }
     }
@@ -456,7 +458,7 @@ final class CharacterDropdownViewTests: XCTestCase {
         var selected: Character?
         dropdown.onSelect = { selected = $0 }
 
-        let row = try XCTUnwrap(accessibleView(labeled: "Dog", in: dropdown) as? UIControl)
+        let row = try XCTUnwrap(accessibleView(labeled: DogCharacter().displayName, in: dropdown) as? UIControl)
         row.sendActions(for: .touchUpInside)
 
         let dog = try XCTUnwrap(selected as? DogCharacter)

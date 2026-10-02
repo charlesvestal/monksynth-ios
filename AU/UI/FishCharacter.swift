@@ -5,7 +5,7 @@ import UIKit
 /// puckered lips at the snout. Sings on a lagoon reef.
 struct FishCharacter: ToonCharacter {
     let id = "fish"
-    let displayName = "Fish"
+    let displayName = "Guppo"
     let palette = Palette(accent: UIColor(hex: 0xFFB02E), skyTop: UIColor(hex: 0x2B8FBE),
                           skyBottom: UIColor(hex: 0x155A86), ground: UIColor(hex: 0xE8CF8F))
     let mouthStyle = ToonMouth.Style(x: 150, y: 182, scale: 0.85, variant: .lips, lip: UIColor(hex: 0xFF6F61))

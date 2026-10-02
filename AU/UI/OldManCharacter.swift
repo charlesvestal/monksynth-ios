@@ -5,7 +5,7 @@ import UIKit
 /// the mouth. Sings on a porch at dusk.
 struct OldManCharacter: ToonCharacter {
     let id = "oldman"
-    let displayName = "Old Man"
+    let displayName = "Gerald"
     let palette = Palette(accent: UIColor(hex: 0xE0A84A), skyTop: UIColor(hex: 0xE9D3A3),
                           skyBottom: UIColor(hex: 0xE2C690), ground: UIColor(hex: 0x8A5A3B))
     let mouthStyle = ToonMouth.Style(x: 150, y: 178, scale: 0.72, variant: .lips, lip: UIColor(hex: 0xC47F6F))

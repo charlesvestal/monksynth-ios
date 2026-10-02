@@ -8,7 +8,7 @@ import UIKit
 /// measurement and the full mapping. Sings in front of a brick wall.
 struct FireFighterCharacter: ToonCharacter {
     let id = "firefighter"
-    let displayName = "Fire Fighter"
+    let displayName = "Officer EeOo"
     let palette = Palette(accent: UIColor(hex: 0xFF5A3C), skyTop: UIColor(hex: 0xC9644A),
                           skyBottom: UIColor(hex: 0xB4523C), ground: UIColor(hex: 0x8D8F96))
     let mouthStyle = ToonMouth.Style(x: 150, y: 178, scale: 0.75, variant: .lips, lip: UIColor(hex: 0xC86A5A))

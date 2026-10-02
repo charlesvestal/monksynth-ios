@@ -4,7 +4,7 @@ import UIKit
 /// draped on the robe below the neckline. Sings on a Himalayan terrace.
 struct MonkCharacter: ToonCharacter {
     let id = "monk"
-    let displayName = "Monk"
+    let displayName = "Jerry"
     let palette = Palette(accent: UIColor(hex: 0xF0A020), skyTop: UIColor(hex: 0xF7B57A),
                           skyBottom: UIColor(hex: 0xFBE6C4), ground: UIColor(hex: 0xB98A55))
     let mouthStyle = ToonMouth.Style(x: 150, y: 165, scale: 0.8, variant: .lips, lip: UIColor(hex: 0xC8735F))
