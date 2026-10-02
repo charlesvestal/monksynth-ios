@@ -33,6 +33,19 @@ final class RenderContext {
     private var xyPendingPitch: Float = 0.5
     private var pitchSnap: Float = 0
     private var midiNoteCount: Int32 = 0
+    /// Which MIDI notes are down. The count above is the number of `true`s, so
+    /// the same note twice is one held note, and a note-off for a note that
+    /// isn't down is ignored (passed on, an empty note stack would release a
+    /// pad note the finger is still holding). Allocated once, never resized.
+    private var heldNotes = [Bool](repeating: false, count: 128)
+    /// Tune (the ±12 st knob) and the pitch wheel (±`wheelRange`) are summed
+    /// into the engine's single bend. Kept apart so the wheel springing back
+    /// returns to the Tune setting instead of overwriting it.
+    private var tuneSemitones: Float = 0
+    private var wheelSemitones: Float = 0
+    static let wheelRange: Float = 2
+    /// The bend last handed to the engine. For tests.
+    private(set) var appliedBendSemitones: Float = 0
 
     /// Published to the UI after each render. Read on the main thread.
     let uiVowel     = UnsafeMutablePointer<Float>.allocate(capacity: 1)
@@ -62,6 +75,10 @@ final class RenderContext {
         xyPendingPitch = 0.5
         pitchSnap = 0
         midiNoteCount = 0
+        for i in heldNotes.indices { heldNotes[i] = false }
+        tuneSemitones = 0
+        wheelSemitones = 0
+        appliedBendSemitones = 0
     }
 
     func destroyEngine() {
@@ -120,7 +137,12 @@ final class RenderContext {
         case kParamDelayRate:         monk_synth_set_delay_rate(s, v)
         case kParamLevel:             monk_synth_set_level(s, v)
         case kParamUnisonVoiceSpread: monk_synth_set_unison_voice_spread(s, v * 0.5)
-        case kParamPitchBend:         monk_synth_set_pitch_bend(s, (v - 0.5) * 24.0)
+        case kParamPitchBend:
+            tuneSemitones = (v - 0.5) * 24.0
+            applyBend(s)
+        case kParamPitchWheelRaw:
+            wheelSemitones = (v - 0.5) * 2 * Self.wheelRange
+            applyBend(s)
         case kParamXYVowel:           monk_synth_set_vowel(s, v)
         case kParamXYPitchTarget:
             xyPendingPitch = v
@@ -153,21 +175,30 @@ final class RenderContext {
             pitchSnap = v
             // Retune a held pad note — unless MIDI notes own the pitch.
             if xyNoteActive && midiNoteCount == 0 { monk_synth_set_pitch_hz(s, xyTargetHz) }
-        default: break   // pitchBendRouting / pitchWheelRaw handled in MIDI
+        default: break   // pitchBendRouting: kept for old sessions, no longer read
         }
     }
 
     // MARK: - MIDI (render thread)
 
+    private func applyBend(_ s: OpaquePointer) {
+        appliedBendSemitones = tuneSemitones + wheelSemitones
+        monk_synth_set_pitch_bend(s, appliedBendSemitones)
+    }
+
     func noteOn(_ note: UInt8, velocity: Float) {
         guard let s = engine else { return }
         monk_synth_note_on(s, note, velocity)
-        midiNoteCount += 1
+        let n = Int(note & 0x7F)
+        if !heldNotes[n] { heldNotes[n] = true; midiNoteCount += 1 }
     }
 
     func noteOff(_ note: UInt8) {
         guard let s = engine else { return }
-        if midiNoteCount > 0 { midiNoteCount -= 1 }
+        let n = Int(note & 0x7F)
+        guard heldNotes[n] else { return }
+        heldNotes[n] = false
+        midiNoteCount -= 1
         monk_synth_note_off(s, note)
         // Upstream processor.cpp:268-276 — the emptied note stack would trigger
         // release, so re-assert the pad's pitch while it is still held.
@@ -176,35 +207,22 @@ final class RenderContext {
         }
     }
 
-    /// Upstream controller.cpp:454-458.
+    /// CC 120/123, a host reset: let go of every MIDI note. A pad note the
+    /// finger is still holding keeps sounding.
+    func allNotesOff() {
+        for n in 0..<128 where heldNotes[n] { noteOff(UInt8(n)) }
+    }
+
+    /// Upstream controller.cpp:454-458, except CC 1: the mod wheel sets the
+    /// vowel here (upstream sent it to vibrato).
     static func parameter(forCC cc: UInt8) -> ParameterAddress? {
         switch cc {
-        case 1:  return kParamVibrato
+        case 1:  return kParamVowel     // mod wheel
         case 5:  return kParamPortTime
         case 7:  return kParamLevel
         case 12: return kParamDelay
         case 13: return kParamHeadSize
         default: return nil
-        }
-    }
-
-    /// Upstream controller.cpp:423-452 plus the processor.cpp:208-245 fan-out.
-    /// `out` is caller-owned and pre-reserved so this never allocates.
-    func pitchWheelTargets(_ normalized: Float,
-                            into out: inout [(ParameterAddress, Float)]) {
-        out.removeAll(keepingCapacity: true)
-        let mode = PitchBendMode(normalized: param_shadow_get(shadow, kParamPitchBendRouting))
-        switch mode {
-        case .classic:
-            out.append((kParamVowel, normalized))
-        case .pitch:
-            out.append((kParamPitchBend, normalized))
-        case .both, .bothInverted:
-            out.append((kParamPitchBend, normalized))
-            if !xyNoteActive {
-                let vowel = mode == .bothInverted ? 1.0 - normalized : normalized
-                out.append((kParamVowel, vowel))
-            }
         }
     }
 
@@ -214,6 +232,7 @@ final class RenderContext {
                 right: UnsafeMutablePointer<Float>,
                 frames: UInt32) {
         guard let s = engine else { return }
+        if param_shadow_take_all_notes_off(shadow) != 0 { allNotesOff() }
         applyChangedParameters(s)
         monk_synth_process(s, left, right, frames)
         uiVowel.pointee     = monk_synth_get_vowel(s)
