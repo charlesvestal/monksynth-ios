@@ -160,9 +160,22 @@ void monk_synth_set_pitch_hz(MonkSynthEngine *s, float hz) {
     if (!s)
         return;
     s->last_base_hz = hz;
-    if (!monk_voice_is_active(&s->voices[0]))
-        apply_unison_detune(s, hz);
+    /* Start a note unless one is HELD. A releasing voice keeps active = true
+     * until its tail ends, so a new XY-pad touch during a release used to only
+     * retarget the dying note: it faded to silence under the finger. A new
+     * touch starts on its own pitch and vowel rather than gliding from the
+     * tail (MIDI's portamento between notes is left alone). */
     int n = s->unison_count;
+    if (!s->voices[0].active || s->voices[0].env_stage == ENV_RELEASE) {
+        apply_unison_detune(s, hz);
+        for (int i = 0; i < n; i++) {
+            MonkVoice *v = &s->voices[i];
+            monk_voice_set_pitch_direct(v, detuned_hz(hz, s->unison_detune, i, n));
+            v->pitch_ramp_ticks = 0;
+            v->current_vowel = v->target_vowel;
+            v->vowel_ramp_ticks = 0;
+        }
+    }
     for (int i = 0; i < n; i++) {
         s->voices[i].min_glide = XY_PAD_GLIDE;
         monk_voice_set_pitch_target(&s->voices[i], detuned_hz(hz, s->unison_detune, i, n));
