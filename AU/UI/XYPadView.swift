@@ -13,7 +13,7 @@ final class XYPadView: UIView {
     private(set) var pitch: Float = 0.5
     private(set) var vowel: Float = 0.5
     private(set) var isPlaying = false
-    private var activeTouch: UITouch?
+    private var touches = TouchStack<ObjectIdentifier>()
 
     /// The touch marker — two white ripple rings around an accent dot with
     /// an ink edge — on its own small layer. Touch begin/move only moves
@@ -107,6 +107,8 @@ final class XYPadView: UIView {
     /// `isPlaying` gates the note-on write (not the pitch/vowel writes) so a
     /// second finger touching down while the first is still held retargets
     /// the pad — last-touch-wins — instead of re-triggering a second note.
+    /// (Fingers arrive here through `TouchStack`, which routes a second
+    /// finger to `moveTouch`; this guard covers direct callers.)
     func beginTouch(at point: CGPoint, in size: CGSize) {
         let (p, v) = Self.normalize(point, in: size)
         pitch = p; vowel = v
@@ -138,25 +140,31 @@ final class XYPadView: UIView {
         updateTouchMarker()
     }
 
+    // Several fingers play like a mono keyboard: the newest sings, and
+    // lifting it hands back to the one still down (see `TouchStack`).
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        activeTouch = touch                      // last touch wins
-        beginTouch(at: touch.location(in: self), in: bounds.size)
+        for t in touches { perform(self.touches.press(ObjectIdentifier(t), at: t.location(in: self))) }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = activeTouch, touches.contains(touch) else { return }
-        moveTouch(at: touch.location(in: self), in: bounds.size)
+        for t in touches { perform(self.touches.move(ObjectIdentifier(t), to: t.location(in: self))) }
     }
 
-    private func end(_ touches: Set<UITouch>) {
-        guard let touch = activeTouch, touches.contains(touch) else { return }
-        activeTouch = nil
-        endTouch()
+    private func lift(_ touches: Set<UITouch>) {
+        for t in touches { perform(self.touches.lift(ObjectIdentifier(t))) }
     }
 
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { end(touches) }
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { end(touches) }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { lift(touches) }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { lift(touches) }
+
+    private func perform(_ action: TouchStack<ObjectIdentifier>.Action?) {
+        switch action {
+        case .begin(let p)?: beginTouch(at: p, in: bounds.size)
+        case .move(let p)?:  moveTouch(at: p, in: bounds.size)
+        case .end?:          endTouch()
+        case nil:            break
+        }
+    }
 
     /// The touch marker's dot colour — the current character's accent, set
     /// by `SceneView` on character change.
