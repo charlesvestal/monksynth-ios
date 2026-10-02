@@ -8,6 +8,7 @@ enum Param: UInt64, CaseIterable {
     case attack, decay, sustain, release, unison, unisonDetune, delayRate
     case level, unisonVoiceSpread, xyNoteOn, xyVowel, xyPitchTarget
     case pitchBend, pitchBendRouting, pitchWheelRaw
+    case pitchSnap
 
     var identifier: String {
         switch self {
@@ -33,6 +34,7 @@ enum Param: UInt64, CaseIterable {
         case .pitchBend: return "pitchBend"
         case .pitchBendRouting: return "pitchBendRouting"
         case .pitchWheelRaw: return "pitchWheelRaw"
+        case .pitchSnap: return "pitchSnap"
         }
     }
 
@@ -58,9 +60,12 @@ enum Param: UInt64, CaseIterable {
         case .xyNoteOn: return "XY Note"
         case .xyVowel: return "XY Vowel"
         case .xyPitchTarget: return "XY Pitch"
-        case .pitchBend: return "Pitch Bend"
+        // A fixed ±12 st transpose (the wheel can drive it too), so "Tune";
+        // the identifier stays "pitchBend" for saved sessions and automation.
+        case .pitchBend: return "Tune"
         case .pitchBendRouting: return "PB Routing"
         case .pitchWheelRaw: return "PW Raw"
+        case .pitchSnap: return "Snap"
         }
     }
 
@@ -83,7 +88,7 @@ enum Param: UInt64, CaseIterable {
         case .sustain, .level: return 1.0
         case .vibrato, .attack, .decay, .release,
              .unison, .unisonDetune, .unisonVoiceSpread,
-             .xyNoteOn, .pitchBendRouting: return 0.0
+             .xyNoteOn, .pitchBendRouting, .pitchSnap: return 0.0
         default: return 0.5   // portTime, vowel, headSize, vibratoRate,
                               // aspiration, delayRate, xyVowel,
                               // xyPitchTarget, pitchBend, pitchWheelRaw
@@ -146,6 +151,8 @@ enum Param: UInt64, CaseIterable {
             return String(format: "%+.2f", display(normalized))
         case .attack, .decay, .release:
             return String(format: "%.2f", display(normalized))
+        case .pitchSnap:
+            return String(format: "%.0f%%", min(max(normalized, 0), 1) * 100)
         default:
             return String(format: "%.2f", normalized)
         }

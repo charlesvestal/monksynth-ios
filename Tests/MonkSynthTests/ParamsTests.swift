@@ -40,6 +40,7 @@ final class ParamsTests: XCTestCase {
             (.pitchBend, kParamPitchBend),
             (.pitchBendRouting, kParamPitchBendRouting),
             (.pitchWheelRaw, kParamPitchWheelRaw),
+            (.pitchSnap, kParamPitchSnap),   // MonkSynth's own, after upstream's
         ]
         XCTAssertEqual(expected.count, Param.allCases.count)
 
@@ -64,7 +65,8 @@ final class ParamsTests: XCTestCase {
         let expected: [AUValue] = [0.5, 0.5, 0.8, 0.5, 0.0, 0.5, 0.5, 0.0,
                                    0.0, 1.0, 0.0, 0.0, 0.0, 0.5, 1.0, 0.0,
                                    0.0, 0.5, 0.5, 0.5, 0.0, 0.5]
-        for (i, p) in Param.allCases.enumerated() {
+        // Upstream's parameters only; MonkSynth's own additions follow them.
+        for (i, p) in Param.allCases.prefix(expected.count).enumerated() {
             XCTAssertEqual(p.defaultValue, expected[i], accuracy: 1e-6,
                            "default mismatch for \(p.name)")
         }

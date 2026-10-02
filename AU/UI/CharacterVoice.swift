@@ -18,8 +18,8 @@ import AVFoundation
 /// see the task's "Designing the six voices" section). Deliberately absent
 /// from every entry, and never written by `voice(for:)`'s caller:
 /// `.vowel` (a live pad/performance position, not a voice trait),
-/// the three `.xy*` parameters, `.pitchBend`, `.pitchBendRouting`, and
-/// `.pitchWheelRaw` — all live performance/routing state that a character
+/// the three `.xy*` parameters, `.pitchBend`, `.pitchBendRouting`,
+/// `.pitchWheelRaw` and `.pitchSnap` — all live performance/routing state that a character
 /// tap must never stomp on.
 enum CharacterVoiceTable {
 
