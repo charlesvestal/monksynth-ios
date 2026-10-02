@@ -65,4 +65,22 @@ final class TapStartTests: XCTestCase {
         render(blocks: 1, frames: 64)
         XCTAssertLessThan(monk_synth_get_vowel(ctx.engine!), 0.5, "a held drag should glide, not jump")
     }
+
+    /// A tap while the previous note is still releasing must start a new note
+    /// that sustains while held. It used to only retune the dying note, which
+    /// faded to silence under the finger — then a drag started it again.
+    func testATapDuringTheReleaseSustainsWhileHeld() {
+        set(.release, 0.6)                       // 3 s, the Cow's
+        set(.xyPitchTarget, 0.5); set(.xyVowel, 0.5); set(.xyNoteOn, 1)
+        render(blocks: 40)
+        set(.xyNoteOn, 0)
+        render(blocks: 50)                       // ~0.6 s into the release
+        set(.xyPitchTarget, 0.3); set(.xyNoteOn, 1)
+        render(blocks: 260)                      // hold ~3 s
+        XCTAssertNotEqual(monk_synth_is_active(ctx.engine!), 0, "the held note died")
+        var peak: Float = 0
+        ctx.render(left: left, right: right, frames: 512)
+        for i in 0..<512 { peak = max(peak, abs(left[i])) }
+        XCTAssertGreaterThan(peak, 0.02, "the held note faded out")
+    }
 }
