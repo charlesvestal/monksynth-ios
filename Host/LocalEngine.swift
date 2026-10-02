@@ -40,15 +40,9 @@ final class LocalEngine {
     // `noteOff` off the render thread — see `NoteEventQueue`'s doc comment.
     private let noteEvents = NoteEventQueue()
 
-    // Reused across pitch-bend messages so `applyPitchBend` never allocates
-    // on every wheel tick, mirroring `MonkSynthAU.internalRenderBlock`'s
-    // `wheelTargets` buffer.
-    private var wheelTargets = [(ParameterAddress, Float)]()
-
     init() {
         for p in Param.allCases { param_shadow_set(shadow, p.address, p.defaultValue) }
         context = RenderContext(shadow: shadow)
-        wheelTargets.reserveCapacity(2)
     }
 
     deinit {
@@ -64,22 +58,19 @@ final class LocalEngine {
 
     func value(of param: Param) -> Float { param_shadow_get(shadow, param.address) }
 
-    /// Upstream controller.cpp:423-452 plus processor.cpp:208-245, replayed
-    /// here exactly as `MonkSynthAU.internalRenderBlock` replays it for a
-    /// hosted pitch wheel: `RenderContext.pitchWheelTargets` decides which
-    /// parameter(s) a raw 0...1 wheel position fans out to (plain vowel,
-    /// pitch bend, or both, depending on the routing mode) and this writes
-    /// the result straight into the shadow — safe from any thread, same as
-    /// `setParameter`.
+    /// A raw 0...1 wheel position (0.5 = centre). Bends pitch ±2 st on top of
+    /// Tune, exactly as `MonkSynthAU`'s render block does for a hosted wheel.
+    /// Shadow write — safe from any thread.
     func applyPitchBend(_ normalized: Float) {
-        context.pitchWheelTargets(normalized, into: &wheelTargets)
-        for (addr, v) in wheelTargets { param_shadow_set(shadow, addr, v) }
+        param_shadow_set(shadow, kParamPitchWheelRaw, normalized)
     }
 
     // MARK: - MIDI notes (any thread — queued, applied on the render thread)
 
     func noteOn(_ note: UInt8, velocity: Float) { noteEvents.push(.on, note: note, velocity: velocity) }
     func noteOff(_ note: UInt8) { noteEvents.push(.off, note: note, velocity: 0) }
+    /// CC 120/123: release every held MIDI note.
+    func allNotesOff() { noteEvents.push(.allOff, note: 0, velocity: 0) }
 
     // MARK: - UI animation (main thread — published by the render thread)
 
@@ -161,6 +152,7 @@ final class LocalEngine {
                 switch kind {
                 case .on:  ctx.noteOn(note, velocity: velocity)
                 case .off: ctx.noteOff(note)
+                case .allOff: ctx.allNotesOff()
                 }
             }
 
@@ -283,7 +275,7 @@ final class LocalEngine {
 /// ParameterShadow.c) and safe to write from any thread — only note on/off
 /// bypass the shadow and touch the engine directly.
 private final class NoteEventQueue {
-    enum Kind { case on, off }
+    enum Kind { case on, off, allOff }
 
     private struct Event { var kind: Kind; var note: UInt8; var velocity: Float }
 

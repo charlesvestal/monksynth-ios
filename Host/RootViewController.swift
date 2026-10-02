@@ -226,8 +226,9 @@ final class RootViewController: UIViewController {
         // on-screen knob. `setParameter` is shadow-safe from any thread;
         // touching `pluginView` is not, so that part hops to main.
         midi.onControlChange = { [weak self] cc, value in
-            guard let self,
-                  let addr = RenderContext.parameter(forCC: cc),
+            guard let self else { return }
+            if cc == 120 || cc == 123 { self.audio.allNotesOff(); return }   // All Sound/Notes Off
+            guard let addr = RenderContext.parameter(forCC: cc),
                   let param = Param(rawValue: UInt64(addr.rawValue))
             else { return }
             self.audio.setParameter(param, value)
@@ -235,19 +236,10 @@ final class RootViewController: UIViewController {
                 self.pluginView.controls.setValue(value, for: param)
             }
         }
-        // Pitch bend: `LocalEngine.applyPitchBend` fans a raw wheel position
-        // out to pitchBend and/or vowel depending on the routing mode (see
-        // its doc comment) — rather than thread the touched-address list
-        // back out, just re-pull both knobs afterward; cheap, and matches
-        // how `AudioUnitViewController`'s host-automation observer already
-        // updates knobs unconditionally on every delivered change.
+        // Pitch wheel: bends pitch ±2 st on top of Tune. It springs back, so
+        // it has no knob of its own and moves none.
         midi.onPitchBend = { [weak self] normalized in
-            guard let self else { return }
-            self.audio.applyPitchBend(normalized)
-            DispatchQueue.main.async {
-                self.pluginView.controls.setValue(self.audio.value(of: .pitchBend), for: .pitchBend)
-                self.pluginView.controls.setValue(self.audio.value(of: .vowel), for: .vowel)
-            }
+            self?.audio.applyPitchBend(normalized)
         }
     }
 

@@ -16,8 +16,7 @@ final class MIDIInput {
     var onNoteOn: ((UInt8, Float) -> Void)?
     var onNoteOff: ((UInt8) -> Void)?
     var onControlChange: ((UInt8, Float) -> Void)?
-    /// Raw 0...1 wheel position (0.5 == center), matching what
-    /// `RenderContext.pitchWheelTargets` expects — the same normalization
+    /// Raw 0...1 wheel position (0.5 == center) — the same normalization
     /// `MonkSynthAU.internalRenderBlock` computes for a hosted pitch wheel.
     var onPitchBend: ((Float) -> Void)?
 

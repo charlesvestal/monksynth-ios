@@ -116,52 +116,77 @@ public final class MonkSynthAU: AUAudioUnit, PresetStoring {
         // Captured once — no ARC traffic or optional unwrapping per block.
         let ctx = renderContext
         let shadowPtr = shadow
-        var wheelTargets = [(ParameterAddress, Float)]()
-        wheelTargets.reserveCapacity(2)
 
-        return { _, _, frameCount, _, outputData, eventListHead, _ in
-            var event = eventListHead?.pointee
-            while let e = event {
-                if e.head.eventType == .MIDI {
-                    // e.MIDI.data is a C `uint8_t data[3]`, imported as the
-                    // Swift tuple (UInt8, UInt8, UInt8) — reading .0/.1/.2 is
-                    // plain field access on a value type, no allocation
-                    // (unlike `withUnsafeBytes(of:) { Array($0.prefix(3)) }`,
-                    // which would heap-allocate an Array on every MIDI event).
-                    let data = e.MIDI.data
-                    let status = data.0 & 0xF0
-                    let d1 = data.1
-                    let d2 = data.2
-                    switch status {
-                    case 0x90 where d2 > 0:
-                        ctx.noteOn(d1, velocity: Float(d2) / 127.0)
-                    case 0x80, 0x90:
-                        ctx.noteOff(d1)
-                    case 0xB0:
-                        if let addr = RenderContext.parameter(forCC: d1) {
-                            param_shadow_set(shadowPtr, addr, Float(d2) / 127.0)
-                        }
-                    case 0xE0:
-                        let raw = (Int(d2) << 7) | Int(d1)
-                        let norm = Float(raw) / 16383.0
-                        ctx.pitchWheelTargets(norm, into: &wheelTargets)
-                        for (addr, v) in wheelTargets { param_shadow_set(shadowPtr, addr, v) }
-                    default: break
-                    }
-                }
-                event = e.head.next?.pointee
-            }
-
+        return { _, timestamp, frameCount, _, outputData, eventListHead, _ in
             let bufferList = UnsafeMutableAudioBufferListPointer(outputData)
             guard bufferList.count >= 2,
                   let l = bufferList[0].mData?.assumingMemoryBound(to: Float.self),
                   let r = bufferList[1].mData?.assumingMemoryBound(to: Float.self)
             else { return noErr }
 
-            ctx.render(left: l, right: r, frames: frameCount)
+            // Sample-accurate: render up to each event's own sample, apply it,
+            // carry on. Applying every event at the start of the buffer put
+            // notes up to a whole buffer early (≈23 ms at 1024 frames).
+            let blockStart = AUEventSampleTime(timestamp.pointee.mSampleTime)
+            var done: AUAudioFrameCount = 0
+            var event = eventListHead
+            while done < frameCount || event != nil {
+                let due: AUAudioFrameCount
+                if let e = event {
+                    let offset = e.pointee.head.eventSampleTime - blockStart
+                    due = AUAudioFrameCount(min(max(offset, Int64(done)), Int64(frameCount)))
+                } else {
+                    due = frameCount
+                }
+                if due > done {
+                    ctx.render(left: l + Int(done), right: r + Int(done), frames: due - done)
+                    done = due
+                }
+                guard let e = event else { break }
+                if e.pointee.head.eventType == .MIDI {
+                    Self.handleMIDI(e.pointee.MIDI.data, ctx: ctx, shadow: shadowPtr)
+                }
+                event = UnsafePointer(e.pointee.head.next)
+            }
             return noErr
         }
     }
+
+    /// `data` is a C `uint8_t data[3]`, imported as the Swift tuple
+    /// (UInt8, UInt8, UInt8) — plain field access, no allocation.
+    private static func handleMIDI(_ data: (UInt8, UInt8, UInt8), ctx: RenderContext, shadow: OpaquePointer) {
+        let status = data.0 & 0xF0
+        let d1 = data.1, d2 = data.2
+        switch status {
+        case 0x90 where d2 > 0:
+            ctx.noteOn(d1, velocity: Float(d2) / 127.0)
+        case 0x80, 0x90:
+            ctx.noteOff(d1)
+        case 0xB0 where d1 == 120 || d1 == 123:   // All Sound Off, All Notes Off
+            ctx.allNotesOff()
+        case 0xB0:
+            if let addr = RenderContext.parameter(forCC: d1) {
+                param_shadow_set(shadow, addr, Float(d2) / 127.0)
+            }
+        case 0xE0:
+            let raw = (Int(d2) << 7) | Int(d1)
+            param_shadow_set(shadow, kParamPitchWheelRaw, Float(raw) / 16383.0)
+        default:
+            break
+        }
+    }
+
+    /// Hosts reset a plugin on transport stop and panic. Without this a note
+    /// whose note-off never arrived kept singing. The render thread does the
+    /// releasing; this only asks.
+    public override func reset() {
+        super.reset()
+        param_shadow_request_all_notes_off(shadow)
+    }
+
+    /// The value the render thread is using right now — including any a MIDI
+    /// CC wrote, which `AUParameter.value` (cached) does not see.
+    func liveValue(of param: Param) -> Float { param_shadow_get(shadow, param.address) }
 
     /// Live animation data for the editor. Main-thread reads of render-thread writes.
     var uiVowel: Float     { renderContext.uiVowel.pointee }
